@@ -34,50 +34,7 @@
 #include <gnuradio/sync_block.h>
 
 class Call;
-struct Transmission {
-    long source;
-    time_t start_time;
-    time_t stop_time;
-    long sample_count;
-    long spike_count;
-    long error_count;
-    double length;
-    char filename[255];
 
-    // Add default constructor
-    Transmission() : source(0), start_time(0), stop_time(0), 
-                    sample_count(0), spike_count(0), error_count(0), 
-                    length(0.0) {
-        filename[0] = '\0';
-    }
-
-    // Add copy constructor
-    Transmission(const Transmission& other) {
-        source = other.source;
-        start_time = other.start_time;
-        stop_time = other.stop_time;
-        sample_count = other.sample_count;
-        spike_count = other.spike_count;
-        error_count = other.error_count;
-        length = other.length;
-        std::strncpy(filename, other.filename, sizeof(filename));
-    }
-
-    // Add assignment operator
-    Transmission& operator=(const Transmission& other) {
-        if (this != &other) {
-            source = other.source;
-            start_time = other.start_time;
-            stop_time = other.stop_time;
-            sample_count = other.sample_count;
-            spike_count = other.spike_count;
-            error_count = other.error_count;
-            length = other.length;
-            std::strncpy(filename, other.filename, sizeof(filename));
-        }
-        return *this;
-    }
-};
 
 namespace gr {
 namespace blocks {
