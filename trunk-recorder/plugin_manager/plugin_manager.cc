@@ -107,6 +107,7 @@ void stop_plugins() {
   for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
     Plugin *plugin = *it;
     if (plugin->state == PLUGIN_RUNNING) {
+      BOOST_LOG_TRIVIAL(info) << " - Stopping Plugin: " << plugin->name;
       int err = plugin->api->stop();
       if (err != 0) {
         plugin->state = PLUGIN_FAILED;

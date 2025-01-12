@@ -40,6 +40,7 @@ private:
   unsigned int d_num_inputs, d_num_outputs; // keep track of the topology
   const unsigned int d_max_port = 100;
   gr::thread::mutex d_mutex;
+  uint64_t current_nitems;
 
 
 public:
@@ -51,7 +52,7 @@ public:
 
   void set_port_enabled(unsigned int port, bool enabled);
   bool is_port_enabled(unsigned int port);
-
+  bool is_receiving_samples();
   bool enabled() const { return d_enabled; }
 
   void set_input_index(unsigned int input_index);

@@ -132,6 +132,22 @@ bool selector_impl::is_port_enabled(unsigned int port) {
   return d_enabled_output_ports[port];
 }
 
+
+bool selector_impl::is_receiving_samples() {
+  uint64_t nitems = this->nitems_read(0);
+  
+  if (nitems == 0) {
+    return true;
+  }
+
+  if (nitems != current_nitems) {
+    current_nitems = nitems;
+    return true;
+  }
+  BOOST_LOG_TRIVIAL(info) << "is_receiving_samples() - nitems: " << nitems << " current_nitems: " << current_nitems;
+  return false;
+}
+
 int selector_impl::general_work(int noutput_items,
                                 gr_vector_int &ninput_items,
                                 gr_vector_const_void_star &input_items,

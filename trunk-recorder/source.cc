@@ -432,6 +432,13 @@ void Source::enable_detected_recorders() {
   }
 }
 
+bool Source::is_alive() {
+  if (this->attached_selector) {
+    return recorder_selector->is_receiving_samples();
+  } else 
+     return true;
+}
+
 void Source::set_signal_detector_threshold(float threshold) {
 BOOST_LOG_TRIVIAL(info) << " - Setting Signal Detector Threshold to: " << threshold;
   signal_detector->set_threshold(threshold);
