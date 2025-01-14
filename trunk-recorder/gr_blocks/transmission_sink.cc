@@ -414,20 +414,20 @@ int transmission_sink::work(int noutput_items, gr_vector_const_void_star &input_
   return nwritten;
 }
 
-time_t transmission_sink::get_start_time() {
+time_t transmission_sink::get_start_time() const {
   return d_start_time;
 }
 
-time_t transmission_sink::get_stop_time() {
+time_t transmission_sink::get_stop_time() const {
   return d_stop_time;
 }
 
-std::chrono::time_point<std::chrono::steady_clock> transmission_sink::get_last_write_time() {
+std::chrono::time_point<std::chrono::steady_clock> transmission_sink::get_last_write_time() const {
   return d_last_write_time;
 }
 
-void transmission_sink::add_transmission(Transmission t) {
-  transmission_list.push_back(t);
+void transmission_sink::add_transmission(const Transmission t) {
+  transmission_list.emplace_back(t);
 }
 
 void transmission_sink::clear_transmission_list() {
@@ -435,7 +435,7 @@ void transmission_sink::clear_transmission_list() {
   transmission_list.shrink_to_fit();
 }
 
-std::vector<Transmission> transmission_sink::get_transmission_list() {
+std::vector<Transmission> transmission_sink::get_transmission_list() const {
   return transmission_list;
 }
 

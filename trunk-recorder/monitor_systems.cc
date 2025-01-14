@@ -786,8 +786,8 @@ void check_sources(std::vector<Source *> &sources) {
   for (vector<Source *>::iterator it = sources.begin(); it != sources.end(); it++) {
     Source *source = *it;
     if (!source->is_alive()) {
-      BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " is not alive";
-      exit_flag = 1;
+      BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " is no longer active";
+      //exit_flag = 1;
     }
   }
 }
