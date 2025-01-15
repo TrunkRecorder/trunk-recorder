@@ -223,6 +223,10 @@ link_directories(
 
 set(CMAKE_CXX_FLAGS_DEBUG "-Wall -Wno-deprecated-declarations -Wno-error=deprecated-declarations -g3")
 
+if(CMAKE_COMPILER_IS_GNUCXX)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GLIBCXX_USE_CXX11_ABI=0")
+endif()
+
 SET(CMAKE_CXX_STANDARD 17)
 
 # The D_GLIBCXX_ASSERTIONS flag will cause a crash when an error is detected, making it easier to catch bugs
