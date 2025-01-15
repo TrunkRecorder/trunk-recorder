@@ -129,7 +129,7 @@ public:
   void set_bits_per_sample(int bits_per_sample);
   void clear_transmission_list();
   std::vector<Transmission> get_transmission_list() const;
-  void add_transmission(const Transmission t);
+  void add_transmission(const Transmission& t);
   int bits_per_sample();
   unsigned int sample_rate();
   double total_length_in_seconds();
