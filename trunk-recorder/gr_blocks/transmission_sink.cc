@@ -426,8 +426,8 @@ std::chrono::time_point<std::chrono::steady_clock> transmission_sink::get_last_w
   return d_last_write_time;
 }
 
-void transmission_sink::add_transmission(const Transmission t) {
-  transmission_list.emplace_back(t);
+void transmission_sink::add_transmission(const Transmission& t) {
+  transmission_list.push_back(t);
 }
 
 void transmission_sink::clear_transmission_list() {
