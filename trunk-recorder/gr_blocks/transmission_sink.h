@@ -34,7 +34,7 @@
 #include <gnuradio/sync_block.h>
 
 class Call;
-
+struct Transmission;
 
 namespace gr {
 namespace blocks {
