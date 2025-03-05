@@ -31,6 +31,8 @@
 #include "source.h"
 #include "systems/system.h"
 
+#include "config_db/ConfigDB.h"
+
 #include <json.hpp>
 
 bool load_config(std::string config_file, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<System *> &systems);

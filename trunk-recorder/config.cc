@@ -116,6 +116,35 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     char *no_color = getenv("NO_COLOR");
     bool color = true;
 
+
+    // Determine if config should be read from Database
+    // If so, skip reading from file
+    // Log the db connection parameters
+    bool use_db = data.value("useDB", false);
+    if (use_db) {
+      BOOST_LOG_TRIVIAL(info) << "Using Database for Configuration";
+      const char* db_uri = getenv("DB_URI");
+      db_uri = db_uri ? db_uri : data.value("dbUri", "mongodb://localhost:27017").c_str();
+      BOOST_LOG_TRIVIAL(info) << "Database URI: " << db_uri;
+      const char* db_name = getenv("DB_NAME");
+      db_name = db_name ? db_name : data.value("db_name", "trunk_recorder").c_str();
+      BOOST_LOG_TRIVIAL(info) << "Database Name: " << db_name;
+      const char* db_collection = getenv("DB_COLLECTION");
+      db_collection = db_collection ? db_collection : data.value("db_collection", "configs").c_str();
+      BOOST_LOG_TRIVIAL(info) << "Database Collection: " << db_collection;
+      const char* db_config_name = getenv("DB_CONFIG_NAME");  
+      db_config_name = db_config_name ? db_config_name : data.value("db_config_name", "default").c_str();
+      BOOST_LOG_TRIVIAL(info) << "Database Configuration Name: " << db_config_name;
+      ConfigDB config_db;
+      json db_data = config_db.readConfigToJson(db_uri, db_name, db_collection, db_config_name);
+      if (db_data.empty()) {
+        BOOST_LOG_TRIVIAL(error) << "Failed to Load Config from Database";
+        return false;
+      }
+      data = db_data;
+      BOOST_LOG_TRIVIAL(info) << "Successfully Loaded Config from Database";
+    }
+    
     if (no_color != NULL && no_color[0] != '\0')
       color = false;
 

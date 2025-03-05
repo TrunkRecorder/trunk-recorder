@@ -25,6 +25,8 @@ cmake_minimum_required(VERSION 3.12)
 
 project(Trunk-Recorder LANGUAGES CXX C VERSION "5.0.0")
 
+# Add /usr/local to the prefix path to find MongoDB C++ driver
+list(APPEND CMAKE_PREFIX_PATH "/usr/local")
 
 configure_file(cmake.h.in "${PROJECT_BINARY_DIR}/cmake.h" @ONLY)
 add_definitions(-DMANUAL_GITINFO="${MANUAL_GITINFO}")
