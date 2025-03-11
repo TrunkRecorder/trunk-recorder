@@ -82,6 +82,7 @@ public:
   gr::basic_block_sptr get_src_block();
   void attach_detector(gr::top_block_sptr tb);
   void attach_selector(gr::top_block_sptr tb);
+  bool is_alive();
   double get_min_hz();
   double get_max_hz();
   void set_min_max();

@@ -20,7 +20,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
       -
         name: Prepare
         id: prepare
@@ -66,14 +66,14 @@ jobs:
       # https://github.com/docker/setup-qemu-action
       - 
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v3
       # https://github.com/docker/setup-buildx-action
       - 
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v3
       -
         name: Cache Docker layers
-        uses: actions/cache@v2
+        uses: actions/cache@v4
         id: cache
         with:
           path: /tmp/.buildx-cache
