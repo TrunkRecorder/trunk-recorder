@@ -36,7 +36,13 @@ RUN apt-get update && \
     wget \
     python3-six \
     openssh-client \
-    ffmpeg
+    ffmpeg \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    fdkaac \
+    sox \
+    ntp \
+    ntpstat
 
 WORKDIR /src
 

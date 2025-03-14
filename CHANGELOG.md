@@ -3,6 +3,7 @@ Trunk Recorder ChangeLog
 ### Unreleased
 * Added openssh-client
 * Added ffmpeg
+* Added libssl-dev libcurl4-openssl-dev fdkaac sox ntp ntpstat packages from Broadcastify Plugin to work. 
 
 ### Version 4.6.0
 * Cleaned up Rdio Scanner talkgroup display logs. by @tadscottsmith in https://github.com/robotastic/trunk-recorder/pull/750
