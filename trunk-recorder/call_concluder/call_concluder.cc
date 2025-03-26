@@ -238,8 +238,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       } else {
         talkgroup_title = (char *)std::to_string(call_info.talkgroup).c_str();
       }
-      result = convert_media(call_info.filename, call_info.converted, std::ctime(&call_info.start_time), call_info.short_name.c_str(), talkgroup_title);
-
+      
+      time_t start_time = static_cast<time_t>(call_info.start_time);
+      result = convert_media(call_info.filename, call_info.converted, std::ctime(&start_time), call_info.short_name.c_str(), talkgroup_title);
+      
       if (result < 0) {
         call_info.status = FAILED;
         return call_info;
