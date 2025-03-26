@@ -45,6 +45,7 @@ selector_impl::selector_impl(size_t itemsize,
       d_input_index(input_index),
       d_output_index(output_index),
       d_num_inputs(0),
+      current_nitems(0),
       d_num_outputs(0) {
 
   d_enabled_output_ports = std::vector<bool>(d_max_port, false);
@@ -123,6 +124,22 @@ bool selector_impl::is_port_enabled(unsigned int port) {
 
   gr::thread::scoped_lock l(d_mutex);
   return d_enabled_output_ports[port];
+}
+
+
+bool selector_impl::is_receiving_samples() {
+  uint64_t nitems = this->nitems_read(0);
+  
+  if (nitems == 0) {
+    return true;
+  }
+
+  if (nitems != current_nitems) {
+    current_nitems = nitems;
+    return true;
+  }
+  BOOST_LOG_TRIVIAL(info) << "is_receiving_samples() - nitems: " << nitems << " current_nitems: " << current_nitems;
+  return false;
 }
 
 int selector_impl::general_work(int noutput_items,
