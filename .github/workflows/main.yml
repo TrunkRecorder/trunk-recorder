@@ -25,8 +25,8 @@ jobs:
         name: Prepare
         id: prepare
         run: |
-          DOCKER_IMAGE=${GITHUB_REPOSITORY}
-          GHCR_IMAGE=ghcr.io/${GITHUB_REPOSITORY}
+          DOCKER_IMAGE=$(echo ${GITHUB_REPOSITORY} | tr '[:upper:]' '[:lower:]')
+          GHCR_IMAGE=ghcr.io/${DOCKER_IMAGE}
           DOCKER_PLATFORMS=linux/amd64,linux/arm64,linux/arm/v7
           VERSION=edge
 
