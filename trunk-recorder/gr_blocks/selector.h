@@ -54,7 +54,6 @@ public:
   // Otherwise samples are copied to the selected output port
   virtual void set_port_enabled(unsigned int port, bool enabled) = 0;
   virtual bool is_port_enabled(unsigned int port) = 0;
-  virtual bool is_receiving_samples() = 0;  
   virtual bool enabled() const = 0;
   virtual void set_input_index(unsigned int input_index) = 0;
   virtual int input_index() const = 0;

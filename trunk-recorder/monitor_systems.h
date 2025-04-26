@@ -15,6 +15,5 @@
 #include <gnuradio/top_block.h>
 
 int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<System *> &systems, std::vector<Call *> &calls);
-void check_sources(std::vector<Source *> &sources);
 void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &sources);
 #endif

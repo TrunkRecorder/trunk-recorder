@@ -133,13 +133,13 @@ int main(int argc, char **argv) {
     // ------------------------------------------------------------------
     BOOST_LOG_TRIVIAL(info) << "stopping flow graph" << std::endl;
     tb->stop();
-    //tb->wait();
+    tb->wait();
 
     BOOST_LOG_TRIVIAL(info) << "stopping plugins" << std::endl;
     stop_plugins();
-    BOOST_LOG_TRIVIAL(info) << "plugins stopped" << std::endl;
   } else {
     BOOST_LOG_TRIVIAL(error) << "Unable to setup a System to record, exiting..." << std::endl;
   }
+
   return exit_code;
 }

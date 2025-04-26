@@ -782,16 +782,6 @@ void process_message_queues(std::vector<System *> &systems) {
   }
 }
 
-void check_sources(std::vector<Source *> &sources) {
-  for (vector<Source *>::iterator it = sources.begin(); it != sources.end(); it++) {
-    Source *source = *it;
-    if (!source->is_alive()) {
-      BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " is no longer active";
-      //exit_flag = 1;
-    }
-  }
-}
-
 int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<System *> &systems, std::vector<Call *> &calls) {
   gr::message::sptr msg;
 
@@ -875,7 +865,6 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
 
     if ((current_time - management_timestamp) >= 1.0) {
       manage_calls(config, calls);
-      check_sources(sources);
       Call_Concluder::manage_call_data_workers();
       management_timestamp = current_time;
     }

@@ -35,7 +35,6 @@
 
 class Call;
 struct Transmission;
-
 namespace gr {
 namespace blocks {
 
@@ -128,8 +127,8 @@ public:
   void set_sample_rate(unsigned int sample_rate);
   void set_bits_per_sample(int bits_per_sample);
   void clear_transmission_list();
-  std::vector<Transmission> get_transmission_list() const;
-  void add_transmission(const Transmission& t);
+  std::vector<Transmission> get_transmission_list();
+  void add_transmission(Transmission t);
   int bits_per_sample();
   unsigned int sample_rate();
   double total_length_in_seconds();
@@ -140,9 +139,9 @@ public:
                    gr_vector_const_void_star &input_items,
                    gr_vector_void_star &output_items);
   State get_state();
-  time_t get_start_time() const;
-  time_t get_stop_time() const;
-  std::chrono::time_point<std::chrono::steady_clock> get_last_write_time() const;
+  time_t get_start_time();
+  time_t get_stop_time();
+  std::chrono::time_point<std::chrono::steady_clock> get_last_write_time();
 };
 
 } /* namespace blocks */
