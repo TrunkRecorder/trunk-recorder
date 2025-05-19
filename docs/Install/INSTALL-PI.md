@@ -10,7 +10,7 @@ Smaller radio systems can be covered using a Raspberry Pi. If you are interested
 ## RaspberryOS (aka Raspbian)
 
 ### Setup Raspbian
-This is a [good guide](https://desertbot.io/blog/headless-raspberry-pi-4-ssh-wifi-setup) on how to setup a Raspberry Pi in headless mode. This means that you do not have to attach a monitor, keyboard or mouse to it to get it working. The steps below are pulled from this guide.
+This is a [good guide](https://www.tomshardware.com/reviews/raspberry-pi-headless-setup-how-to,6028.html) on how to setup a Raspberry Pi in headless mode. This means that you do not have to attach a monitor, keyboard or mouse to it to get it working. The steps below are pulled from this guide.
 
 #### Download and burn the image
 
@@ -21,7 +21,7 @@ The first step is to put the Raspberry Pi OS onto a MicroSD card. You will need 
 
 #### Setup for headless boot
 
-After the OS has been written to MicroSD card, we need to change a few files so that the Pi can get on Wifi and also allow for SSH connections. See the [guide](https://desertbot.io/blog/headless-raspberry-pi-4-ssh-wifi-setup) for how to do it using Windows.
+After the OS has been written to MicroSD card, we need to change a few files so that the Pi can get on Wifi and also allow for SSH connections. See the [guide](https://www.tomshardware.com/reviews/raspberry-pi-headless-setup-how-to,6028.html) for how to do it using Windows.
 
 - **On a Mac** `touch /Volumes/boot/ssh`
 - Next, add the WiFi info
@@ -66,13 +66,13 @@ deb https://www.deb-multimedia.org bookworm main non-free
 ```
 - Download the keys for the apt source and install them:
 ```bash
-wget https://www.deb-multimedia.org/pool/main/d/deb-multimedia-keyring/deb-multimedia-keyring_2016.8.1_all.deb
-sudo dpkg -i deb-multimedia-keyring_2016.8.1_all.deb
+wget https://www.deb-multimedia.org/pool/main/d/deb-multimedia-keyring/deb-multimedia-keyring_2024.9.1_all.deb
+sudo dpkg -i deb-multimedia-keyring_2024.9.1_all.deb
 ```
 - You can verify the package integrity with:
 ```bash
-sha256sum deb-multimedia-keyring_2016.8.1_all.deb
-9faa6f6cba80aeb69c9bac139b74a3d61596d4486e2458c2c65efe9e21ff3c7d deb-multimedia-keyring_2016.8.1_all.deb
+sha256sum deb-multimedia-keyring_2024.9.1_all.deb
+9faa6f6cba80aeb69c9bac139b74a3d61596d4486e2458c2c65efe9e21ff3c7d deb-multimedia-keyring_2024.9.1_all.deb
 ```
 - Update the OS:
 ```
