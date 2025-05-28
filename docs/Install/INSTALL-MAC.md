@@ -26,6 +26,16 @@ See [the Brew homepage](https://brew.sh) for more information.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 ```
 
+#### Installing using the Trunk Recorder Tap
+
+Trunk Recorder can be installed easily by adding the repository to homebrew. More information can be found on [this github repo](https://github.com/TrunkRecorder/homebrew-install). Install can be done easily with the following commands.
+```
+brew tap trunkrecorder/install
+brew install trunk-recorder
+```
+
+If you prefer to install packages individually or without adding the repository, it can be done using the instructions below.
+
 #### Install GNURadio and other dependencies
 ```bash
 brew install gnuradio uhd cmake pkgconfig cppunit openssl fdk-aac-encoder sox pybind11 six
