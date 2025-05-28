@@ -6,18 +6,19 @@ sidebar_position: 4
 There are two main "package managers" used on MacOS: [Homebrew](#using-homebrew) and [MacPorts](#using-macports). Trunk-recorder can be installed with dependencies from one or the other
 
 ## Using Homebrew
-Tested on macOS Ventura 13.2 with the following packages:
+Tested on macOS Sequoia 15.5 with the following packages:
 
-- homebrew 3.6.21
-- cmake 3.25.2
-- gnuradio 3.10.5.1
-- uhd 4.4.0.0
-- pkgconfig 0.29.2
+- homebrew 4.5.3
+- cmake 4.0.2
+- gnuradio 3.10.12.0_1
+- uhd 4.8.0.0_1
+- pkgconfig 2.4.3
 - cppunit 1.15.1
-- openssl 3.0.7
-- fdk-aac-encoder 1.0.3
-- sox 14.4.2
-- pybind11 2.10.3
+- openssl 3.5.0
+- fdk-aac-encoder 2.0.3
+- sox 14.4.2_6
+- pybind11 2.13.6_1
+- six 1.17.0
 
 #### Install Homebrew
 See [the Brew homepage](https://brew.sh) for more information.
@@ -25,9 +26,19 @@ See [the Brew homepage](https://brew.sh) for more information.
 /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
 ```
 
+#### Installing using the Trunk Recorder Tap
+
+Trunk Recorder can be installed easily by adding the repository to homebrew. More information can be found on [this github repo](https://github.com/TrunkRecorder/homebrew-install). Install can be done easily with the following commands.
+```
+brew tap trunkrecorder/install
+brew install trunk-recorder
+```
+
+If you prefer to install packages individually or without adding the repository, it can be done using the instructions below.
+
 #### Install GNURadio and other dependencies
 ```bash
-brew install gnuradio uhd cmake pkgconfig cppunit openssl fdk-aac-encoder sox pybind11
+brew install gnuradio uhd cmake pkgconfig cppunit openssl fdk-aac-encoder sox pybind11 six
 ```
 #### Install the OsmoSDR Package for GNURadio
 See the gr-osmosdr [homepage](https://osmocom.org/projects/gr-osmosdr/wiki/GrOsmoSDR) for more information.
@@ -71,7 +82,7 @@ sudo port selfupdate
 
 #### Install GNU Radio
 
-The preferred method for [installing GNU Radio](http://gnuradio.org/redmine/projects/gnuradio/wiki/InstallingGR) on macOS is: 
+The preferred method for [installing GNU Radio](https://wiki.gnuradio.org/index.php?title=MacInstall) on macOS is: 
  
 ```bash
 sudo port install gnuradio uhd gr-osmosdr
@@ -111,7 +122,7 @@ sudo make install
 #### Building Trunk Recorder
 ```bash
 mkdir trunk-recorder && cd trunk-recorder
-git clone https://github.com/robotastic/trunk-recorder.git source
+git clone https://github.com/TrunkRecorder/trunk-recorder.git source
 mkdir build && cd build
 cmake ../source -DOPENSSL_ROOT_DIR=/usr/local/opt/openssl
 make -j
@@ -120,11 +131,11 @@ sudo make install
 
 ## Configuring Trunk Recorder
 
-The next step is to [configure Trunk Recorder](CONFIGURE.md) for the system you are trying to capture.
+The next step is to [configure Trunk Recorder](../CONFIGURE.md) for the system you are trying to capture.
 
 ## Running trunk recorder. 
 
-If all goes well you should now have the executable named `trunk-recorder`, and created the `config.json` configuration file as described in the [Wiki](https://github.com/robotastic/trunk-recorder/wiki/Configuring-a-System) and [README](https://github.com/robotastic/trunk-recorder/blob/master/README.md#configure).
+If all goes well you should now have the executable named `trunk-recorder`, and created the `config.json` configuration file as described in the [Wiki](https://github.com/TrunkRecorder/trunk-recorder/wiki/Configuring-a-System) and [Configuring Trunk Recorder](https://github.com/TrunkRecorder/trunk-recorder/blob/master/docs/CONFIGURE.md).
 
 From your build directory (e.g. `trunk-build`) you can now run
 `./trunk-recorder`
