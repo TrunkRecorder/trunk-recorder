@@ -72,8 +72,9 @@ class Simple_Stream : public Plugin_Api {
     std::string call_src_tag = call_system->find_unit_tag(call_src);
     std::vector<unsigned long> patched_talkgroups = call_system->get_talkgroup_patch(call_tgid);
 
-    Recorder local_recorder = *recorder;
+    Recorder& local_recorder = *recorder;
     int recorder_id = local_recorder.get_num();
+    long wav_hz = local_recorder.get_wav_hz();
     boost::system::error_code error;
     BOOST_FOREACH (auto stream, streams){
       if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
@@ -95,7 +96,7 @@ class Simple_Stream : public Plugin_Api {
                  {"patched_talkgroups",patched_talkgroups},
                  {"freq", call_freq},
                  {"short_name", call_short_name},
-                 {"audio_sample_rate",local_recorder.get_wav_hz()},
+                 {"audio_sample_rate",wav_hz},
                  {"event","audio"},
               };
               json_string = json_object.dump();
