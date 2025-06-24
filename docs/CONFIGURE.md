@@ -278,14 +278,14 @@ By default, Trunk Recorder will record the call from the first site to receive t
         {
             "type": "P25",
             ...
-            "multiSite": "true",
+            "multiSite": true,
             "multiSiteSystemName": "somesharedname",
             "multiSiteSystemNumber": 1
         },
         {
             "type": "P25",
             ...
-            "multiSite": "true",
+            "multiSite": true,
             "multiSiteSystemName": "somesharedname",
             "multiSiteSystemNumber": 2
         }
