@@ -335,7 +335,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_filter_width(filter_width);
         system->set_conversation_mode(conversation_mode);
         BOOST_LOG_TRIVIAL(info) << "Conversation Mode: " << conversation_mode;
-        BOOST_LOG_TRIVIAL(info) << "Analog Recorder Maximum Deviation: " << element.value("maxDev", 4000);
+        BOOST_LOG_TRIVIAL(info) << "Analog Recorder Maximum Deviation: " << element.value("maxDev", 5000);
         BOOST_LOG_TRIVIAL(info) << "Filter Width: " << filter_width;
         BOOST_LOG_TRIVIAL(info) << "Squelch: " << element.value("squelch", -160);
         BOOST_LOG_TRIVIAL(info) << "De-emphasis Tau: " << tau;
