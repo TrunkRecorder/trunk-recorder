@@ -19,11 +19,11 @@ bool start_recorder(Call *call, TrunkMessage message, Config &config, System *sy
   bool source_found = false;
   bool recorder_found = false;
   bool override_record_unknown = false;
-  
+
   Recorder *recorder;
   Recorder *debug_recorder;
   Recorder *sigmf_recorder;
-  
+
   if (!talkgroup){
     BOOST_FOREACH (auto &TGID, sys->get_talkgroup_patch(call->get_talkgroup())) {  //for each talkgroup in the patch
       if (sys->find_talkgroup(TGID) != NULL){  //if the patched talkgroup is known
@@ -219,7 +219,7 @@ void manage_conventional_call(Call *call, Config &config) {
     // if any recording has happened
 
     if (call->get_current_length() > 0) {
-      
+
       BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Call Length: " << call->get_current_length() << "s\t Idle: " << call->get_recorder()->is_idle() << "\t Squelched: " << call->get_recorder()->is_squelched() << " Idle Count: " << call->get_idle_count();
 
       // means that the squelch is on and it has stopped recording
@@ -753,9 +753,9 @@ void check_message_count(float timeDiff, Config &config, gr::top_block_sptr &tb,
       }
 
       if (msgs_decoded_per_second < config.control_message_warn_rate) {
-        BOOST_LOG_TRIVIAL(error) << "[" << sys->get_short_name() << "]\t Control Channel Message Decode Rate: " << msgs_decoded_per_second << "/sec, count:  " << sys->message_count;
+        BOOST_LOG_TRIVIAL(error) << "[" << sys->get_short_name() << "]\tfreq: " << format_freq(sys->get_current_control_channel()) << "\tControl Channel Message Decode Rate: " << msgs_decoded_per_second << "/sec, count:  " << sys->message_count;
       } else if (config.control_message_warn_rate == -1) {
-        BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\t Control Channel Message Decode Rate: " << msgs_decoded_per_second << "/sec, count:  " << sys->message_count;
+        BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tfreq: " << format_freq(sys->get_current_control_channel()) << "\tControl Channel Message Decode Rate: " << msgs_decoded_per_second << "/sec, count:  " << sys->message_count;
       }
     }
     sys->message_count = 0;
