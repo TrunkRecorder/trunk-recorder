@@ -1,8 +1,45 @@
 Trunk Recorder ChangeLog
 ========================
 ### Unreleased
-* Added openssh-client
-* Added ffmpeg
+* Update simpstream.cc by @aaknitt in #1024
+* Multisite should be boolean, not string by @ancker010 #1026
+* Some documentation updates by @SimonSheehan in #1019 and #1023
+* When logging Control Channel decode rate warnings, include the Control Channel's frequency by @gofaster in #1030
+* Removed boost 'system' required component by @taclane in #1037
+
+### Version 5.0.2 - Quality of Life Improvements
+* Hostname resolution cache for upload plugins by @taclane in #973
+* fmt 11 compile fix by @taclane in #977
+* Update INSTALL-PI.md by @Dygear in #979
+* Configurable de-emphasis time constant for analog recorders by @algertc in #975
+* Update unit to unit recording config documentation. by @tadscottsmith in #987
+* Fixed Raspberry Pi Docker Install Typo by @avery1227 in #983
+* Docker Build: Only build librtlsdr 1x, install 2x by @mkmer in #986
+* Correct spelling of transmissions. by @tadscottsmith in #982
+* auto-restart.sh - Enable Email Alerts by @decoy4fun in #984
+* For testing / future - Ubuntu 24.04 Dockerfile by @jquagga in #953
+* don't remove call when upload failed by @rosecitytransit in #939
+* Dev/backlog by @robotastic in #991
+* Motorola opcode 0x05 0x09 fix by @taclane in #992
+* fix(add openssh-client and ffmpeg) by @jared-bloomer in #1003
+* Min Duration to Info instead of error by @decoy4fun in #1001
+* Initialize noise value by @taclane in #1006
+*  Update main.yml by @robotastic in #1012
+* static_cast start_time by @taclane in #1013
+* Quit if SDR drops by @robotastic in #1015
+* Updated json.hpp library by @robotastic in #1016
+
+### Version 5.0.1
+* Addition of P25 custom bandplans by @tadscottsmith in https://github.com/TrunkRecorder/trunk-recorder/pull/968
+
+### Version 5.0.0 - The best release yet! 
+* Version 5 of Trunk Recorder involved many commits and changes. A full list can be found here, but some will be summarized below. https://github.com/TrunkRecorder/trunk-recorder/pull/963/
+* Channelizer block improvements
+* Significant upgrades to analog recording, squelch, and recorders.
+* Updates to Rdio Scanner, OpenMhz, and Broadcastify uploader plugins.
+* Signal detector improvements.
+* Significant improvements to overall performance and many bugs fixed. 
+* Improved CSV/JSON handling 
 
 ### Version 4.6.0
 * Cleaned up Rdio Scanner talkgroup display logs. by @tadscottsmith in https://github.com/robotastic/trunk-recorder/pull/750
