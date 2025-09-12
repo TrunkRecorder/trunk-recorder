@@ -70,7 +70,24 @@ class Simple_Stream : public Plugin_Api {
     uint32_t call_freq = call->get_freq();
     std::string call_short_name = call->get_short_name();
     std::string call_src_tag = call_system->find_unit_tag(call_src);
-    std::vector<unsigned long> patched_talkgroups = call_system->get_talkgroup_patch(call_tgid);
+    std::vector<unsigned long> unsigned_patched_talkgroups = call_system->get_talkgroup_patch(call_tgid);
+    std::vector<long> patched_talkgroups;
+    // Convert unsigned long to signed long, preserving negative values
+    for (auto tgid : unsigned_patched_talkgroups) {
+      patched_talkgroups.push_back(static_cast<long>(tgid));
+    }
+
+    if(call_src == -1){
+      if(call->get_transmissions().size() > 0){
+        // Get the source from the most recent transmission
+        auto transmissions = call->get_transmissions();
+        call_src = transmissions.back().source;
+        BOOST_LOG_TRIVIAL(info) << "using source " << call_src << " from most recent transmission";
+      }
+      else{
+        BOOST_LOG_TRIVIAL(info) << "no source found for call - leaving src as -1";
+      }
+    }
 
     Recorder& local_recorder = *recorder;
     int recorder_id = local_recorder.get_num();
@@ -79,10 +96,10 @@ class Simple_Stream : public Plugin_Api {
     BOOST_FOREACH (auto stream, streams){
       if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
         if (patched_talkgroups.size() == 0){
-          patched_talkgroups.push_back(static_cast<unsigned long>(call_tgid));  //call_info.talkgroup may be negative so cast for comparison (conventional system hack)
+          patched_talkgroups.push_back(call_tgid);  //call_info.talkgroup may be negative - we cast stream.TGID to signed for comparison
         }
         BOOST_FOREACH (auto TGID, patched_talkgroups){
-          if ((TGID==static_cast<unsigned long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
+          if ((TGID==static_cast<long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
             BOOST_LOG_TRIVIAL(debug) << "got " <<sampleCount <<" samples - " <<sampleCount*2<<" bytes from recorder "<<recorder_id<<" for TGID "<<TGID;
             json json_object;
             std::string json_string;
@@ -132,21 +149,34 @@ class Simple_Stream : public Plugin_Api {
     std::string call_short_name = call->get_short_name();
     std::string call_src_tag = call_system->find_unit_tag(call_src);
     std::string call_tgid_tag = call->get_talkgroup_tag();
-    std::vector<unsigned long> patched_talkgroups = call_system->get_talkgroup_patch(call_tgid);
+    std::vector<unsigned long> unsigned_patched_talkgroups = call_system->get_talkgroup_patch(call_tgid);
+    std::vector<long> patched_talkgroups;
+    // Convert unsigned long to signed long, preserving negative values
+    for (auto tgid : unsigned_patched_talkgroups) {
+      patched_talkgroups.push_back(static_cast<long>(tgid));
+    }
+
+    if(call_src == -1){
+      if(call->get_transmissions().size() > 0){
+        // Get the source from the most recent transmission
+        auto transmissions = call->get_transmissions();
+        call_src = transmissions.back().source;
+      }
+    }
     
     BOOST_FOREACH (auto stream, streams){
       if (stream.sendJSON == true && stream.sendCallStart == true){
         if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
           if (patched_talkgroups.size() == 0){
-            patched_talkgroups.push_back(static_cast<unsigned long>(call_tgid));  //call_info.talkgroup may be negative so cast for comparison (conventional system hack)
+            patched_talkgroups.push_back(call_tgid);  //call_info.talkgroup may be negative - we cast stream.TGID to signed for comparison
           }
           std::vector<std::string> patched_talkgroup_tags;
           BOOST_FOREACH (auto TGID, patched_talkgroups){
-            Talkgroup* this_tg = call_system->find_talkgroup(TGID);
+            Talkgroup* this_tg = call_system->find_talkgroup(static_cast<unsigned long>(TGID));
             if (this_tg != nullptr) {
               patched_talkgroup_tags.push_back(this_tg->alpha_tag);
             }
-            if ((TGID==static_cast<unsigned long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
+            if ((TGID==static_cast<long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
               json json_object;
               std::string json_string;
               std::vector<boost::asio::const_buffer> send_buffer;
@@ -187,12 +217,17 @@ class Simple_Stream : public Plugin_Api {
     BOOST_FOREACH (auto stream, streams){
       if (stream.sendJSON == true && stream.sendCallEnd == true){
         if (0==stream.short_name.compare(call_info.short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
-          std::vector<unsigned long> patched_talkgroups = call_info.patched_talkgroups;
-          if (patched_talkgroups.size() == 0){
-            patched_talkgroups.push_back(static_cast<unsigned long>(call_info.talkgroup)); //call_info.talkgroup may be negative so cast for comparison (conventional system hack)
+          std::vector<long> patched_talkgroups;
+          if (call_info.patched_talkgroups.size() == 0){
+            patched_talkgroups.push_back(call_info.talkgroup); //call_info.talkgroup may be negative - we cast stream.TGID to signed for comparison
+          } else {
+            // Convert existing unsigned long values to signed long
+            for (auto tgid : call_info.patched_talkgroups) {
+              patched_talkgroups.push_back(static_cast<long>(tgid));
+            }
           }
           BOOST_FOREACH (auto TGID, patched_talkgroups){
-            if ((TGID == static_cast<unsigned long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
+            if ((TGID == static_cast<long>(stream.TGID)) || stream.TGID==0){  //setting TGID to 0 in the config file will stream everything
               json json_object;
               std::string json_string;
               std::vector<boost::asio::const_buffer> send_buffer;
