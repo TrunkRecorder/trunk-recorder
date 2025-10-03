@@ -56,14 +56,6 @@ This is a [good guide](https://www.raspberrypi.org/documentation/computers/remot
 
 The following steps setup all of the libraries needed to build Trunk Recorder.
 
-- Add the Debian Multimedia source and include non-free libraries, like **fdkaac**. Edit the sources.list file: 
-```bash
-sudo nano /etc/apt/sources.list
-```
-- and add this line to the end:
-```
-deb https://www.deb-multimedia.org bookworm main non-free
-```
 - Download the keys for the apt source and install them:
 ```bash
 wget https://www.deb-multimedia.org/pool/main/d/deb-multimedia-keyring/deb-multimedia-keyring_2024.9.1_all.deb
@@ -74,6 +66,20 @@ sudo dpkg -i deb-multimedia-keyring_2024.9.1_all.deb
 sha256sum deb-multimedia-keyring_2024.9.1_all.deb
 8dc6cbb266c701cfe58bd1d2eb9fe2245a1d6341c7110cfbfe3a5a975dcf97ca deb-multimedia-keyring_2024.9.1_all.deb
 ```
+- Add the Debian Multimedia source and include non-free libraries, like **fdkaac**. Edit the raspi.sources file: 
+```bash
+sudo nano /etc/apt/sources.list.d/raspi.sources
+```
+- and add these lines to the end:
+```
+Types: deb
+URIs: https://www.deb-multimedia.org/
+Suites: trixie
+Components: main non-free
+Signed-By: /usr/share/keyrings/deb-multimedia-keyring.pgp
+
+```
+By convention, there should be a empty line between the last entry set and the `Types` of the next entry set, as well as an empty line at the end of the file.
 - Update the OS:
 ```
 sudo apt update
@@ -83,13 +89,13 @@ sudo apt upgrade
 ```bash
 sudo apt -y install libssl-dev openssl curl git fdkaac sox libcurl3-gnutls libcurl4 libcurl4-openssl-dev gnuradio gnuradio-dev gr-osmosdr libhackrf-dev libairspy-dev libairspyhf-dev libuhd-dev cmake make build-essential libboost-all-dev libusb-1.0-0-dev libsndfile1-dev
 ```
-
+<!--
 - Remove xtra-dkms.
 DKMS is not needed on the Raspberry Pi platform, and just causes issues. The above command actually returns an error on Raspberry Pi OS. So we remove that module from our build so we do not get errors from subsaquent `apt` calls.
 ```bash
 sudo apt remove xtrx-dkms
 ```
-
+-->
 ## Configure RTL-SDRs to load correctly:
 
 ```bash
