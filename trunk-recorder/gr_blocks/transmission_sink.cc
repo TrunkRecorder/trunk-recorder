@@ -228,11 +228,19 @@ void transmission_sink::end_transmission() {
     } else {
       BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
+
+    auto now_ms = std::chrono::system_clock::now();
+    d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         now_ms.time_since_epoch()
+                     ).count();
+
     // if an Transmission has ended, send it to Call.
     Transmission transmission;
     transmission.source = curr_src_id;      // Source ID for the Call
     transmission.start_time = d_start_time; // Start time of the Call
     transmission.stop_time = d_stop_time;   // when the Call eneded
+    transmission.start_time_ms  = d_start_time_ms;
+    transmission.stop_time_ms   = d_stop_time_ms;
     transmission.sample_count = d_sample_count;
     transmission.spike_count = d_spike_count;
     transmission.error_count = d_error_count;
@@ -506,6 +514,11 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
       d_start_time = current_time;
     }
 
+    auto now_ms = std::chrono::system_clock::now();
+    d_start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+        now_ms.time_since_epoch()
+    ).count();
+
     // create a new filename, based on the current time and source.
     create_filename();
     if (!open_internal(current_filename)) {
@@ -550,6 +563,8 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
 
   d_stop_time = time(NULL);
   d_last_write_time = std::chrono::steady_clock::now();
+
+  d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now_ms.time_since_epoch()).count();
 
   if (nwritten < noutput_items) {
     BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to Write! Wrote: " << nwritten << " of " << noutput_items;
