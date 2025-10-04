@@ -8,6 +8,7 @@
 #include <boost/algorithm/string.hpp>
 #include <signal.h>
 #include <stdio.h>
+#include <chrono>
 
 std::string Call_impl::get_capture_dir() {
   return this->config.capture_dir;
@@ -41,6 +42,11 @@ Call_impl::Call_impl(long t, double f, System *s, Config c) {
   sys = s;
   start_time = time(NULL);
   stop_time = time(NULL);
+  start_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+  stop_time_ms = 0;
   last_update = time(NULL);
   state = MONITORING;
   monitoringState = UNSPECIFIED;
@@ -74,6 +80,11 @@ Call_impl::Call_impl(TrunkMessage message, System *s, Config c) {
   sys = s;
   start_time = time(NULL);
   stop_time = time(NULL);
+  start_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+  stop_time_ms = 0;
   last_update = time(NULL);
   state = MONITORING;
   monitoringState = UNSPECIFIED;
@@ -123,6 +134,10 @@ void Call_impl::conclude_call() {
 
   // BOOST_LOG_TRIVIAL(info) << "conclude_call()";
   stop_time = time(NULL);
+  stop_time_ms =
+        std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
 
   if (state == RECORDING || (state == MONITORING && monitoringState == SUPERSEDED)) {
     if (!recorder) {

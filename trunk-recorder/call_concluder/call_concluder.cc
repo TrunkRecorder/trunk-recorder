@@ -279,6 +279,8 @@ int create_call_json(Call_Data_t& call_info) {
           {"phase2_tdma", int(call_info.phase2_tdma)},
           {"start_time", call_info.start_time},
           {"stop_time", call_info.stop_time},
+          {"start_time_ms", call_info.start_time_ms},
+          {"stop_time_ms", call_info.stop_time_ms},
           {"emergency", int(call_info.emergency)},
           {"priority", call_info.priority},
           {"mode", int(call_info.mode)},
@@ -640,10 +642,12 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
 
     if (it == call_info.transmission_list.begin()) {
       call_info.start_time = t.start_time;
+      call_info.start_time_ms = t.start_time_ms;
     }
 
     if (std::next(it) == call_info.transmission_list.end()) {
       call_info.stop_time = t.stop_time;
+      call_info.stop_time_ms = t.stop_time_ms;
     }
 
     if (call_info.color_code == -1 && t.color_code != -1) {
