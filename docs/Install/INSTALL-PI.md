@@ -113,7 +113,7 @@ sudo udevadm trigger
 
 In order to keep your copy of the Trunk Recorder source code free of build artifacts created by the build process, it is suggested to create a separate "out-of-tree" build directory. We will use `trunk-build` as our build directory. We by default do this in our home directory (`~` - Is a shortcut back to home.).
 
-**Note:** Depending on the amount of RAM in your Raspberry Pi, it may be best to run `make -j1` (2GB), `make -j3` (4GB), and `make -j4` (8GB) in order to ensure that you do not run out of RAM, at the cost of making the compile process take longer. If you ran out of RAM the compile process will fail completely, so it can be an acceptable tradeoff.
+**Note:** Depending on the amount of RAM in your Raspberry Pi, it may be best to run `make -j1` (2GB or less), `make -j2` (4GB or less), and `make -j4` (8GB or more) in order to ensure that you do not run out of RAM, at the cost of making the compile process take longer. If you ran out of RAM the compile process will fail completely, so it can be an acceptable tradeoff.
 
 ```bash
 cd ~
