@@ -267,6 +267,7 @@ int create_call_json(Call_Data_t& call_info) {
   // Bools are stored as 0 or 1 as in previous versions
   // Call length is rounded up to the nearest second as in previous versions
   // Time stored in fractional seconds will omit trailing zeroes per json spec (1.20 -> 1.2)
+
   nlohmann::ordered_json json_data =
       {
           {"freq", int(call_info.freq)},
@@ -287,6 +288,7 @@ int create_call_json(Call_Data_t& call_info) {
           {"duplex", int(call_info.duplex)},
           {"encrypted",int(call_info.encrypted)},
           {"call_length", int(std::round(call_info.length))},
+          {"call_length_ms", call_info.call_length_ms},
           {"talkgroup", call_info.talkgroup},
           {"talkgroup_tag", call_info.talkgroup_alpha_tag},
           {"talkgroup_description", call_info.talkgroup_description},
@@ -558,6 +560,10 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config config) {
   Call_Data_t call_info;
   double total_length = 0;
+  std::int64_t audio_sum_ms = 0;
+  bool have_first = false;
+
+  call_info = create_base_filename(call, call_info);
 
   call_info.status = INITIAL;
   call_info.process_call_time = time(0);
@@ -608,8 +614,10 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
 
   // loop through the transmission list, pull in things to fill in totals for call_info
   // Using a for loop with iterator
-  for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end();) {
-    Transmission t = *it;
+  for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin();
+     it != call_info.transmission_list.end();) {
+
+     Transmission t = *it;
 
     if (t.length < sys->get_min_tx_duration() && !call_info.encrypted) {
       if (!call_info.transmission_archive) {
@@ -625,11 +633,12 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
       continue;
     }
 
-    std::string tag = sys->find_unit_tag(t.source);
-    std::string display_tag = "";
-    if (tag != "") {
-      display_tag = " (\033[0;34m" + tag + "\033[0m)";
-    }
+     // compute exact duration from ms stamps (matches playable audio)
+     const std::int64_t seg_ms   = std::max<std::int64_t>(0, t.stop_time_ms - t.start_time_ms);
+     const double       seg_len_s = seg_ms / 1000.0;
+
+     std::string tag = sys->find_unit_tag(t.source);
+     std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
 
     std::stringstream transmission_info;
     transmission_info << loghdr << "- Transmission src: " << t.source << display_tag << " pos: " << format_time(total_length) << " length: " << format_time(t.length);
@@ -640,10 +649,11 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
       BOOST_LOG_TRIVIAL(info) << transmission_info.str() << "\033[0;31m errors: " << t.error_count << " spikes: " << t.spike_count << "\033[0m";
     }
 
-    if (it == call_info.transmission_list.begin()) {
-      call_info.start_time = t.start_time;
-      call_info.start_time_ms = t.start_time_ms;
-    }
+     if (it == call_info.transmission_list.begin()) {
+       call_info.start_time    = t.start_time;
+       call_info.start_time_ms = t.start_time_ms;
+       have_first = true;
+     }
 
     if (std::next(it) == call_info.transmission_list.end()) {
       call_info.stop_time = t.stop_time;
@@ -663,19 +673,32 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     }
 
 
-    Call_Source call_source = {t.source, t.start_time, total_length, false, "", tag};
-    Call_Error call_error = {t.start_time, total_length, t.length, t.error_count, t.spike_count};
-    call_info.error_count = call_info.error_count + t.error_count;
-    call_info.spike_count = call_info.spike_count + t.spike_count;
-    call_info.transmission_source_list.push_back(call_source);
-    call_info.transmission_error_list.push_back(call_error);
+     Call_Source call_source = { t.source, t.start_time, total_length, false, "", tag };
+     Call_Error  call_error  = { t.start_time, total_length, seg_len_s, t.error_count, t.spike_count };
+     call_info.transmission_source_list.push_back(call_source);
+     call_info.transmission_error_list.push_back(call_error);
 
-    total_length = total_length + t.length;
+     call_info.error_count += t.error_count;
+     call_info.spike_count += t.spike_count;
+    
+      total_length += seg_len_s;
+     audio_sum_ms += seg_ms;
     it++;
   }
 
-
-
+    if (have_first) {
+    call_info.stop_time_ms = call_info.start_time_ms + audio_sum_ms;
+    call_info.stop_time    = (time_t)(call_info.stop_time_ms / 1000);
+    call_info.length       = audio_sum_ms / 1000.0;
+    call_info.call_length_ms = audio_sum_ms;
+  } else {
+    call_info.length       = 0.0;
+    call_info.start_time_ms = 0;
+    call_info.stop_time_ms  = 0;
+    call_info.start_time    = 0;
+    call_info.stop_time     = 0;
+    call_info.call_length_ms = 0;
+  }
   Talkgroup *tg = sys->find_talkgroup(call_info.talkgroup);
   if (tg != NULL) {
     call_info.talkgroup_tag = tg->tag;
@@ -694,8 +717,6 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info = create_base_filename(call, call_info, sys, config);
 
   call_info.archive_files_on_failure = config.archive_files_on_failure;
-  call_info.length = total_length;
-
   return call_info;
 }
 
