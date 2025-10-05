@@ -138,6 +138,7 @@ private:
   int silence_frames;
   int tdma_slot;
   bool d_phase2_tdma;
+  bool d_soft_vocoder;
   long input_rate;
   const int phase1_samples_per_symbol = 5;
   const double phase1_symbol_rate = 4800;

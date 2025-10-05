@@ -219,7 +219,7 @@ void rx_sync::ysf_sync(const uint8_t dibitbuf[], bool& ysf_fullrate, bool& unmut
 		fprintf(stderr, "%s ysf_sync: muting audio: dt: %d, rc: %d\n", logts.get(d_msgq_id), d_shift_reg, rc);
 }
 
-rx_sync::rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue, std::array<std::deque<int16_t>, 2> &output_queue) :	// constructor
+rx_sync::rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue, std::array<std::deque<int16_t>, 2> &output_queue, bool d_soft_vocoder) :	// constructor
 	sync_timer(op25_timer(1000000)),
 	d_symbol_count(0),
 	d_sync_reg(0),
@@ -421,31 +421,53 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 		do_fullrate = true;
 		break;
 	}
+	int16_t samp_buf[NSAMP_OUTPUT];
+	bool use_samp_buf = false;
+
 	if (do_tone) {
 		d_software_decoder[slot_id].decode_tone(tone_mp[slot_id].ID, tone_mp[slot_id].AD, &tone_mp[slot_id].n);
 	} else {
 		mbe_moveMbeParms (&cur_mp[slot_id], &prev_mp[slot_id]);
 		if (do_fullrate) {
-			d_software_decoder[slot_id].decode(fullrate_cw);
+			if (d_soft_vocoder) {
+				d_software_decoder[slot_id].decode(fullrate_cw);
+			} else {
+				int16_t frame_vector[8];
+
+                for (int i=0; i < 8; i++) {
+                    frame_vector[i] = u[i];
+                }
+                frame_vector[7] >>= 1;
+                d_imbe_vocoder[slot_id].imbe_decode(frame_vector, samp_buf);
+				use_samp_buf = true;
+			}
 		} else {	/* halfrate */
 			if (!do_silence) {
-				d_software_decoder[slot_id].decode_tap(cur_mp[slot_id].L, 0, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
+				if (d_soft_vocoder) {
+					d_software_decoder[slot_id].decode_tap(cur_mp[slot_id].L, 0, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
+				} else {
+					d_imbe_vocoder[slot_id].decode_tap(samp_buf, cur_mp[slot_id].L, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
+					use_samp_buf = true;
+				}
 			}
 		}
 	}
 	audio_samples *samples = d_software_decoder[slot_id].audio();
 	float snd;
-	int16_t samp_buf[NSAMP_OUTPUT];
 	for (int i=0; i < NSAMP_OUTPUT; i++) {
-		if ((!do_silence) && samples->size() > 0) {
-			snd = samples->front();
-			samples->pop_front();
-		} else {
+		if (do_silence) {
 			snd = 0;
+		} else {
+			if (use_samp_buf) {
+				snd = samp_buf[i];
+			} else {
+				snd = samples->front();
+				samples->pop_front();
+
+				if (do_fullrate)
+					snd *= 32768.0;
+			}
 		}
-		if (do_fullrate)
-			snd *= 32768.0;
-		samp_buf[i] = snd;
 		output_queue[slot_id].push_back(snd);
 	}
 	//output(samp_buf, slot_id);

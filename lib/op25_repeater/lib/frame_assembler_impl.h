@@ -63,7 +63,7 @@ namespace gr {
                 log_ts logts;
 
             public:
-                frame_assembler_impl(const char* options, int debug, int msgq_id, gr::msg_queue::sptr queue);
+                frame_assembler_impl(const char* options, int debug, int msgq_id, gr::msg_queue::sptr queue, bool d_soft_vocoder);
                 ~frame_assembler_impl();
 
                 // Where all the action really happens

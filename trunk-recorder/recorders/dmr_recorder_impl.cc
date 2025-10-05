@@ -26,6 +26,7 @@ void dmr_recorder_impl::initialize(Source *src) {
   chan_freq = source->get_center();
   center_freq = source->get_center();
   config = source->get_config();
+  d_soft_vocoder = config->soft_vocoder;
   input_rate = source->get_rate();
   silence_frames = source->get_silence_frames();
   squelch_db = 0;
@@ -98,7 +99,7 @@ void dmr_recorder_impl::initialize(Source *src) {
   rx_queue = gr::msg_queue::make(100);
   int verbosity = 0; // 10 = lots of debug messages
 
-  framer = gr::op25_repeater::frame_assembler::make("file:///tmp/out1.raw", verbosity, 1, rx_queue);
+  framer = gr::op25_repeater::frame_assembler::make("file:///tmp/out1.raw", verbosity, 1, rx_queue, d_soft_vocoder);
   levels = gr::blocks::multiply_const_ff::make(1);
   plugin_sink_slot0 = gr::blocks::plugin_wrapper_impl::make(std::bind(&dmr_recorder_impl::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
   plugin_sink_slot1 = gr::blocks::plugin_wrapper_impl::make(std::bind(&dmr_recorder_impl::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
