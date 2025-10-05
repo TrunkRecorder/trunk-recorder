@@ -1,5 +1,6 @@
 #ifndef GLOBAL_STRUCTS_H
 #define GLOBAL_STRUCTS_H
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -132,6 +133,7 @@ struct Call_Data_t {
 
   int tdma_slot;
   double length;
+  std::int64_t call_length_ms;
   bool phase2_tdma;
 
   std::vector<Call_Source> transmission_source_list;

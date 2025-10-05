@@ -79,24 +79,56 @@ transmission_sink::transmission_sink(int n_channels, unsigned int sample_rate, i
 }
 
 void transmission_sink::create_filename() {
-  time_t work_start_time = d_start_time;
-  std::stringstream temp_path_stream;
-  // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
+  using std::ostringstream;
+  using std::setw;
+  using std::setfill;
 
-  temp_path_stream << d_current_call_temp_dir << "/" << d_current_call_short_name;
-  std::string temp_path_string = temp_path_stream.str();
-  boost::filesystem::create_directories(temp_path_string);
+  // <temp>/<short_name>
+  boost::filesystem::path dir =
+      boost::filesystem::path(d_current_call_temp_dir) / d_current_call_short_name;
 
-  int nchars;
-
-  if (d_slot == -1) {
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq);
-  } else {
-    // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.%d.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq, d_slot);
+  boost::system::error_code ec;
+  boost::filesystem::create_directories(dir, ec);
+  if (ec) {
+    BOOST_LOG_TRIVIAL(error) << "create_directories failed for " << dir.string()
+                             << " : " << ec.message();
   }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
+
+  // Seconds.milliseconds from d_start_time_ms
+  const long long start_ms = static_cast<long long>(d_start_time_ms);
+  const long long sec     = start_ms / 1000;
+  const int       milli   = static_cast<int>(start_ms % 1000);
+
+  // Normalize frequency to integer
+  const long long freq_i  = static_cast<long long>(std::llround(d_current_call_freq));
+
+  auto make_stem = [&](int suffix) {
+    ostringstream ts;
+    ts << sec << '.' << setw(3) << setfill('0') << milli;   // e.g. 1718145678.042
+
+    ostringstream oss;
+    oss << d_current_call_talkgroup << "-" << ts.str() << "_" << freq_i;
+    if (d_slot != -1) oss << "." << d_slot;
+    if (suffix > 0)    oss << "-" << suffix;                // collision suffix
+    oss << ".wav";
+    return oss.str();
+  };
+
+  boost::filesystem::path candidate = dir / make_stem(0);
+  for (int i = 1; boost::filesystem::exists(candidate) && i <= 99; ++i) {
+    candidate = dir / make_stem(i);
+  }
+
+  const std::string cand_str = candidate.string();
+  const size_t cap = sizeof(current_filename);
+  if (cand_str.size() >= cap) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Call: Path longer than buffer (" << cap
+        << ") — truncating filename: " << cand_str;
+    std::snprintf(current_filename, cap, "%.*s",
+                  static_cast<int>(cap - 1), cand_str.c_str());
+  } else {
+    std::snprintf(current_filename, cap, "%s", cand_str.c_str());
   }
 }
 

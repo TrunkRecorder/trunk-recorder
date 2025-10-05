@@ -2,6 +2,10 @@
 #include "../plugin_manager/plugin_manager.h"
 #include <boost/filesystem.hpp>
 #include <filesystem>
+#include <algorithm>
+#include <cstdint>
+#include <iomanip>
+
 namespace fs = std::filesystem;
 
 const int Call_Concluder::MAX_RETRY = 2;
@@ -57,7 +61,8 @@ int create_call_json(Call_Data_t& call_info) {
   // Using nlohmann::ordered_json to preserve the previous order
   // Bools are stored as 0 or 1 as in previous versions
   // Call length is rounded up to the nearest second as in previous versions
-  // Time stored in fractional seconds will omit trailing zeroes per json spec (1.20 -> 1.2) 
+  // Time stored in fractional seconds will omit trailing zeroes per json spec (1.20 -> 1.2)
+
   nlohmann::ordered_json json_data =
       {
           {"freq", int(call_info.freq)},
@@ -78,6 +83,7 @@ int create_call_json(Call_Data_t& call_info) {
           {"duplex", int(call_info.duplex)},
           {"encrypted",int(call_info.encrypted)},
           {"call_length", int(std::round(call_info.length))},
+          {"call_length_ms", call_info.call_length_ms},
           {"talkgroup", call_info.talkgroup},
           {"talkgroup_tag", call_info.talkgroup_alpha_tag},
           {"talkgroup_description", call_info.talkgroup_description},
@@ -278,30 +284,47 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
 // static int rec_counter=0;
 Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_info) {
-  char base_filename[255];
   time_t work_start_time = call->get_start_time();
-  std::stringstream base_path_stream;
   tm *ltm = localtime(&work_start_time);
-  // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
-  base_path_stream << call->get_capture_dir() << "/" << call->get_short_name() << "/" << 1900 + ltm->tm_year << "/" << 1 + ltm->tm_mon << "/" << ltm->tm_mday;
-  std::string base_path_string = base_path_stream.str();
-  boost::filesystem::create_directories(base_path_string);
 
-  int nchars;
+  boost::filesystem::path base_path =
+      boost::filesystem::path(call->get_capture_dir()) /
+      call->get_short_name() /
+      boost::lexical_cast<std::string>(1900 + ltm->tm_year) /
+      boost::lexical_cast<std::string>(1 + ltm->tm_mon) /
+      boost::lexical_cast<std::string>(ltm->tm_mday);
 
+  boost::filesystem::create_directories(base_path);
+
+  // Seconds.milliseconds from call start_time_ms
+  const long long start_ms = static_cast<long long>(call->get_start_time_ms());
+  const long long sec     = start_ms / 1000;
+  const int       milli   = static_cast<int>(start_ms % 1000);
+
+  std::ostringstream ts;
+  ts << sec << '.' << std::setw(3) << std::setfill('0') << milli;
+
+  char base_filename[255];
   if (call->get_tdma_slot() == -1) {
-    nchars = snprintf(base_filename, 255, "%s/%ld-%ld_%.0f", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq());
+    std::snprintf(base_filename, sizeof(base_filename),
+                  "%s/%ld-%s_%.0f",
+                  base_path.string().c_str(),
+                  call->get_talkgroup(),
+                  ts.str().c_str(),
+                  call->get_freq());
   } else {
-    // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(base_filename, 255, "%s/%ld-%ld_%.0f.%d", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq(), call->get_tdma_slot());
+    std::snprintf(base_filename, sizeof(base_filename),
+                  "%s/%ld-%s_%.0f.%d",
+                  base_path.string().c_str(),
+                  call->get_talkgroup(),
+                  ts.str().c_str(),
+                  call->get_freq(),
+                  call->get_tdma_slot());
   }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
-  }
-  snprintf(call_info.filename, 300, "%s-call_%lu.wav", base_filename, call->get_call_num());
-  snprintf(call_info.status_filename, 300, "%s-call_%lu.json", base_filename, call->get_call_num());
-  snprintf(call_info.converted, 300, "%s-call_%lu.m4a", base_filename, call->get_call_num());
 
+  std::snprintf(call_info.filename,         sizeof(call_info.filename),         "%s-call_%lu.wav", base_filename, call->get_call_num());
+  std::snprintf(call_info.status_filename,  sizeof(call_info.status_filename),  "%s-call_%lu.json", base_filename, call->get_call_num());
+  std::snprintf(call_info.converted,        sizeof(call_info.converted),        "%s-call_%lu.m4a", base_filename, call->get_call_num());
   return call_info;
 }
 
@@ -309,6 +332,8 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config config) {
   Call_Data_t call_info;
   double total_length = 0;
+  std::int64_t audio_sum_ms = 0;
+  bool have_first = false;
 
   call_info = create_base_filename(call, call_info);
 
@@ -368,62 +393,87 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
 
   // loop through the transmission list, pull in things to fill in totals for call_info
   // Using a for loop with iterator
-  for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end();) {
-    Transmission t = *it;
+  for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin();
+     it != call_info.transmission_list.end();) {
 
-    if (t.length < sys->get_min_tx_duration()) {
-      if (!call_info.transmission_archive) {
-        std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission less than " << sys->get_min_tx_duration() << " seconds. Actual length: " << t.length << ".";
-        call_info.min_transmissions_removed++;
+     Transmission t = *it;
 
-        if (checkIfFile(t.filename)) {
-          remove(t.filename);
-        }
-      }
+     if (t.length < sys->get_min_tx_duration()) {
+       if (!call_info.transmission_archive) {
+         std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                         call_info.talkgroup_display, call_info.freq);
+         BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission less than "
+                                 << sys->get_min_tx_duration()
+                                 << " seconds. Actual length: " << t.length << ".";
+         call_info.min_transmissions_removed++;
 
-      it = call_info.transmission_list.erase(it);
-      continue;
-    }
+         if (checkIfFile(t.filename)) {
+           remove(t.filename);
+         }
+       }
+       it = call_info.transmission_list.erase(it);
+       continue;
+     }
 
-    std::string tag = sys->find_unit_tag(t.source);
-    std::string display_tag = "";
-    if (tag != "") {
-      display_tag = " (\033[0;34m" + tag + "\033[0m)";
-    }
+     // compute exact duration from ms stamps (matches playable audio)
+     const std::int64_t seg_ms   = std::max<std::int64_t>(0, t.stop_time_ms - t.start_time_ms);
+     const double       seg_len_s = seg_ms / 1000.0;
 
-    std::stringstream transmission_info;
-    std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
-    transmission_info << loghdr << "- Transmission src: " << t.source << display_tag << " pos: " << format_time(total_length) << " length: " << format_time(t.length);
+     std::string tag = sys->find_unit_tag(t.source);
+     std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
 
-    if (t.error_count < 1) {
-      BOOST_LOG_TRIVIAL(info) << transmission_info.str();
-    } else {
-      BOOST_LOG_TRIVIAL(info) << transmission_info.str() << "\033[0;31m errors: " << t.error_count << " spikes: " << t.spike_count << "\033[0m";
-    }
+     std::stringstream transmission_info;
+     std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                     call_info.talkgroup_display, call_info.freq);
+     transmission_info << loghdr << "- Transmission src: " << t.source << display_tag
+                       << " pos: "    << format_time(total_length)
+                       << " length: " << format_time(t.length);
+     if (t.error_count < 1) {
+       BOOST_LOG_TRIVIAL(info) << transmission_info.str();
+     } else {
+       BOOST_LOG_TRIVIAL(info) << transmission_info.str()
+                               << "\033[0;31m errors: " << t.error_count
+                               << " spikes: " << t.spike_count << "\033[0m";
+     }
 
-    if (it == call_info.transmission_list.begin()) {
-      call_info.start_time = t.start_time;
-      call_info.start_time_ms = t.start_time_ms;
-    }
+     if (it == call_info.transmission_list.begin()) {
+       call_info.start_time    = t.start_time;
+       call_info.start_time_ms = t.start_time_ms;
+       have_first = true;
+     }
 
-    if (std::next(it) == call_info.transmission_list.end()) {
-      call_info.stop_time = t.stop_time;
-      call_info.stop_time_ms = t.stop_time_ms;
-    }
+     if (std::next(it) == call_info.transmission_list.end()) {
+       call_info.stop_time    = t.stop_time;
+       call_info.stop_time_ms = t.stop_time_ms;
+     }
 
-    Call_Source call_source = {t.source, t.start_time, total_length, false, "", tag};
-    Call_Error call_error = {t.start_time, total_length, t.length, t.error_count, t.spike_count};
-    call_info.error_count = call_info.error_count + t.error_count;
-    call_info.spike_count = call_info.spike_count + t.spike_count;
-    call_info.transmission_source_list.push_back(call_source);
-    call_info.transmission_error_list.push_back(call_error);
+     Call_Source call_source = { t.source, t.start_time, total_length, false, "", tag };
+     Call_Error  call_error  = { t.start_time, total_length, seg_len_s, t.error_count, t.spike_count };
+     call_info.transmission_source_list.push_back(call_source);
+     call_info.transmission_error_list.push_back(call_error);
 
-    total_length = total_length + t.length;
-    it++;
+     call_info.error_count += t.error_count;
+     call_info.spike_count += t.spike_count;
+
+     total_length += seg_len_s;
+     audio_sum_ms += seg_ms;
+
+     ++it;
+   }
+
+  if (have_first) {
+    call_info.stop_time_ms = call_info.start_time_ms + audio_sum_ms;
+    call_info.stop_time    = (time_t)(call_info.stop_time_ms / 1000);
+    call_info.length       = audio_sum_ms / 1000.0;
+    call_info.call_length_ms = audio_sum_ms;
+  } else {
+    call_info.length       = 0.0;
+    call_info.start_time_ms = 0;
+    call_info.stop_time_ms  = 0;
+    call_info.start_time    = 0;
+    call_info.stop_time     = 0;
+    call_info.call_length_ms = 0;
   }
-
-  call_info.length = total_length;
 
   return call_info;
 }
