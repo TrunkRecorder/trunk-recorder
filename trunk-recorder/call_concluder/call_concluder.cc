@@ -284,7 +284,8 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
 // static int rec_counter=0;
 Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_info) {
-  time_t work_start_time = call->get_start_time();
+  const std::int64_t start_ms = call->get_start_time_ms();
+  time_t work_start_time = static_cast<time_t>(start_ms / 1000);
   tm *ltm = localtime(&work_start_time);
 
   boost::filesystem::path base_path =
