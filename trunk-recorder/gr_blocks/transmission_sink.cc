@@ -564,7 +564,10 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
   d_stop_time = time(NULL);
   d_last_write_time = std::chrono::steady_clock::now();
 
-  d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now_ms.time_since_epoch()).count();
+  auto now_sys = std::chrono::system_clock::now();
+  d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now_sys.time_since_epoch()
+  ).count();
 
   if (nwritten < noutput_items) {
     BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to Write! Wrote: " << nwritten << " of " << noutput_items;
