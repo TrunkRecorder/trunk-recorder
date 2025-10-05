@@ -3,6 +3,7 @@
 #include "formatter.h"
 #include "recorders/recorder.h"
 #include <boost/algorithm/string.hpp>
+#include <chrono>
 
 Call_conventional::Call_conventional(long t, double f, System *s, Config c, double squelch_db, bool signal_detection) : Call_impl(t, f, s, c) {
   this->squelch_db = squelch_db;
@@ -16,8 +17,13 @@ void Call_conventional::restart_call() {
   signal = DB_UNSET;
   noise = DB_UNSET;
   curr_src_id = -1;
-  start_time = time(NULL);
-  stop_time = time(NULL);
+
+  auto now = std::chrono::system_clock::now();
+  start_time    = std::chrono::system_clock::to_time_t(now);
+  start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
+  stop_time     = start_time;
+  stop_time_ms  = start_time_ms;
+
   last_update = time(NULL);
   state = RECORDING;
   debug_recording = false;
@@ -29,9 +35,13 @@ void Call_conventional::restart_call() {
   recorder->start(this);
 }
 
+// derive start from stop − final_length:
 time_t Call_conventional::get_start_time() {
   // Fixes https://github.com/robotastic/trunk-recorder/issues/103#issuecomment-284825841
-  return start_time = stop_time - final_length;
+  start_time = stop_time - final_length;
+  // keep ms in sync (rounded):
+  start_time_ms = stop_time_ms - static_cast<std::int64_t>(std::llround(final_length * 1000.0));
+  return start_time;
 }
 
 void Call_conventional::set_recorder(Recorder *r) {
@@ -40,7 +50,9 @@ void Call_conventional::set_recorder(Recorder *r) {
 }
 
 void Call_conventional::recording_started() {
-  start_time = time(NULL);
+  auto now = std::chrono::system_clock::now();
+  start_time    = std::chrono::system_clock::to_time_t(now);
+  start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
 }
 
 double Call_conventional::get_squelch_db() {

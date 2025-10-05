@@ -33,6 +33,7 @@
 #include <gnuradio/thread/thread.h>
 #include <stdexcept>
 #include <stdio.h>
+#include <chrono>
 
 // win32 (mingw/msvc) specific
 #ifdef HAVE_IO_H
@@ -229,22 +230,23 @@ void transmission_sink::end_transmission() {
       BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
 
-    auto now_ms = std::chrono::system_clock::now();
-    d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-                         now_ms.time_since_epoch()
-                     ).count();
+    const int64_t dur_ms = (int64_t)std::llround(1000.0 * (d_nchans > 0 ? (double)d_sample_count / (d_sample_rate * (double)d_nchans) : 0.0));
 
-    // if an Transmission has ended, send it to Call.
+    // Assign canonical stop time from sample count
+    d_stop_time_ms = d_start_time_ms + dur_ms;
+    d_stop_time    = static_cast<time_t>(d_stop_time_ms / 1000);
+
+    // Build Transmission using the canonical fields
     Transmission transmission;
-    transmission.source = curr_src_id;      // Source ID for the Call
-    transmission.start_time = d_start_time; // Start time of the Call
-    transmission.stop_time = d_stop_time;   // when the Call eneded
-    transmission.start_time_ms  = d_start_time_ms;
-    transmission.stop_time_ms   = d_stop_time_ms;
-    transmission.sample_count = d_sample_count;
-    transmission.spike_count = d_spike_count;
-    transmission.error_count = d_error_count;
-    transmission.length = length_in_seconds(); // length in seconds
+    transmission.source        = curr_src_id;
+    transmission.start_time    = d_start_time;
+    transmission.stop_time     = d_stop_time;
+    transmission.start_time_ms = d_start_time_ms;
+    transmission.stop_time_ms  = d_stop_time_ms;
+    transmission.sample_count  = d_sample_count;
+    transmission.spike_count   = d_spike_count;
+    transmission.error_count   = d_error_count;
+    transmission.length        = length_in_seconds();
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
     strcpy(transmission.filename, current_filename); // Copy the filename
     this->add_transmission(transmission);
@@ -507,17 +509,11 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
       close_wav(false);
     }
 
-    time_t current_time = time(NULL);
-    if (current_time == d_start_time) {
-      d_start_time = current_time + 1;
-    } else {
-      d_start_time = current_time;
-    }
-
-    auto now_ms = std::chrono::system_clock::now();
+    auto now_sys = std::chrono::system_clock::now();
     d_start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now_ms.time_since_epoch()
+        now_sys.time_since_epoch()
     ).count();
+    d_start_time = std::chrono::system_clock::to_time_t(now_sys);
 
     // create a new filename, based on the current time and source.
     create_filename();
@@ -561,13 +557,7 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
     }
   }
 
-  d_stop_time = time(NULL);
   d_last_write_time = std::chrono::steady_clock::now();
-
-  auto now_sys = std::chrono::system_clock::now();
-  d_stop_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-      now_sys.time_since_epoch()
-  ).count();
 
   if (nwritten < noutput_items) {
     BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to Write! Wrote: " << nwritten << " of " << noutput_items;
@@ -605,7 +595,7 @@ double transmission_sink::total_length_in_seconds() {
 }
 
 double transmission_sink::length_in_seconds() {
-  return (double)d_sample_count / (double)d_sample_rate;
+  return d_nchans > 0 ? (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans) : 0.0;
 }
 
 void transmission_sink::do_update() {}

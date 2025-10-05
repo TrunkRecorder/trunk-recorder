@@ -114,8 +114,8 @@ protected:
   int idle_count;
   time_t stop_time;
   time_t start_time;
-  long long start_time_ms;
-  long long stop_time_ms;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   bool debug_recording;
   bool sigmf_recording;
   bool was_update;
