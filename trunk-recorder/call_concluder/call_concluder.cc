@@ -506,7 +506,8 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
 // static int rec_counter=0;
 Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_info, System *sys, Config config) {
-  time_t work_start_time = call->get_start_time();
+  const std::int64_t start_ms = call->get_start_time_ms();
+  time_t work_start_time = static_cast<time_t>(start_ms / 1000);
   std::string capture_dir = call->get_capture_dir();
   std::string base_filename;
 
@@ -520,21 +521,31 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 
   if (filename_format.empty()) {
     // ---- Legacy default behaviour (unchanged) ----
-    std::stringstream base_path_stream;
-    tm *ltm = localtime(&work_start_time);
-    // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
-    base_path_stream << capture_dir << "/" << call->get_short_name() << "/" << 1900 + ltm->tm_year << "/" << 1 + ltm->tm_mon << "/" << ltm->tm_mday;
-    std::string base_path_string = base_path_stream.str();
-    boost::filesystem::create_directories(base_path_string);
+  tm *ltm = localtime(&work_start_time);
+
+  boost::filesystem::path base_path =
+      boost::filesystem::path(call->get_capture_dir()) /
+      call->get_short_name() /
+      boost::lexical_cast<std::string>(1900 + ltm->tm_year) /
+      boost::lexical_cast<std::string>(1 + ltm->tm_mon) /
+      boost::lexical_cast<std::string>(ltm->tm_mday);
+
+  boost::filesystem::create_directories(base_path);
+    // Seconds.milliseconds from call start_time_ms
+  const long long sec   = start_ms / 1000;
+  const int       milli = static_cast<int>(start_ms % 1000);
+
+  std::ostringstream ts;
+  ts << sec << '.' << std::setw(3) << std::setfill('0') << milli;
 
     if (call->get_tdma_slot() == -1) {
-      base_filename = base_path_string + "/" + std::to_string(call->get_talkgroup()) + "-" +
-                      std::to_string(work_start_time) + "_" +
+      base_filename = base_path.string() + "/" + std::to_string(call->get_talkgroup()) + "-" +
+                      ts.str() + "_" +
                       std::to_string(static_cast<long>(std::llround(call->get_freq())));
     } else {
       // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-      base_filename = base_path_string + "/" + std::to_string(call->get_talkgroup()) + "-" +
-                      std::to_string(work_start_time) + "_" +
+      base_filename = base_path.string() + "/" + std::to_string(call->get_talkgroup()) + "-" +
+                      ts.str() + "_" +
                       std::to_string(static_cast<long>(std::llround(call->get_freq()))) + "." +
                       std::to_string(call->get_tdma_slot());
     }
