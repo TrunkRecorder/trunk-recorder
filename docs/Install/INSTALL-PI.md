@@ -69,8 +69,8 @@ sudo apt -y install libssl-dev openssl curl git fdkaac sox libcurl3-gnutls libcu
 ## Configure RTL-SDRs to load correctly:
 
 ```bash
-sudo wget https://raw.githubusercontent.com/osmocom/rtl-sdr/master/rtl-sdr.rules ~/rtl-sdr.rules
-sudo mv ~/rtl-sdr.rules /etc/udev/rules.d/20.rtlsdr.rules
+wget https://raw.githubusercontent.com/osmocom/rtl-sdr/master/rtl-sdr.rules rtl-sdr.rules
+sudo mv rtl-sdr.rules /etc/udev/rules.d/20.rtlsdr.rules
 ```
 
 You will need to restart for the rules to take effect. Logging out and logging back in will not be enough.
@@ -79,7 +79,9 @@ You will need to restart for the rules to take effect. Logging out and logging b
 sudo shutdown -r now
 ```
 
-## Configuring the UHD for Ettus SDRs
+## Configuring the UHD for Ettus SDRs (Optional)
+
+*You only need to do this step if you are going to be using an Ettus SDR*
 
 If you haven't setup UHD yet there are a few extra steps you need to take:
 
@@ -113,7 +115,13 @@ sudo udevadm trigger
 
 In order to keep your copy of the Trunk Recorder source code free of build artifacts created by the build process, it is suggested to create a separate "out-of-tree" build directory. We will use `trunk-build` as our build directory. We by default do this in our home directory (`~` - Is a shortcut back to home.).
 
-**Note:** Depending on the amount of RAM in your Raspberry Pi, it may be best to run `make -j1` (2GB or less), `make -j2` (4GB or less), and `make -j4` (8GB or more) in order to ensure that you do not run out of RAM, at the cost of making the compile process take longer. If you ran out of RAM the compile process will fail completely, so it can be an acceptable tradeoff.
+**Note:** Depending on the amount of RAM in your Raspberry Pi, you may need to adjust the number of parallel compilation jobs to avoid running out of memory. If you run out of RAM, the compile process will fail completely, so it can be an acceptable tradeoff to use fewer parallel jobs. If it does fail, you can just restart the build from where it left off.
+
+| RAM Amount | Make Command | Notes |
+|------------|--------------|-------|
+| 2GB or less | `make -j1` | Single-threaded compilation |
+| 4GB or less | `make -j2` | Two parallel jobs |
+| 8GB or more | `make -j4` | Four parallel jobs |
 
 ```bash
 cd ~
