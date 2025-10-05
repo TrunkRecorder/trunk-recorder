@@ -297,9 +297,8 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
   boost::filesystem::create_directories(base_path);
 
   // Seconds.milliseconds from call start_time_ms
-  const long long start_ms = static_cast<long long>(call->get_start_time_ms());
-  const long long sec     = start_ms / 1000;
-  const int       milli   = static_cast<int>(start_ms % 1000);
+  const long long sec   = start_ms / 1000;
+  const int       milli = static_cast<int>(start_ms % 1000);
 
   std::ostringstream ts;
   ts << sec << '.' << std::setw(3) << std::setfill('0') << milli;
@@ -331,55 +330,52 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 
 Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config config) {
   Call_Data_t call_info;
-  double total_length = 0;
-  std::int64_t audio_sum_ms = 0;
-  bool have_first = false;
 
+  // ---------- Static metadata ----------
   call_info = create_base_filename(call, call_info);
 
-  call_info.status = INITIAL;
-  call_info.process_call_time = time(0);
-  call_info.retry_attempt = 0;
-  call_info.error_count = 0;
-  call_info.spike_count = 0;
-  call_info.freq = call->get_freq();
-  call_info.freq_error = call->get_freq_error();
-  call_info.signal = call->get_signal();
-  call_info.noise = call->get_noise();
-  call_info.recorder_num = call->get_recorder()->get_num();
-  call_info.source_num = call->get_recorder()->get_source()->get_num();
-  call_info.encrypted = call->get_encrypted();
-  call_info.emergency = call->get_emergency();
-  call_info.priority = call->get_priority();
-  call_info.mode = call->get_mode();
-  call_info.duplex = call->get_duplex();
-  call_info.tdma_slot = call->get_tdma_slot();
-  call_info.phase2_tdma = call->get_phase2_tdma();
-  call_info.transmission_list = call->get_transmissions();
-  call_info.sys_num = sys->get_sys_num();
-  call_info.short_name = sys->get_short_name();
-  call_info.upload_script = sys->get_upload_script();
-  call_info.audio_archive = sys->get_audio_archive();
-  call_info.transmission_archive = sys->get_transmission_archive();
-  call_info.call_log = sys->get_call_log();
-  call_info.call_num = call->get_call_num();
-  call_info.compress_wav = sys->get_compress_wav();
-  call_info.talkgroup = call->get_talkgroup();
-  call_info.talkgroup_display = call->get_talkgroup_display();
-  call_info.patched_talkgroups = sys->get_talkgroup_patch(call_info.talkgroup);
+  call_info.status              = INITIAL;
+  call_info.process_call_time   = time(0);
+  call_info.retry_attempt       = 0;
+  call_info.error_count         = 0;
+  call_info.spike_count         = 0;
+  call_info.freq                = call->get_freq();
+  call_info.freq_error          = call->get_freq_error();
+  call_info.signal              = call->get_signal();
+  call_info.noise               = call->get_noise();
+  call_info.recorder_num        = call->get_recorder()->get_num();
+  call_info.source_num          = call->get_recorder()->get_source()->get_num();
+  call_info.encrypted           = call->get_encrypted();
+  call_info.emergency           = call->get_emergency();
+  call_info.priority            = call->get_priority();
+  call_info.mode                = call->get_mode();
+  call_info.duplex              = call->get_duplex();
+  call_info.tdma_slot           = call->get_tdma_slot();
+  call_info.phase2_tdma         = call->get_phase2_tdma();
+  call_info.transmission_list   = call->get_transmissions();
+  call_info.sys_num             = sys->get_sys_num();
+  call_info.short_name          = sys->get_short_name();
+  call_info.upload_script       = sys->get_upload_script();
+  call_info.audio_archive       = sys->get_audio_archive();
+  call_info.transmission_archive= sys->get_transmission_archive();
+  call_info.call_log            = sys->get_call_log();
+  call_info.call_num            = call->get_call_num();
+  call_info.compress_wav        = sys->get_compress_wav();
+  call_info.talkgroup           = call->get_talkgroup();
+  call_info.talkgroup_display   = call->get_talkgroup_display();
+  call_info.patched_talkgroups  = sys->get_talkgroup_patch(call_info.talkgroup);
   call_info.min_transmissions_removed = 0;
 
-  Talkgroup *tg = sys->find_talkgroup(call->get_talkgroup());
-  if (tg != NULL) {
-    call_info.talkgroup_tag = tg->tag;
-    call_info.talkgroup_alpha_tag = tg->alpha_tag;
-    call_info.talkgroup_description = tg->description;
-    call_info.talkgroup_group = tg->group;
+  if (Talkgroup *tg = sys->find_talkgroup(call->get_talkgroup())) {
+    call_info.talkgroup_tag          = tg->tag;
+    call_info.talkgroup_alpha_tag    = tg->alpha_tag;
+    call_info.talkgroup_description  = tg->description;
+    call_info.talkgroup_group        = tg->group;
   } else {
-    call_info.talkgroup_tag = "";
-    call_info.talkgroup_alpha_tag = "";
-    call_info.talkgroup_description = "";
-    call_info.talkgroup_group = "";
+    call_info.talkgroup_tag.clear();
+    call_info.talkgroup_alpha_tag.clear();
+    call_info.talkgroup_description.clear();
+    call_info.talkgroup_group.clear();
   }
 
   if (call->get_is_analog()) {
@@ -390,93 +386,112 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     call_info.audio_type = "digital";
   }
 
+  // ---------- Aggregate over transmissions (ms-accurate & efficient) ----------
+  const double min_tx_s = sys->get_min_tx_duration();  // seconds
 
-  // loop through the transmission list, pull in things to fill in totals for call_info
-  // Using a for loop with iterator
-  for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin();
-     it != call_info.transmission_list.end();) {
+  // Reserve to avoid reallocs during push_back
+  call_info.transmission_source_list.reserve(call_info.transmission_list.size());
+  call_info.transmission_error_list.reserve(call_info.transmission_list.size());
 
-     Transmission t = *it;
+  double        playable_pos_s = 0.0;       // "pos" field is playable timeline
+  std::int64_t  audio_sum_ms   = 0;         // sum of segment durations (playable)
+  bool          have_any       = false;
+  std::int64_t  min_start_ms   = 0;
+  std::int64_t  max_stop_ms    = 0;
 
-     if (t.length < sys->get_min_tx_duration()) {
-       if (!call_info.transmission_archive) {
-         std::string loghdr = log_header(call_info.short_name, call_info.call_num,
-                                         call_info.talkgroup_display, call_info.freq);
-         BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission less than "
-                                 << sys->get_min_tx_duration()
-                                 << " seconds. Actual length: " << t.length << ".";
-         call_info.min_transmissions_removed++;
+  for (auto it = call_info.transmission_list.begin();
+       it != call_info.transmission_list.end(); /* manual inc */) {
 
-         if (checkIfFile(t.filename)) {
-           remove(t.filename);
-         }
-       }
-       it = call_info.transmission_list.erase(it);
-       continue;
-     }
+    const Transmission &t = *it;
 
-     // compute exact duration from ms stamps (matches playable audio)
-     const std::int64_t seg_ms   = std::max<std::int64_t>(0, t.stop_time_ms - t.start_time_ms);
-     const double       seg_len_s = seg_ms / 1000.0;
+    // Canonical length from millisecond stamps
+    const std::int64_t seg_ms   = std::max<std::int64_t>(0, t.stop_time_ms - t.start_time_ms);
+    const double       seg_len_s = seg_ms / 1000.0;
 
-     std::string tag = sys->find_unit_tag(t.source);
-     std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
+    // Filter short segments using canonical length
+    if (seg_len_s < min_tx_s) {
+      if (!call_info.transmission_archive) {
+        std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                        call_info.talkgroup_display, call_info.freq);
+        BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission less than "
+                                << min_tx_s
+                                << " seconds. Actual length: " << seg_len_s << ".";
+        call_info.min_transmissions_removed++;
+        if (checkIfFile(t.filename)) {
+          remove(t.filename);
+        }
+      }
+      it = call_info.transmission_list.erase(it);
+      continue;
+    }
 
-     std::stringstream transmission_info;
-     std::string loghdr = log_header(call_info.short_name, call_info.call_num,
-                                     call_info.talkgroup_display, call_info.freq);
-     transmission_info << loghdr << "- Transmission src: " << t.source << display_tag
-                       << " pos: "    << format_time(total_length)
-                       << " length: " << format_time(t.length);
-     if (t.error_count < 1) {
-       BOOST_LOG_TRIVIAL(info) << transmission_info.str();
-     } else {
-       BOOST_LOG_TRIVIAL(info) << transmission_info.str()
-                               << "\033[0;31m errors: " << t.error_count
-                               << " spikes: " << t.spike_count << "\033[0m";
-     }
+    // Track true wall-clock window [min start, max stop]
+    if (!have_any) {
+      have_any     = true;
+      min_start_ms = t.start_time_ms;
+      max_stop_ms  = t.stop_time_ms;
+    } else {
+      if (t.start_time_ms < min_start_ms) min_start_ms = t.start_time_ms;
+      if (t.stop_time_ms  > max_stop_ms)  max_stop_ms  = t.stop_time_ms;
+    }
 
-     if (it == call_info.transmission_list.begin()) {
-       call_info.start_time    = t.start_time;
-       call_info.start_time_ms = t.start_time_ms;
-       have_first = true;
-     }
+    // Unit tag (once per segment)
+    std::string tag = sys->find_unit_tag(t.source);
+    std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
 
-     if (std::next(it) == call_info.transmission_list.end()) {
-       call_info.stop_time    = t.stop_time;
-       call_info.stop_time_ms = t.stop_time_ms;
-     }
+    // Log with canonical length and playable position
+    {
+      std::stringstream transmission_info;
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                      call_info.talkgroup_display, call_info.freq);
+      transmission_info << loghdr << "- Transmission src: " << t.source << display_tag
+                        << " pos: "    << format_time(playable_pos_s)
+                        << " length: " << format_time(seg_len_s);
+      if (t.error_count < 1) {
+        BOOST_LOG_TRIVIAL(info) << transmission_info.str();
+      } else {
+        BOOST_LOG_TRIVIAL(info) << transmission_info.str()
+                                << "\033[0;31m errors: " << t.error_count
+                                << " spikes: " << t.spike_count << "\033[0m";
+      }
+    }
 
-     Call_Source call_source = { t.source, t.start_time, total_length, false, "", tag };
-     Call_Error  call_error  = { t.start_time, total_length, seg_len_s, t.error_count, t.spike_count };
-     call_info.transmission_source_list.push_back(call_source);
-     call_info.transmission_error_list.push_back(call_error);
+    // Build src/error lists aligned to playable timeline
+    Call_Source call_source = { t.source, t.start_time, playable_pos_s, false, "", tag };
+    Call_Error  call_error  = { t.start_time, playable_pos_s, seg_len_s,
+                                t.error_count, t.spike_count };
+    call_info.transmission_source_list.push_back(call_source);
+    call_info.transmission_error_list.push_back(call_error);
 
-     call_info.error_count += t.error_count;
-     call_info.spike_count += t.spike_count;
+    call_info.error_count += t.error_count;
+    call_info.spike_count += t.spike_count;
 
-     total_length += seg_len_s;
-     audio_sum_ms += seg_ms;
+    playable_pos_s += seg_len_s;
+    audio_sum_ms   += seg_ms;
 
-     ++it;
-   }
+    ++it;
+  }
 
-  if (have_first) {
-    call_info.stop_time_ms = call_info.start_time_ms + audio_sum_ms;
-    call_info.stop_time    = (time_t)(call_info.stop_time_ms / 1000);
-    call_info.length       = audio_sum_ms / 1000.0;
-    call_info.call_length_ms = audio_sum_ms;
+  // ---------- Finalize aggregate timing ----------
+  if (have_any) {
+    call_info.start_time_ms  = min_start_ms;                   // earliest start (ms)
+    call_info.stop_time_ms   = max_stop_ms;                    // latest stop   (ms)
+    call_info.start_time     = (time_t)(min_start_ms / 1000);
+    call_info.stop_time      = (time_t)(max_stop_ms  / 1000);
+    call_info.call_length_ms = audio_sum_ms;                   // playable audio only
+    call_info.length         = audio_sum_ms / 1000.0;          // seconds
   } else {
-    call_info.length       = 0.0;
-    call_info.start_time_ms = 0;
-    call_info.stop_time_ms  = 0;
-    call_info.start_time    = 0;
-    call_info.stop_time     = 0;
+    call_info.length         = 0.0;
+    call_info.start_time_ms  = 0;
+    call_info.stop_time_ms   = 0;
+    call_info.start_time     = 0;
+    call_info.stop_time      = 0;
     call_info.call_length_ms = 0;
   }
 
   return call_info;
 }
+
 
 void Call_Concluder::conclude_call(Call *call, System *sys, Config config) {
   Call_Data_t call_info = create_call_data(call, sys, config);

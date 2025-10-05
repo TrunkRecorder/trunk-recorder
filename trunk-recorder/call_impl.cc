@@ -228,6 +228,21 @@ double Call_impl::get_current_length() {
   }
 }
 
+std::int64_t Call_impl::get_start_time_ms() {
+  // Prefer the earliest transmission start (true playable start)
+  if (!transmission_list.empty()) {
+    std::int64_t best = 0;
+    for (const auto& t : transmission_list) {
+      if (t.start_time_ms > 0 && (best == 0 || t.start_time_ms < best)) {
+        best = t.start_time_ms;
+      }
+    }
+    if (best > 0) return best;
+  }
+  // Fallback: call creation time in ms
+  return start_time_ms;
+}
+
 System *Call_impl::get_system() {
   return sys;
 }
@@ -505,7 +520,7 @@ boost::property_tree::ptree Call_impl::get_stats() {
   call_node.put("duplex", this->get_duplex());
   call_node.put("startTime", this->get_start_time());
   call_node.put("stopTime", this->get_stop_time());
-  call_node.put("startTimeMs", this->start_time_ms);
+  call_node.put("startTimeMs", this->get_start_time_ms());
   call_node.put("stopTimeMs",  this->stop_time_ms);
   call_node.put("srcId", this->get_current_source_id());
 

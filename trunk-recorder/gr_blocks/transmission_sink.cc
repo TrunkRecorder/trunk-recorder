@@ -262,7 +262,10 @@ void transmission_sink::end_transmission() {
       BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
 
-    const int64_t dur_ms = (int64_t)std::llround(1000.0 * (d_nchans > 0 ? (double)d_sample_count / (d_sample_rate * (double)d_nchans) : 0.0));
+    const std::int64_t dur_ms = (d_nchans > 0)
+        ? (std::int64_t)std::llround(1000.0 *
+           (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans))
+        : 0;
 
     // Assign canonical stop time from sample count
     d_stop_time_ms = d_start_time_ms + dur_ms;
@@ -543,9 +546,8 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
 
     auto now_sys = std::chrono::system_clock::now();
     d_start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now_sys.time_since_epoch()
-    ).count();
-    d_start_time = std::chrono::system_clock::to_time_t(now_sys);
+      now_sys.time_since_epoch()).count();
+    d_start_time = static_cast<time_t>(d_start_time_ms / 1000);
 
     // create a new filename, based on the current time and source.
     create_filename();

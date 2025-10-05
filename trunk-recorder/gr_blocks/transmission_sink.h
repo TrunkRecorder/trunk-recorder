@@ -136,6 +136,8 @@ public:
   unsigned int sample_rate();
   double total_length_in_seconds();
   double length_in_seconds();
+  std::int64_t get_start_time_ms() const { return d_start_time_ms; }
+  std::int64_t get_stop_time_ms()  const { return d_stop_time_ms;  }
   Call_Source *get_source_list();
   int get_source_count();
   virtual int work(int noutput_items,
