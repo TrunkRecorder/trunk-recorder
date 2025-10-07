@@ -4,13 +4,7 @@ imbe_decoder::~imbe_decoder()
 {
 }
 
-imbe_decoder::imbe_decoder() :
-   d_audio()
+imbe_decoder::imbe_decoder() 
 {
 }
 
-audio_samples*
-imbe_decoder::audio()
-{
-   return &d_audio;
-}

@@ -35,6 +35,7 @@
 #include "p25_crypt_algs.h"
 #include "op25_audio.h"
 #include "log_ts.h"
+#include "imbe_vocoder/imbe_vocoder.h"
 
 #include "ezpwd/rs"
 
@@ -42,7 +43,7 @@
 class p25p2_tdma
 {
 public:
-	p25p2_tdma(const op25_audio& udp, log_ts& logger, int slotid, int debug, bool do_msgq, gr::msg_queue::sptr queue, std::deque<int16_t> &qptr, bool do_audio_output, int msgq_id = 0) ;	// constructor
+	p25p2_tdma(const op25_audio& udp, log_ts& logger, int slotid, int debug, bool do_msgq, gr::msg_queue::sptr queue, std::deque<int16_t> &qptr, bool do_audio_output, bool soft_vocoder, int msgq_id = 0) ;	// constructor
 	int handle_packet(uint8_t dibits[], const uint64_t fs) ;
 	void set_slotid(int slotid);
 	void call_end();
@@ -77,11 +78,13 @@ private:
 	int mbe_err_cnt;
 	bool tone_frame;
 	software_imbe_decoder software_decoder;
+	imbe_vocoder vocoder;
 	gr::msg_queue::sptr d_msg_queue;
 	std::deque<int16_t> &output_queue_decode;
 	bool d_do_msgq;
 	int d_msgq_id;
 	bool d_do_audio_output;
+	bool d_soft_vocoder;
 	std::pair<bool,long> terminate_call;
 	long src_id;
 	long grp_id;

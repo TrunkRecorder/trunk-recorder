@@ -728,16 +728,7 @@ namespace gr {
 
                             if (d_soft_vocoder) {
                                 // This is vocoder that is for half-rate
-                                software_decoder.decode_fullrate(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
-                                audio_samples *samples = software_decoder.audio();
-                                for (int i=0; i < SND_FRAME; i++) {
-                                    if (samples->size() > 0) {
-                                        snd[i] = (int16_t)(samples->front());
-                                        samples->pop_front();
-                                    } else {
-                                        snd[i] = 0;
-                                    }
-                                }
+                                software_decoder.decode_fullrate(snd, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
                             } else {
 
                                 // This is the older, fullrate vocoder

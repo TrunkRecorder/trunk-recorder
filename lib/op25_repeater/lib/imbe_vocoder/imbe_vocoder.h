@@ -36,6 +36,8 @@ public:
 	// hack to enable ambe encoder read access to speech parameters
 	const IMBE_PARAM* param(void) {return &my_imbe_param;}
 	void set_gain_adjust(float gain_adjust) {d_gain_adjust = gain_adjust;}
+	// decodes IMBE codec parameters in float format into 160 audio samples (snd)	
+	void decode_tap(Word16 *snd, int L, float w0, const int *Vl, const float *Ml);
 private:
 	IMBE_PARAM my_imbe_param;
 

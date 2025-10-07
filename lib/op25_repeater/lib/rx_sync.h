@@ -40,6 +40,7 @@
 #include "p25p2_vf.h"
 #include "mbelib.h"
 #include "ambe.h"
+#include "imbe_vocoder/imbe_vocoder.h"
 
 #include "ysf_const.h"
 #include "dmr_const.h"
@@ -125,7 +126,7 @@ public:
 	void set_debug(int debug);
 	int get_src_id(int slot);
 	std::pair<bool,long> get_terminated(int slot);
-	rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue, std::array<std::deque<int16_t>, 2> &output_queue);
+	rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue, std::array<std::deque<int16_t>, 2> &output_queue, bool d_soft_vocoder);
 	~rx_sync();
 
 private:
@@ -162,7 +163,9 @@ private:
 	mbe_errs errs_mp[2];
 	mbe_tone tone_mp[2];
 	int mbe_err_cnt[2];
+	bool d_soft_vocoder;
 	software_imbe_decoder d_software_decoder[2];
+	imbe_vocoder d_imbe_vocoder[2];
 	std::deque<int16_t> d_output_queue[2];
 	dmr_cai dmr;
 	int d_msgq_id;

@@ -33,7 +33,9 @@
 #include "dsp_sub.h"
 #include "imbe_vocoder.h"
 
+
 #include <string.h>
+#include <math.h>
 
 
 
@@ -66,4 +68,62 @@ void imbe_vocoder::decode(IMBE_PARAM *imbe_param, Word16 *frame_vector, Word16 *
 
 	for(j = 0; j < FRAME; j++)
 		snd[j] = add(snd[j], snd_tmp[j]);
+}
+
+
+void imbe_vocoder::decode_tap(Word16 *snd, int L, float w0, const int *Vl, const float *Ml)
+{
+	Word16 snd_v[FRAME];
+    Word16 snd_uv[FRAME];
+    int i;
+
+	//
+	// Convert floating-point parameters into fixed-point IMBE_PARAM struct
+	//
+
+	// Number of Harmonics (L) -> num_harms
+	my_imbe_param.num_harms = L;
+
+	// Fundamental Frequency (w0) -> fund_freq
+	// w0 is float angular frequency, convert to frequency
+	float fund_freq_f = w0 / M_PI;
+	// Convert fundamental frequency to fixed-point Q1.31 format
+	my_imbe_param.fund_freq = (Word32)(fund_freq_f * (UWord32)(1LL << 31));
+
+	// Zero out harmonic vectors so only used harmonics have values
+	memset(my_imbe_param.v_uv_dsn, 0, sizeof(my_imbe_param.v_uv_dsn));
+	memset(my_imbe_param.sa, 0, sizeof(my_imbe_param.sa));
+
+	// Voicing Vector (Vl) -> v_uv_dsn
+    for (i = 0; i < L; i++) {
+        my_imbe_param.v_uv_dsn[i] = (Word16)Vl[i];
+    }
+
+	// Spectral Amplitudes (Ml) -> sa
+    for (int i = 0; i < L; i++) {
+        my_imbe_param.sa[i] = (Word16)Ml[i];
+    }
+
+	//
+	// Pre-calculate values needed by synthesis that is typically done during sa decode
+	//
+	
+	my_imbe_param.div_one_by_num_harm_sh = norm_s(my_imbe_param.num_harms);
+	my_imbe_param.div_one_by_num_harm = div_s(0x4000, my_imbe_param.num_harms << my_imbe_param.div_one_by_num_harm_sh);
+    my_imbe_param.l_uv = 0;
+    for (i = 0; i < my_imbe_param.num_harms; i++) {
+        if (my_imbe_param.v_uv_dsn[i] == 0)
+			my_imbe_param.l_uv++;
+    }
+
+	//
+	// Perform fixed-point synthesis
+	//
+
+    sa_enh(&my_imbe_param);
+    v_synt(&my_imbe_param, snd_v);
+    uv_synt(&my_imbe_param, snd_uv);
+
+    for(i = 0; i < FRAME; i++)
+		snd[i] = add(snd_v[i], snd_uv[i]);
 }
