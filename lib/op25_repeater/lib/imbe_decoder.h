@@ -26,10 +26,8 @@
 
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
-#include <deque>
 #include <vector>
 
-typedef std::deque<float> audio_samples;
 typedef std::vector<bool> voice_codeword;
 
 
@@ -39,6 +37,7 @@ typedef std::vector<bool> voice_codeword;
    typedef std::shared_ptr<class imbe_decoder> imbe_decoder_sptr;
 	#endif
 
+#define IMBE_SAMPLES_PER_FRAME 160 
 /**
  * imbe_decoder is the interface to the various mechanisms for
  * translating P25 voice codewords into audio samples.
@@ -64,15 +63,7 @@ public:
     *
     * \param cw IMBE codeword (including parity check bits).
     */
-   virtual void decode(const voice_codeword& cw) = 0;
-
-   /**
-    * Returns the audio_samples samples. These are mono samples at
-    * 8KS/s represented as a float in the range -1.0 .. +1.0.
-    *
-    * \return A non-null pointer to a deque<float> of audio samples.
-    */
-   audio_samples *audio();
+   virtual void decode(int16_t samples[IMBE_SAMPLES_PER_FRAME], const voice_codeword& cw) = 0;
 
 protected:
 
@@ -81,15 +72,7 @@ protected:
     * because this is an abstract class and users should call
     * make_imbe_decoder to construct  concrete instances.
     */
-   imbe_decoder();
-
-private:
-
-   /**
-    * The audio samples produced by the IMBE decoder.
-    */
-   audio_samples d_audio;
-   
+   imbe_decoder();   
 };
 
 #endif /* INCLUDED_IMBE_DECODER_H */

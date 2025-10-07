@@ -35,6 +35,7 @@
 
 #include "check_frame_sync.h"
 
+#include "imbe_decoder.h"
 #include "p25p2_vf.h"
 #include "mbelib.h"
 #include "ambe.h"
@@ -421,16 +422,15 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 		do_fullrate = true;
 		break;
 	}
-	int16_t samp_buf[NSAMP_OUTPUT];
-	bool use_samp_buf = false;
+	int16_t samp_buf[IMBE_SAMPLES_PER_FRAME];
 
 	if (do_tone) {
-		d_software_decoder[slot_id].decode_tone(tone_mp[slot_id].ID, tone_mp[slot_id].AD, &tone_mp[slot_id].n);
+		d_software_decoder[slot_id].decode_tone(samp_buf, tone_mp[slot_id].ID, tone_mp[slot_id].AD, &tone_mp[slot_id].n);
 	} else {
 		mbe_moveMbeParms (&cur_mp[slot_id], &prev_mp[slot_id]);
 		if (do_fullrate) {
 			if (d_soft_vocoder) {
-				d_software_decoder[slot_id].decode(fullrate_cw);
+				d_software_decoder[slot_id].decode(samp_buf, fullrate_cw);
 			} else {
 				int16_t frame_vector[8];
 
@@ -439,34 +439,23 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
                 }
                 frame_vector[7] >>= 1;
                 d_imbe_vocoder[slot_id].imbe_decode(frame_vector, samp_buf);
-				use_samp_buf = true;
 			}
 		} else {	/* halfrate */
 			if (!do_silence) {
 				if (d_soft_vocoder) {
-					d_software_decoder[slot_id].decode_tap(cur_mp[slot_id].L, 0, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
+					d_software_decoder[slot_id].decode_tap(samp_buf, cur_mp[slot_id].L, 0, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
 				} else {
 					d_imbe_vocoder[slot_id].decode_tap(samp_buf, cur_mp[slot_id].L, cur_mp[slot_id].w0, &cur_mp[slot_id].Vl[1], &cur_mp[slot_id].Ml[1]);
-					use_samp_buf = true;
 				}
 			}
 		}
 	}
-	audio_samples *samples = d_software_decoder[slot_id].audio();
 	float snd;
 	for (int i=0; i < NSAMP_OUTPUT; i++) {
 		if (do_silence) {
-			snd = 0;
+			snd = 0.0f;
 		} else {
-			if (use_samp_buf) {
-				snd = samp_buf[i];
-			} else {
-				snd = samples->front();
-				samples->pop_front();
-
-				if (do_fullrate)
-					snd *= 32768.0;
-			}
+			snd = samp_buf[i];
 		}
 		output_queue[slot_id].push_back(snd);
 	}

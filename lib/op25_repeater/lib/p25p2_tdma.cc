@@ -27,6 +27,7 @@
 #include <errno.h>
 #include <sys/time.h>
 
+#include "imbe_decoder.h"
 #include "op25_msg_types.h"
 #include "p25p2_duid.h"
 #include "p25p2_sync.h"
@@ -525,10 +526,7 @@ int p25p2_tdma::handle_acch_frame(const uint8_t dibits[], bool fast, bool is_lcc
 
 void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_subframe)
 {
-	static const int NSAMP_OUTPUT=160;
-	audio_samples *samples = NULL;
-	int16_t samples_buf[NSAMP_OUTPUT];
-	bool use_samples_buf = false;
+	int16_t samples_buf[IMBE_SAMPLES_PER_FRAME];
 	packed_codeword p_cw;
     bool audio_valid = !encrypted();
 	int u[4];
@@ -608,31 +606,21 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
 	// Synthesize tones or speech as long as dequantization was successful and overall error rate is below threshold
 	if ((rc == 0) && (errs_mp.ER <= 0.096)) {
 		if (tone_frame) {
-			software_decoder.decode_tone(tone_mp.ID, tone_mp.AD, &tone_mp.n);
-			samples = software_decoder.audio();
+			software_decoder.decode_tone(samples_buf, tone_mp.ID, tone_mp.AD, &tone_mp.n);
 		} else if(d_soft_vocoder) {
 			K = 12;
 			if (cur_mp.L <= 36)
 				K = int(float(cur_mp.L + 2.0) / 3.0);
-			software_decoder.decode_tap(cur_mp.L, K, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
-			samples = software_decoder.audio();
+			software_decoder.decode_tap(samples_buf, cur_mp.L, K, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
 		} else {
 			vocoder.decode_tap(samples_buf, cur_mp.L, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
-			use_samples_buf = true;
 		}
 	}
 
 	// Populate output buffer with either audio samples or silence
 	write_bufp = 0;
-	for (int i=0; i < NSAMP_OUTPUT; i++) {
-		if (samples && (samples->size() > 0)) {
-			snd = (int16_t)(samples->front());
-			samples->pop_front();
-		} else if (use_samples_buf) {
-			snd = samples_buf[i];
-		} else {
-			snd = 0;
-		}
+	for (int i=0; i < IMBE_SAMPLES_PER_FRAME; i++) {
+		snd = samples_buf[i];
 		output_queue_decode.push_back(snd); // outputs the sound
 		write_buf[write_bufp++] = snd & 0xFF ;
 		write_buf[write_bufp++] = snd >> 8;
@@ -640,12 +628,6 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
 	if (d_do_audio_output && (write_bufp >= 0)) { 
 		op25audio.send_audio(write_buf, write_bufp);
 		write_bufp = 0;
-	}
-
-	// This should never happen; audio samples should never be left in buffer
-	if (software_decoder.audio()->size() != 0) {
-		fprintf(stderr, "%s p25p2_tdma::handle_voice_frame(): residual audio sample buffer non-zero (len=%lu)\n", logts.get(d_msgq_id), software_decoder.audio()->size());
-		software_decoder.audio()->clear();
 	}
 
 	mbe_moveMbeParms (&cur_mp, &prev_mp);

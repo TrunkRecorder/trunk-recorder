@@ -768,7 +768,7 @@ software_imbe_decoder::~software_imbe_decoder()
 }
 
 void
-software_imbe_decoder::decode(const voice_codeword& cw)
+software_imbe_decoder::decode(int16_t samples[IMBE_SAMPLES_PER_FRAME], const voice_codeword& cw)
 {
 	// process input 144-bit IMBE frame - converts to 88-bit frame
 	unsigned int u0 = 0;
@@ -782,7 +782,7 @@ software_imbe_decoder::decode(const voice_codeword& cw)
 	//replace the sync bit(LSB of u7) with the BOT flag
 	u7 = u7 | 0x01; //ECC procedure called above always returns u7 LSB = 0
 
-	decode_fullrate(u0, u1, u2, u3, u4, u5, u6, u7, E0, ET); // process 88-bit frame
+	decode_fullrate(samples, u0, u1, u2, u3, u4, u5, u6, u7, E0, ET); // process 88-bit frame
 }
 
 void
@@ -861,7 +861,7 @@ software_imbe_decoder::fft(float REX[], float IMX[])
 }
 
 void
-software_imbe_decoder::decode_fullrate(uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7, uint32_t E0, uint32_t ET)
+software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7, uint32_t E0, uint32_t ET)
 {
 	int K;
 	float SE = 0;
@@ -900,7 +900,6 @@ software_imbe_decoder::decode_fullrate(uint32_t u0, uint32_t u1, uint32_t u2, ui
 		synth_voiced(); // ToDo: make sv return value?
 
 		//output:
-		audio_samples *samples = audio();
 		for(en = 0; en <= 159; en++) {
 			// The unvoiced samples are loud and the voiced are low...I don't know why.
 			// Most of the difference is compensated by removing the 146.6433 factor
@@ -910,12 +909,11 @@ software_imbe_decoder::decode_fullrate(uint32_t u0, uint32_t u1, uint32_t u2, ui
 			if(abs((int)sample) > 32767) {
 				sample = (sample < 0) ? -32767 : 32767; // * sgn(sample)
 			}
-			samples->push_back(sample);
+			samples[en] = sample;
 		}
 	} else { // muted
-		audio_samples *samples = audio();
 		for(en = 0; en <= 159; en++) {
-			samples->push_back(0);
+			samples[en] = 0;
 		}
 	}
 	OldL = L;
@@ -924,7 +922,7 @@ software_imbe_decoder::decode_fullrate(uint32_t u0, uint32_t u1, uint32_t u2, ui
 }
 
 void
-software_imbe_decoder::decode_tap(int _L, int _K, float _w0, const int * _v, const float * _mu)
+software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _L, int _K, float _w0, const int * _v, const float * _mu)
 {
 	int ell;
 	uint32_t ET=0;
@@ -952,7 +950,6 @@ software_imbe_decoder::decode_tap(int _L, int _K, float _w0, const int * _v, con
 	synth_voiced(); // ToDo: make sv return value?
 
 	//output:
-	audio_samples *samples = audio();
 	for(en = 0; en <= 159; en++) {
 		// The unvoiced samples are loud and the voiced are low...I don't know why.
 		// Most of the difference is compensated by removing the 146.6433 factor
@@ -962,7 +959,7 @@ software_imbe_decoder::decode_tap(int _L, int _K, float _w0, const int * _v, con
 		if(abs((int)sample) > 32767) {
 			sample = (sample < 0) ? -32767 : 32767; // * sgn(sample)
 		}
-		samples->push_back(sample);
+		samples[en] = sample;
     }
 	OldL = L;
 	Oldw0 = w0;
@@ -970,12 +967,11 @@ software_imbe_decoder::decode_tap(int _L, int _K, float _w0, const int * _v, con
 }
 
 void
-software_imbe_decoder::decode_tone(int _ID, int _AD, int * _n)
+software_imbe_decoder::decode_tone(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _ID, int _AD, int * _n)
 {
    int en;
    float step1, step2, sample, amplitude;
    float freq1 = 0, freq2 = 0;
-   audio_samples *samples = audio();
 
 #ifdef DISABLE_AMBE_TONES
    return;
@@ -1114,7 +1110,7 @@ software_imbe_decoder::decode_tone(int _ID, int _AD, int * _n)
    // Zero Amplitude and unimplemented tones
    if ((freq1 == 0) && (freq2 == 0)) {
       for(en = 0; en <= 159; en++) {
-         samples->push_back(0);
+         samples[en] = 0;
       }
       return;
    }
@@ -1124,8 +1120,7 @@ software_imbe_decoder::decode_tone(int _ID, int _AD, int * _n)
    step2 = 2 * M_PI * freq2 / 8000;
    amplitude = _AD * 75; // make adjustment to overall tone amplitude here
    for (en = 0; en<=159; en++) {
-      sample =  amplitude * (sin((*_n) * step1)/2 + sin((*_n) * step2)/2);
-      samples->push_back(sample);
+      samples[en] =  (amplitude * (sin((*_n) * step1)/2 + sin((*_n) * step2)/2));
       (*_n)++;
    }
 }

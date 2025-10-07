@@ -79,16 +79,7 @@ void p25p1_voice_decode::rxframe(const voice_codeword& cw)
 {
 	int16_t snd[FRAME];
 	if (d_software_imbe_decoder) {
-		software_decoder.decode(cw);
-		audio_samples *samples = software_decoder.audio();
-		for (int i=0; i < FRAME; i++) {
-			if (samples->size() > 0) {
-				snd[i] = (int16_t)(samples->front() * 32768.0);
-				samples->pop_front();
-			} else {
-				snd[i] = 0;
-			}
-		}
+		software_decoder.decode(snd, cw);
 	} else { // non-default decoder, do we still need to support it?
 		uint32_t u[8], E0, ET;
 		int16_t frame_vector[8];
@@ -120,16 +111,7 @@ void p25p1_voice_decode::rxframe(const uint32_t u[])
 	if (d_software_imbe_decoder) {
 		voice_codeword cw(voice_codeword_sz);
 		imbe_header_encode(cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
-		software_decoder.decode(cw);
-		audio_samples *samples = software_decoder.audio();
-		for (int i=0; i < FRAME; i++) {
-			if (samples->size() > 0) {
-				snd[i] = (int16_t)(samples->front() * 32768.0);
-				samples->pop_front();
-			} else {
-				snd[i] = 0;
-			}
-		}
+		software_decoder.decode(snd, cw);
 	} else {
 		for (int i=0; i < 8; i++) {
 			frame_vector[i] = u[i];
