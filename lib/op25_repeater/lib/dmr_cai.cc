@@ -83,6 +83,21 @@ int dmr_cai::get_src_id(int slot) {
 	return -1;
 }
 
+int dmr_cai::get_dst_id(int slot) {
+	if ((slot == 0) || (slot == 1)) {
+		return d_slot[slot].get_dst_id();
+	}
+	fprintf(stderr, "Error, Slot given is not 0 or 1\n");
+	return -1;
+}
+
+int dmr_cai::get_cc(int slot) {
+	if ((slot == 0) || (slot == 1)) {
+		return d_slot[slot].get_cc();
+	}
+	fprintf(stderr, "Error, Slot given is not 0 or 1\n");
+	return -1;
+}
 
 void
 dmr_cai::send_msg(const std::string& m_buf, const int m_type) {

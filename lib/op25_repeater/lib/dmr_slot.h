@@ -73,6 +73,8 @@ public:
 
 	/* For getting Src and Terminator for DMR Recorder */
 	int get_src_id(); 
+	int get_dst_id();
+	int get_cc();
 	std::pair<bool,long> get_terminated();
 
 private:
@@ -103,6 +105,7 @@ private:
 	int         d_chan;
 	int         d_slot_mask;
 	int			d_src_id;
+	int			d_dst_id;
 	std::pair<bool,long>		d_terminated;
     log_ts&      logts;
 	CBPTC19696  bptc;

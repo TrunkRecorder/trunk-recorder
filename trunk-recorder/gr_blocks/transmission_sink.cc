@@ -236,6 +236,7 @@ void transmission_sink::end_transmission() {
     transmission.sample_count = d_sample_count;
     transmission.spike_count = d_spike_count;
     transmission.error_count = d_error_count;
+    transmission.slot = d_slot;
     transmission.length = length_in_seconds(); // length in seconds
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
     strcpy(transmission.filename, current_filename); // Copy the filename

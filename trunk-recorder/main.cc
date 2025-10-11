@@ -79,6 +79,7 @@ namespace sinks = boost::log::sinks;
 std::vector<Source *> sources;
 std::vector<System *> systems;
 std::vector<Call *> calls;
+std::vector<Call *> monitored_calls;
 
 gr::top_block_sptr tb;
 

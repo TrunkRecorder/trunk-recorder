@@ -9,6 +9,9 @@ const int DB_UNSET = 999;
 
 struct Transmission {
   long source;
+  long talkgroup;
+  unsigned int slot;
+  unsigned int color_code;
   long start_time;
   long stop_time;
   long sample_count;
