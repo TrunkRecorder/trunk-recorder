@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.2)
+cmake_minimum_required(VERSION 3.12)
 
 SET( MORE_FLAGS "-fPIC")
 SET( CMAKE_CXX_FLAGS  "${CMAKE_CXX_FLAGS} ${MORE_FLAGS}" )
