@@ -65,7 +65,6 @@ public:
   std::string bcfy_api_key;
   std::string default_mode;
   std::string system_type;
-  std::string upload_script;
   int bcfy_system_id;
   int message_count;
   int decode_rate;
@@ -111,8 +110,6 @@ public:
 
   std::string get_short_name() override;
   void set_short_name(std::string short_name) override;
-  std::string get_upload_script() override;
-  void set_upload_script(std::string script) override;
   bool get_compress_wav() override;
   void set_compress_wav(bool compress) override;
   std::string get_api_key() override;

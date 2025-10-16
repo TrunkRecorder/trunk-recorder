@@ -207,8 +207,6 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
   int result;
 
   if (call_info.status == INITIAL) {
-    std::stringstream shell_command;
-    std::string shell_command_string;
     std::string files;
 
     struct stat statbuf;
@@ -256,15 +254,6 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       }
     }
 
-    // Handle the Upload Script, if set
-    if (call_info.upload_script.length() != 0) {
-      shell_command << call_info.upload_script << " " << call_info.filename << " " << call_info.status_filename << " " << call_info.converted;
-      shell_command_string = shell_command.str();
-      std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
-      BOOST_LOG_TRIVIAL(info) << loghdr << "C\033[0m \t Running upload script: " << shell_command_string;
-
-      result = system(shell_command_string.c_str());
-    }
   }
 
   int error = 0;
@@ -356,7 +345,6 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info.transmission_list   = call->get_transmissions();
   call_info.sys_num             = sys->get_sys_num();
   call_info.short_name          = sys->get_short_name();
-  call_info.upload_script       = sys->get_upload_script();
   call_info.audio_archive       = sys->get_audio_archive();
   call_info.transmission_archive= sys->get_transmission_archive();
   call_info.call_log            = sys->get_call_log();

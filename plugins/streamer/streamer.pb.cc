@@ -5,425 +5,414 @@
 
 #include <algorithm>
 
-#include <google/protobuf/stubs/common.h>
-#include <google/protobuf/stubs/port.h>
 #include <google/protobuf/io/coded_stream.h>
-#include <google/protobuf/wire_format_lite_inl.h>
+#include <google/protobuf/extension_set.h>
+#include <google/protobuf/wire_format_lite.h>
 #include <google/protobuf/descriptor.h>
 #include <google/protobuf/generated_message_reflection.h>
 #include <google/protobuf/reflection_ops.h>
 #include <google/protobuf/wire_format.h>
-// This is a temporary google only hack
-#ifdef GOOGLE_PROTOBUF_ENFORCE_UNIQUENESS
-#include "third_party/protobuf/version.h"
-#endif
 // @@protoc_insertion_point(includes)
+#include <google/protobuf/port_def.inc>
 
-namespace protobuf_streamer_2eproto {
-extern PROTOBUF_INTERNAL_EXPORT_protobuf_streamer_2eproto ::google::protobuf::internal::SCCInfo<0> scc_info_CallInfo;
-extern PROTOBUF_INTERNAL_EXPORT_protobuf_streamer_2eproto ::google::protobuf::internal::SCCInfo<0> scc_info_RecorderInfo;
-extern PROTOBUF_INTERNAL_EXPORT_protobuf_streamer_2eproto ::google::protobuf::internal::SCCInfo<0> scc_info_SourceInfo;
-extern PROTOBUF_INTERNAL_EXPORT_protobuf_streamer_2eproto ::google::protobuf::internal::SCCInfo<0> scc_info_SystemInfo;
-}  // namespace protobuf_streamer_2eproto
+PROTOBUF_PRAGMA_INIT_SEG
+
+namespace _pb = ::PROTOBUF_NAMESPACE_ID;
+namespace _pbi = _pb::internal;
+
 namespace streamer {
-class AudioSampleDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<AudioSample>
-      _instance;
-} _AudioSample_default_instance_;
-class RecorderInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<RecorderInfo>
-      _instance;
-} _RecorderInfo_default_instance_;
-class SourceInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<SourceInfo>
-      _instance;
-} _SourceInfo_default_instance_;
-class SystemInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<SystemInfo>
-      _instance;
-} _SystemInfo_default_instance_;
-class ConfigInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<ConfigInfo>
-      _instance;
-} _ConfigInfo_default_instance_;
-class CallInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<CallInfo>
-      _instance;
-} _CallInfo_default_instance_;
-class SignalInfoDefaultTypeInternal {
- public:
-  ::google::protobuf::internal::ExplicitlyConstructed<SignalInfo>
-      _instance;
-} _SignalInfo_default_instance_;
-}  // namespace streamer
-namespace protobuf_streamer_2eproto {
-static void InitDefaultsAudioSample() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_AudioSample_default_instance_;
-    new (ptr) ::streamer::AudioSample();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::AudioSample::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<0> scc_info_AudioSample =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsAudioSample}, {}};
-
-static void InitDefaultsRecorderInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_RecorderInfo_default_instance_;
-    new (ptr) ::streamer::RecorderInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::RecorderInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<0> scc_info_RecorderInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsRecorderInfo}, {}};
-
-static void InitDefaultsSourceInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_SourceInfo_default_instance_;
-    new (ptr) ::streamer::SourceInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::SourceInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<0> scc_info_SourceInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsSourceInfo}, {}};
-
-static void InitDefaultsSystemInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_SystemInfo_default_instance_;
-    new (ptr) ::streamer::SystemInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::SystemInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<0> scc_info_SystemInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsSystemInfo}, {}};
-
-static void InitDefaultsConfigInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_ConfigInfo_default_instance_;
-    new (ptr) ::streamer::ConfigInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::ConfigInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<2> scc_info_ConfigInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 2, InitDefaultsConfigInfo}, {
-      &protobuf_streamer_2eproto::scc_info_SourceInfo.base,
-      &protobuf_streamer_2eproto::scc_info_SystemInfo.base,}};
-
-static void InitDefaultsCallInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_CallInfo_default_instance_;
-    new (ptr) ::streamer::CallInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::CallInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<0> scc_info_CallInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 0, InitDefaultsCallInfo}, {}};
-
-static void InitDefaultsSignalInfo() {
-  GOOGLE_PROTOBUF_VERIFY_VERSION;
-
-  {
-    void* ptr = &::streamer::_SignalInfo_default_instance_;
-    new (ptr) ::streamer::SignalInfo();
-    ::google::protobuf::internal::OnShutdownDestroyMessage(ptr);
-  }
-  ::streamer::SignalInfo::InitAsDefaultInstance();
-}
-
-::google::protobuf::internal::SCCInfo<3> scc_info_SignalInfo =
-    {{ATOMIC_VAR_INIT(::google::protobuf::internal::SCCInfoBase::kUninitialized), 3, InitDefaultsSignalInfo}, {
-      &protobuf_streamer_2eproto::scc_info_CallInfo.base,
-      &protobuf_streamer_2eproto::scc_info_SystemInfo.base,
-      &protobuf_streamer_2eproto::scc_info_RecorderInfo.base,}};
-
-void InitDefaults() {
-  ::google::protobuf::internal::InitSCC(&scc_info_AudioSample.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_RecorderInfo.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_SourceInfo.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_SystemInfo.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_ConfigInfo.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_CallInfo.base);
-  ::google::protobuf::internal::InitSCC(&scc_info_SignalInfo.base);
-}
-
-::google::protobuf::Metadata file_level_metadata[7];
-const ::google::protobuf::EnumDescriptor* file_level_enum_descriptors[3];
-
-const ::google::protobuf::uint32 TableStruct::offsets[] GOOGLE_PROTOBUF_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::AudioSample, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::AudioSample, recorder_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::AudioSample, sample_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, recorder_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, recorder_type_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, source_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, id_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, recorder_count_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, recorder_duration_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, recorder_state_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, status_len_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, status_error_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, status_spike_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, audio_sample_rate_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, audio_channels_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::RecorderInfo, audio_format_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, source_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, min_hz_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, max_hz_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, center_hz_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, rate_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, driver_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, device_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, antenna_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, error_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, mix_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, lna_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, vga1_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, vga2_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, bb_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, if_gain_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, analog_recorders_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, digital_recorders_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, debug_recorders_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SourceInfo, sigmf_recorders_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, system_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, system_type_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, system_name_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, audio_archive_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, upload_script_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, record_unknown_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, call_log_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, talkgroups_file_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, analog_levels_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, digital_levels_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, qpsk_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, squelch_db_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, channels_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandplan_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandfreq_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandplan_base_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandplan_high_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandplan_spacing_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SystemInfo, bandplan_offset_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, sources_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, systems_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, capture_dir_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, upload_server_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, call_timeout_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, log_file_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, instance_id_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, instance_key_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::ConfigInfo, broadcast_signals_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::CallInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::CallInfo, call_active_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::CallInfo, recorder_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::CallInfo, system_num_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::CallInfo, curr_freq_),
-  ~0u,  // no _has_bits_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, _internal_metadata_),
-  ~0u,  // no _extensions_
-  ~0u,  // no _oneof_case_
-  ~0u,  // no _weak_field_map_
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, unit_id_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, signaling_type_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, signal_type_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, call_info_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, system_info_),
-  GOOGLE_PROTOBUF_GENERATED_MESSAGE_FIELD_OFFSET(::streamer::SignalInfo, recorder_info_),
-};
-static const ::google::protobuf::internal::MigrationSchema schemas[] GOOGLE_PROTOBUF_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-  { 0, -1, sizeof(::streamer::AudioSample)},
-  { 7, -1, sizeof(::streamer::RecorderInfo)},
-  { 25, -1, sizeof(::streamer::SourceInfo)},
-  { 50, -1, sizeof(::streamer::SystemInfo)},
-  { 74, -1, sizeof(::streamer::ConfigInfo)},
-  { 88, -1, sizeof(::streamer::CallInfo)},
-  { 97, -1, sizeof(::streamer::SignalInfo)},
-};
-
-static ::google::protobuf::Message const * const file_default_instances[] = {
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_AudioSample_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_RecorderInfo_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_SourceInfo_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_SystemInfo_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_ConfigInfo_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_CallInfo_default_instance_),
-  reinterpret_cast<const ::google::protobuf::Message*>(&::streamer::_SignalInfo_default_instance_),
-};
-
-void protobuf_AssignDescriptors() {
-  AddDescriptors();
-  AssignDescriptors(
-      "streamer.proto", schemas, file_default_instances, TableStruct::offsets,
-      file_level_metadata, file_level_enum_descriptors, NULL);
-}
-
-void protobuf_AssignDescriptorsOnce() {
-  static ::google::protobuf::internal::once_flag once;
-  ::google::protobuf::internal::call_once(once, protobuf_AssignDescriptors);
-}
-
-void protobuf_RegisterTypes(const ::std::string&) GOOGLE_PROTOBUF_ATTRIBUTE_COLD;
-void protobuf_RegisterTypes(const ::std::string&) {
-  protobuf_AssignDescriptorsOnce();
-  ::google::protobuf::internal::RegisterAllTypes(file_level_metadata, 7);
-}
-
-void AddDescriptorsImpl() {
-  InitDefaults();
-  static const char descriptor[] GOOGLE_PROTOBUF_ATTRIBUTE_SECTION_VARIABLE(protodesc_cold) = {
-      "\n\016streamer.proto\022\010streamer\032\033google/proto"
-      "buf/empty.proto\"3\n\013AudioSample\022\024\n\014record"
-      "er_num\030\001 \001(\005\022\016\n\006sample\030\002 \001(\014\"\230\004\n\014Recorde"
-      "rInfo\022\024\n\014recorder_num\030\001 \001(\005\022\025\n\rrecorder_"
-      "type\030\002 \001(\t\022\022\n\nsource_num\030\003 \001(\005\022\n\n\002id\030\004 \001"
-      "(\t\022\026\n\016recorder_count\030\005 \001(\005\022\031\n\021recorder_d"
-      "uration\030\006 \001(\001\022<\n\016recorder_state\030\007 \001(\0162$."
-      "streamer.RecorderInfo.RecorderState\022\022\n\ns"
-      "tatus_len\030\010 \001(\001\022\024\n\014status_error\030\t \001(\001\022\024\n"
-      "\014status_spike\030\n \001(\001\022\031\n\021audio_sample_rate"
-      "\030\013 \001(\005\022\026\n\016audio_channels\030\014 \001(\005\0228\n\014audio_"
-      "format\030\r \001(\0162\".streamer.RecorderInfo.Aud"
-      "ioFormat\"H\n\rRecorderState\022\016\n\nMonitoring\020"
-      "\000\022\r\n\tRecording\020\001\022\014\n\010Inactive\020\002\022\n\n\006Active"
-      "\020\003\"S\n\013AudioFormat\022\013\n\007Float32\020\000\022\014\n\010Signed"
-      "16\020\001\022\014\n\010Signed24\020\002\022\014\n\010Signed32\020\003\022\r\n\tUnsi"
-      "gned8\020\004\"\202\003\n\nSourceInfo\022\022\n\nsource_num\030\001 \001"
-      "(\005\022\016\n\006min_hz\030\002 \001(\001\022\016\n\006max_hz\030\003 \001(\001\022\021\n\tce"
-      "nter_hz\030\004 \001(\001\022\014\n\004rate\030\005 \001(\001\022\016\n\006driver\030\006 "
-      "\001(\t\022\016\n\006device\030\007 \001(\t\022\017\n\007antenna\030\010 \001(\t\022\r\n\005"
-      "error\030\t \001(\001\022\020\n\010mix_gain\030\n \001(\005\022\020\n\010lna_gai"
-      "n\030\013 \001(\005\022\021\n\tvga1_gain\030\014 \001(\005\022\021\n\tvga2_gain\030"
-      "\r \001(\005\022\017\n\007bb_gain\030\016 \001(\005\022\014\n\004gain\030\017 \001(\005\022\017\n\007"
-      "if_gain\030\020 \001(\005\022\030\n\020analog_recorders\030\021 \001(\005\022"
-      "\031\n\021digital_recorders\030\022 \001(\005\022\027\n\017debug_reco"
-      "rders\030\023 \001(\005\022\027\n\017sigmf_recorders\030\024 \001(\005\"\243\003\n"
-      "\nSystemInfo\022\022\n\nsystem_num\030\001 \001(\005\022\023\n\013syste"
-      "m_type\030\002 \001(\t\022\023\n\013system_name\030\003 \001(\t\022\025\n\raud"
-      "io_archive\030\004 \001(\010\022\025\n\rupload_script\030\005 \001(\t\022"
-      "\026\n\016record_unknown\030\006 \001(\010\022\020\n\010call_log\030\007 \001("
-      "\010\022\027\n\017talkgroups_file\030\010 \001(\t\022\025\n\ranalog_lev"
-      "els\030\t \001(\001\022\026\n\016digital_levels\030\n \001(\001\022\014\n\004qps"
-      "k\030\013 \001(\010\022\022\n\nsquelch_db\030\014 \001(\001\022\020\n\010channels\030"
-      "\r \003(\001\022\020\n\010bandplan\030\016 \001(\t\022\020\n\010bandfreq\030\017 \001("
-      "\005\022\025\n\rbandplan_base\030\020 \001(\001\022\025\n\rbandplan_hig"
-      "h\030\021 \001(\001\022\030\n\020bandplan_spacing\030\022 \001(\001\022\027\n\017ban"
-      "dplan_offset\030\023 \001(\005\"\364\001\n\nConfigInfo\022%\n\007sou"
-      "rces\030\001 \003(\0132\024.streamer.SourceInfo\022%\n\007syst"
-      "ems\030\002 \003(\0132\024.streamer.SystemInfo\022\023\n\013captu"
-      "re_dir\030\003 \001(\t\022\025\n\rupload_server\030\004 \001(\t\022\024\n\014c"
-      "all_timeout\030\005 \001(\005\022\020\n\010log_file\030\006 \001(\010\022\023\n\013i"
-      "nstance_id\030\007 \001(\t\022\024\n\014instance_key\030\010 \001(\t\022\031"
-      "\n\021broadcast_signals\030\t \001(\010\"\\\n\010CallInfo\022\023\n"
-      "\013call_active\030\001 \001(\010\022\024\n\014recorder_num\030\002 \001(\005"
-      "\022\022\n\nsystem_num\030\003 \001(\005\022\021\n\tcurr_freq\030\004 \001(\001\""
-      "\262\003\n\nSignalInfo\022\017\n\007unit_id\030\001 \001(\003\022\026\n\016signa"
-      "ling_type\030\002 \001(\t\0224\n\013signal_type\030\003 \001(\0162\037.s"
-      "treamer.SignalInfo.SignalType\022%\n\tcall_in"
-      "fo\030\004 \001(\0132\022.streamer.CallInfo\022)\n\013system_i"
-      "nfo\030\005 \001(\0132\024.streamer.SystemInfo\022-\n\rrecor"
-      "der_info\030\006 \001(\0132\026.streamer.RecorderInfo\"\303"
-      "\001\n\nSignalType\022\n\n\006Normal\020\000\022\r\n\tEmergency\020\001"
-      "\022\020\n\014EmergencyAck\020\002\022\016\n\nRadioCheck\020\003\022\021\n\rRa"
-      "dioCheckAck\020\004\022\r\n\tRadioStun\020\005\022\020\n\014RadioStu"
-      "nAck\020\006\022\017\n\013RadioRevive\020\007\022\022\n\016RadioReviveAc"
-      "k\020\010\022\r\n\tNormalPre\020\t\022\020\n\014EmergencyPre\020\n2\200\004\n"
-      "\025TrunkRecorderStreamer\022=\n\nSendStream\022\025.s"
-      "treamer.AudioSample\032\026.google.protobuf.Em"
-      "pty(\001\022<\n\nSendSignal\022\024.streamer.SignalInf"
-      "o\032\026.google.protobuf.Empty(\001\0229\n\013CallStart"
-      "ed\022\022.streamer.CallInfo\032\026.google.protobuf"
-      ".Empty\0227\n\tCallEnded\022\022.streamer.CallInfo\032"
-      "\026.google.protobuf.Empty\022\?\n\rSetupRecorder"
-      "\022\026.streamer.RecorderInfo\032\026.google.protob"
-      "uf.Empty\022;\n\013SetupSystem\022\024.streamer.Syste"
-      "mInfo\032\026.google.protobuf.Empty\022;\n\013SetupSo"
-      "urce\022\024.streamer.SourceInfo\032\026.google.prot"
-      "obuf.Empty\022;\n\013SetupConfig\022\024.streamer.Con"
-      "figInfo\032\026.google.protobuf.EmptyB=\n\032io.tr"
-      "unk.recorder.streamerP\001\242\002\003TRS\252\002\026TrunkRec"
-      "order.Streamerb\006proto3"
+PROTOBUF_CONSTEXPR AudioSample::AudioSample(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.sample_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.recorder_num_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct AudioSampleDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR AudioSampleDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~AudioSampleDefaultTypeInternal() {}
+  union {
+    AudioSample _instance;
   };
-  ::google::protobuf::DescriptorPool::InternalAddGeneratedFile(
-      descriptor, 2822);
-  ::google::protobuf::MessageFactory::InternalRegisterGeneratedFile(
-    "streamer.proto", &protobuf_RegisterTypes);
-  ::protobuf_google_2fprotobuf_2fempty_2eproto::AddDescriptors();
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 AudioSampleDefaultTypeInternal _AudioSample_default_instance_;
+PROTOBUF_CONSTEXPR RecorderInfo::RecorderInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.recorder_type_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.id_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.recorder_num_)*/0
+  , /*decltype(_impl_.source_num_)*/0
+  , /*decltype(_impl_.recorder_duration_)*/0
+  , /*decltype(_impl_.recorder_count_)*/0
+  , /*decltype(_impl_.recorder_state_)*/0
+  , /*decltype(_impl_.status_len_)*/0
+  , /*decltype(_impl_.status_error_)*/0
+  , /*decltype(_impl_.status_spike_)*/0
+  , /*decltype(_impl_.audio_sample_rate_)*/0
+  , /*decltype(_impl_.audio_channels_)*/0
+  , /*decltype(_impl_.audio_format_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct RecorderInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR RecorderInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~RecorderInfoDefaultTypeInternal() {}
+  union {
+    RecorderInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 RecorderInfoDefaultTypeInternal _RecorderInfo_default_instance_;
+PROTOBUF_CONSTEXPR SourceInfo::SourceInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.driver_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.device_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.antenna_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.min_hz_)*/0
+  , /*decltype(_impl_.max_hz_)*/0
+  , /*decltype(_impl_.center_hz_)*/0
+  , /*decltype(_impl_.rate_)*/0
+  , /*decltype(_impl_.source_num_)*/0
+  , /*decltype(_impl_.mix_gain_)*/0
+  , /*decltype(_impl_.error_)*/0
+  , /*decltype(_impl_.lna_gain_)*/0
+  , /*decltype(_impl_.vga1_gain_)*/0
+  , /*decltype(_impl_.vga2_gain_)*/0
+  , /*decltype(_impl_.bb_gain_)*/0
+  , /*decltype(_impl_.gain_)*/0
+  , /*decltype(_impl_.if_gain_)*/0
+  , /*decltype(_impl_.analog_recorders_)*/0
+  , /*decltype(_impl_.digital_recorders_)*/0
+  , /*decltype(_impl_.debug_recorders_)*/0
+  , /*decltype(_impl_.sigmf_recorders_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct SourceInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SourceInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SourceInfoDefaultTypeInternal() {}
+  union {
+    SourceInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SourceInfoDefaultTypeInternal _SourceInfo_default_instance_;
+PROTOBUF_CONSTEXPR SystemInfo::SystemInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.channels_)*/{}
+  , /*decltype(_impl_.system_type_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.system_name_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.talkgroups_file_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.bandplan_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.system_num_)*/0
+  , /*decltype(_impl_.audio_archive_)*/false
+  , /*decltype(_impl_.record_unknown_)*/false
+  , /*decltype(_impl_.call_log_)*/false
+  , /*decltype(_impl_.qpsk_)*/false
+  , /*decltype(_impl_.analog_levels_)*/0
+  , /*decltype(_impl_.digital_levels_)*/0
+  , /*decltype(_impl_.squelch_db_)*/0
+  , /*decltype(_impl_.bandplan_base_)*/0
+  , /*decltype(_impl_.bandplan_high_)*/0
+  , /*decltype(_impl_.bandfreq_)*/0
+  , /*decltype(_impl_.bandplan_offset_)*/0
+  , /*decltype(_impl_.bandplan_spacing_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct SystemInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SystemInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SystemInfoDefaultTypeInternal() {}
+  union {
+    SystemInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SystemInfoDefaultTypeInternal _SystemInfo_default_instance_;
+PROTOBUF_CONSTEXPR ConfigInfo::ConfigInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.sources_)*/{}
+  , /*decltype(_impl_.systems_)*/{}
+  , /*decltype(_impl_.capture_dir_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.upload_server_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.instance_id_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.instance_key_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.call_timeout_)*/0
+  , /*decltype(_impl_.log_file_)*/false
+  , /*decltype(_impl_.broadcast_signals_)*/false
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct ConfigInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR ConfigInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~ConfigInfoDefaultTypeInternal() {}
+  union {
+    ConfigInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 ConfigInfoDefaultTypeInternal _ConfigInfo_default_instance_;
+PROTOBUF_CONSTEXPR CallInfo::CallInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.call_active_)*/false
+  , /*decltype(_impl_.recorder_num_)*/0
+  , /*decltype(_impl_.curr_freq_)*/0
+  , /*decltype(_impl_.system_num_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct CallInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR CallInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~CallInfoDefaultTypeInternal() {}
+  union {
+    CallInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 CallInfoDefaultTypeInternal _CallInfo_default_instance_;
+PROTOBUF_CONSTEXPR SignalInfo::SignalInfo(
+    ::_pbi::ConstantInitialized): _impl_{
+    /*decltype(_impl_.signaling_type_)*/{&::_pbi::fixed_address_empty_string, ::_pbi::ConstantInitialized{}}
+  , /*decltype(_impl_.call_info_)*/nullptr
+  , /*decltype(_impl_.system_info_)*/nullptr
+  , /*decltype(_impl_.recorder_info_)*/nullptr
+  , /*decltype(_impl_.unit_id_)*/int64_t{0}
+  , /*decltype(_impl_.signal_type_)*/0
+  , /*decltype(_impl_._cached_size_)*/{}} {}
+struct SignalInfoDefaultTypeInternal {
+  PROTOBUF_CONSTEXPR SignalInfoDefaultTypeInternal()
+      : _instance(::_pbi::ConstantInitialized{}) {}
+  ~SignalInfoDefaultTypeInternal() {}
+  union {
+    SignalInfo _instance;
+  };
+};
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 SignalInfoDefaultTypeInternal _SignalInfo_default_instance_;
+}  // namespace streamer
+static ::_pb::Metadata file_level_metadata_streamer_2eproto[7];
+static const ::_pb::EnumDescriptor* file_level_enum_descriptors_streamer_2eproto[3];
+static constexpr ::_pb::ServiceDescriptor const** file_level_service_descriptors_streamer_2eproto = nullptr;
+
+const uint32_t TableStruct_streamer_2eproto::offsets[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::AudioSample, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::AudioSample, _impl_.recorder_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::AudioSample, _impl_.sample_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.recorder_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.recorder_type_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.source_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.id_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.recorder_count_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.recorder_duration_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.recorder_state_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.status_len_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.status_error_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.status_spike_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.audio_sample_rate_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.audio_channels_),
+  PROTOBUF_FIELD_OFFSET(::streamer::RecorderInfo, _impl_.audio_format_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.source_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.min_hz_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.max_hz_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.center_hz_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.rate_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.driver_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.device_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.antenna_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.error_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.mix_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.lna_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.vga1_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.vga2_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.bb_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.if_gain_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.analog_recorders_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.digital_recorders_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.debug_recorders_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SourceInfo, _impl_.sigmf_recorders_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.system_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.system_type_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.system_name_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.audio_archive_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.record_unknown_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.call_log_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.talkgroups_file_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.analog_levels_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.digital_levels_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.qpsk_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.squelch_db_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.channels_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandplan_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandfreq_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandplan_base_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandplan_high_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandplan_spacing_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SystemInfo, _impl_.bandplan_offset_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.sources_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.systems_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.capture_dir_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.upload_server_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.call_timeout_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.log_file_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.instance_id_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.instance_key_),
+  PROTOBUF_FIELD_OFFSET(::streamer::ConfigInfo, _impl_.broadcast_signals_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::CallInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::CallInfo, _impl_.call_active_),
+  PROTOBUF_FIELD_OFFSET(::streamer::CallInfo, _impl_.recorder_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::CallInfo, _impl_.system_num_),
+  PROTOBUF_FIELD_OFFSET(::streamer::CallInfo, _impl_.curr_freq_),
+  ~0u,  // no _has_bits_
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _internal_metadata_),
+  ~0u,  // no _extensions_
+  ~0u,  // no _oneof_case_
+  ~0u,  // no _weak_field_map_
+  ~0u,  // no _inlined_string_donated_
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.unit_id_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.signaling_type_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.signal_type_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.call_info_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.system_info_),
+  PROTOBUF_FIELD_OFFSET(::streamer::SignalInfo, _impl_.recorder_info_),
+};
+static const ::_pbi::MigrationSchema schemas[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) = {
+  { 0, -1, -1, sizeof(::streamer::AudioSample)},
+  { 8, -1, -1, sizeof(::streamer::RecorderInfo)},
+  { 27, -1, -1, sizeof(::streamer::SourceInfo)},
+  { 53, -1, -1, sizeof(::streamer::SystemInfo)},
+  { 77, -1, -1, sizeof(::streamer::ConfigInfo)},
+  { 92, -1, -1, sizeof(::streamer::CallInfo)},
+  { 102, -1, -1, sizeof(::streamer::SignalInfo)},
+};
+
+static const ::_pb::Message* const file_default_instances[] = {
+  &::streamer::_AudioSample_default_instance_._instance,
+  &::streamer::_RecorderInfo_default_instance_._instance,
+  &::streamer::_SourceInfo_default_instance_._instance,
+  &::streamer::_SystemInfo_default_instance_._instance,
+  &::streamer::_ConfigInfo_default_instance_._instance,
+  &::streamer::_CallInfo_default_instance_._instance,
+  &::streamer::_SignalInfo_default_instance_._instance,
+};
+
+const char descriptor_table_protodef_streamer_2eproto[] PROTOBUF_SECTION_VARIABLE(protodesc_cold) =
+  "\n\016streamer.proto\022\010streamer\032\033google/proto"
+  "buf/empty.proto\"3\n\013AudioSample\022\024\n\014record"
+  "er_num\030\001 \001(\005\022\016\n\006sample\030\002 \001(\014\"\230\004\n\014Recorde"
+  "rInfo\022\024\n\014recorder_num\030\001 \001(\005\022\025\n\rrecorder_"
+  "type\030\002 \001(\t\022\022\n\nsource_num\030\003 \001(\005\022\n\n\002id\030\004 \001"
+  "(\t\022\026\n\016recorder_count\030\005 \001(\005\022\031\n\021recorder_d"
+  "uration\030\006 \001(\001\022<\n\016recorder_state\030\007 \001(\0162$."
+  "streamer.RecorderInfo.RecorderState\022\022\n\ns"
+  "tatus_len\030\010 \001(\001\022\024\n\014status_error\030\t \001(\001\022\024\n"
+  "\014status_spike\030\n \001(\001\022\031\n\021audio_sample_rate"
+  "\030\013 \001(\005\022\026\n\016audio_channels\030\014 \001(\005\0228\n\014audio_"
+  "format\030\r \001(\0162\".streamer.RecorderInfo.Aud"
+  "ioFormat\"H\n\rRecorderState\022\016\n\nMonitoring\020"
+  "\000\022\r\n\tRecording\020\001\022\014\n\010Inactive\020\002\022\n\n\006Active"
+  "\020\003\"S\n\013AudioFormat\022\013\n\007Float32\020\000\022\014\n\010Signed"
+  "16\020\001\022\014\n\010Signed24\020\002\022\014\n\010Signed32\020\003\022\r\n\tUnsi"
+  "gned8\020\004\"\202\003\n\nSourceInfo\022\022\n\nsource_num\030\001 \001"
+  "(\005\022\016\n\006min_hz\030\002 \001(\001\022\016\n\006max_hz\030\003 \001(\001\022\021\n\tce"
+  "nter_hz\030\004 \001(\001\022\014\n\004rate\030\005 \001(\001\022\016\n\006driver\030\006 "
+  "\001(\t\022\016\n\006device\030\007 \001(\t\022\017\n\007antenna\030\010 \001(\t\022\r\n\005"
+  "error\030\t \001(\001\022\020\n\010mix_gain\030\n \001(\005\022\020\n\010lna_gai"
+  "n\030\013 \001(\005\022\021\n\tvga1_gain\030\014 \001(\005\022\021\n\tvga2_gain\030"
+  "\r \001(\005\022\017\n\007bb_gain\030\016 \001(\005\022\014\n\004gain\030\017 \001(\005\022\017\n\007"
+  "if_gain\030\020 \001(\005\022\030\n\020analog_recorders\030\021 \001(\005\022"
+  "\031\n\021digital_recorders\030\022 \001(\005\022\027\n\017debug_reco"
+  "rders\030\023 \001(\005\022\027\n\017sigmf_recorders\030\024 \001(\005\"\241\003\n"
+  "\nSystemInfo\022\022\n\nsystem_num\030\001 \001(\005\022\023\n\013syste"
+  "m_type\030\002 \001(\t\022\023\n\013system_name\030\003 \001(\t\022\025\n\raud"
+  "io_archive\030\004 \001(\010\022\026\n\016record_unknown\030\006 \001(\010"
+  "\022\020\n\010call_log\030\007 \001(\010\022\027\n\017talkgroups_file\030\010 "
+  "\001(\t\022\025\n\ranalog_levels\030\t \001(\001\022\026\n\016digital_le"
+  "vels\030\n \001(\001\022\014\n\004qpsk\030\013 \001(\010\022\022\n\nsquelch_db\030\014"
+  " \001(\001\022\020\n\010channels\030\r \003(\001\022\020\n\010bandplan\030\016 \001(\t"
+  "\022\020\n\010bandfreq\030\017 \001(\005\022\025\n\rbandplan_base\030\020 \001("
+  "\001\022\025\n\rbandplan_high\030\021 \001(\001\022\030\n\020bandplan_spa"
+  "cing\030\022 \001(\001\022\027\n\017bandplan_offset\030\023 \001(\005J\004\010\005\020"
+  "\006R\rupload_script\"\364\001\n\nConfigInfo\022%\n\007sourc"
+  "es\030\001 \003(\0132\024.streamer.SourceInfo\022%\n\007system"
+  "s\030\002 \003(\0132\024.streamer.SystemInfo\022\023\n\013capture"
+  "_dir\030\003 \001(\t\022\025\n\rupload_server\030\004 \001(\t\022\024\n\014cal"
+  "l_timeout\030\005 \001(\005\022\020\n\010log_file\030\006 \001(\010\022\023\n\013ins"
+  "tance_id\030\007 \001(\t\022\024\n\014instance_key\030\010 \001(\t\022\031\n\021"
+  "broadcast_signals\030\t \001(\010\"\\\n\010CallInfo\022\023\n\013c"
+  "all_active\030\001 \001(\010\022\024\n\014recorder_num\030\002 \001(\005\022\022"
+  "\n\nsystem_num\030\003 \001(\005\022\021\n\tcurr_freq\030\004 \001(\001\"\262\003"
+  "\n\nSignalInfo\022\017\n\007unit_id\030\001 \001(\003\022\026\n\016signali"
+  "ng_type\030\002 \001(\t\0224\n\013signal_type\030\003 \001(\0162\037.str"
+  "eamer.SignalInfo.SignalType\022%\n\tcall_info"
+  "\030\004 \001(\0132\022.streamer.CallInfo\022)\n\013system_inf"
+  "o\030\005 \001(\0132\024.streamer.SystemInfo\022-\n\rrecorde"
+  "r_info\030\006 \001(\0132\026.streamer.RecorderInfo\"\303\001\n"
+  "\nSignalType\022\n\n\006Normal\020\000\022\r\n\tEmergency\020\001\022\020"
+  "\n\014EmergencyAck\020\002\022\016\n\nRadioCheck\020\003\022\021\n\rRadi"
+  "oCheckAck\020\004\022\r\n\tRadioStun\020\005\022\020\n\014RadioStunA"
+  "ck\020\006\022\017\n\013RadioRevive\020\007\022\022\n\016RadioReviveAck\020"
+  "\010\022\r\n\tNormalPre\020\t\022\020\n\014EmergencyPre\020\n2\200\004\n\025T"
+  "runkRecorderStreamer\022=\n\nSendStream\022\025.str"
+  "eamer.AudioSample\032\026.google.protobuf.Empt"
+  "y(\001\022<\n\nSendSignal\022\024.streamer.SignalInfo\032"
+  "\026.google.protobuf.Empty(\001\0229\n\013CallStarted"
+  "\022\022.streamer.CallInfo\032\026.google.protobuf.E"
+  "mpty\0227\n\tCallEnded\022\022.streamer.CallInfo\032\026."
+  "google.protobuf.Empty\022\?\n\rSetupRecorder\022\026"
+  ".streamer.RecorderInfo\032\026.google.protobuf"
+  ".Empty\022;\n\013SetupSystem\022\024.streamer.SystemI"
+  "nfo\032\026.google.protobuf.Empty\022;\n\013SetupSour"
+  "ce\022\024.streamer.SourceInfo\032\026.google.protob"
+  "uf.Empty\022;\n\013SetupConfig\022\024.streamer.Confi"
+  "gInfo\032\026.google.protobuf.EmptyB=\n\032io.trun"
+  "k.recorder.streamerP\001\242\002\003TRS\252\002\026TrunkRecor"
+  "der.Streamerb\006proto3"
+  ;
+static const ::_pbi::DescriptorTable* const descriptor_table_streamer_2eproto_deps[1] = {
+  &::descriptor_table_google_2fprotobuf_2fempty_2eproto,
+};
+static ::_pbi::once_flag descriptor_table_streamer_2eproto_once;
+const ::_pbi::DescriptorTable descriptor_table_streamer_2eproto = {
+    false, false, 2820, descriptor_table_protodef_streamer_2eproto,
+    "streamer.proto",
+    &descriptor_table_streamer_2eproto_once, descriptor_table_streamer_2eproto_deps, 1, 7,
+    schemas, file_default_instances, TableStruct_streamer_2eproto::offsets,
+    file_level_metadata_streamer_2eproto, file_level_enum_descriptors_streamer_2eproto,
+    file_level_service_descriptors_streamer_2eproto,
+};
+PROTOBUF_ATTRIBUTE_WEAK const ::_pbi::DescriptorTable* descriptor_table_streamer_2eproto_getter() {
+  return &descriptor_table_streamer_2eproto;
 }
 
-void AddDescriptors() {
-  static ::google::protobuf::internal::once_flag once;
-  ::google::protobuf::internal::call_once(once, AddDescriptorsImpl);
-}
-// Force AddDescriptors() to be called at dynamic initialization time.
-struct StaticDescriptorInitializer {
-  StaticDescriptorInitializer() {
-    AddDescriptors();
-  }
-} static_descriptor_initializer;
-}  // namespace protobuf_streamer_2eproto
+// Force running AddDescriptors() at dynamic initialization time.
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY2 static ::_pbi::AddDescriptorsRunner dynamic_init_dummy_streamer_2eproto(&descriptor_table_streamer_2eproto);
 namespace streamer {
-const ::google::protobuf::EnumDescriptor* RecorderInfo_RecorderState_descriptor() {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return protobuf_streamer_2eproto::file_level_enum_descriptors[0];
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* RecorderInfo_RecorderState_descriptor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_streamer_2eproto);
+  return file_level_enum_descriptors_streamer_2eproto[0];
 }
 bool RecorderInfo_RecorderState_IsValid(int value) {
   switch (value) {
@@ -437,18 +426,18 @@ bool RecorderInfo_RecorderState_IsValid(int value) {
   }
 }
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const RecorderInfo_RecorderState RecorderInfo::Monitoring;
-const RecorderInfo_RecorderState RecorderInfo::Recording;
-const RecorderInfo_RecorderState RecorderInfo::Inactive;
-const RecorderInfo_RecorderState RecorderInfo::Active;
-const RecorderInfo_RecorderState RecorderInfo::RecorderState_MIN;
-const RecorderInfo_RecorderState RecorderInfo::RecorderState_MAX;
-const int RecorderInfo::RecorderState_ARRAYSIZE;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
-const ::google::protobuf::EnumDescriptor* RecorderInfo_AudioFormat_descriptor() {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return protobuf_streamer_2eproto::file_level_enum_descriptors[1];
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr RecorderInfo_RecorderState RecorderInfo::Monitoring;
+constexpr RecorderInfo_RecorderState RecorderInfo::Recording;
+constexpr RecorderInfo_RecorderState RecorderInfo::Inactive;
+constexpr RecorderInfo_RecorderState RecorderInfo::Active;
+constexpr RecorderInfo_RecorderState RecorderInfo::RecorderState_MIN;
+constexpr RecorderInfo_RecorderState RecorderInfo::RecorderState_MAX;
+constexpr int RecorderInfo::RecorderState_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* RecorderInfo_AudioFormat_descriptor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_streamer_2eproto);
+  return file_level_enum_descriptors_streamer_2eproto[1];
 }
 bool RecorderInfo_AudioFormat_IsValid(int value) {
   switch (value) {
@@ -463,19 +452,19 @@ bool RecorderInfo_AudioFormat_IsValid(int value) {
   }
 }
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const RecorderInfo_AudioFormat RecorderInfo::Float32;
-const RecorderInfo_AudioFormat RecorderInfo::Signed16;
-const RecorderInfo_AudioFormat RecorderInfo::Signed24;
-const RecorderInfo_AudioFormat RecorderInfo::Signed32;
-const RecorderInfo_AudioFormat RecorderInfo::Unsigned8;
-const RecorderInfo_AudioFormat RecorderInfo::AudioFormat_MIN;
-const RecorderInfo_AudioFormat RecorderInfo::AudioFormat_MAX;
-const int RecorderInfo::AudioFormat_ARRAYSIZE;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
-const ::google::protobuf::EnumDescriptor* SignalInfo_SignalType_descriptor() {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return protobuf_streamer_2eproto::file_level_enum_descriptors[2];
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr RecorderInfo_AudioFormat RecorderInfo::Float32;
+constexpr RecorderInfo_AudioFormat RecorderInfo::Signed16;
+constexpr RecorderInfo_AudioFormat RecorderInfo::Signed24;
+constexpr RecorderInfo_AudioFormat RecorderInfo::Signed32;
+constexpr RecorderInfo_AudioFormat RecorderInfo::Unsigned8;
+constexpr RecorderInfo_AudioFormat RecorderInfo::AudioFormat_MIN;
+constexpr RecorderInfo_AudioFormat RecorderInfo::AudioFormat_MAX;
+constexpr int RecorderInfo::AudioFormat_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+const ::PROTOBUF_NAMESPACE_ID::EnumDescriptor* SignalInfo_SignalType_descriptor() {
+  ::PROTOBUF_NAMESPACE_ID::internal::AssignDescriptors(&descriptor_table_streamer_2eproto);
+  return file_level_enum_descriptors_streamer_2eproto[2];
 }
 bool SignalInfo_SignalType_IsValid(int value) {
   switch (value) {
@@ -496,192 +485,167 @@ bool SignalInfo_SignalType_IsValid(int value) {
   }
 }
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const SignalInfo_SignalType SignalInfo::Normal;
-const SignalInfo_SignalType SignalInfo::Emergency;
-const SignalInfo_SignalType SignalInfo::EmergencyAck;
-const SignalInfo_SignalType SignalInfo::RadioCheck;
-const SignalInfo_SignalType SignalInfo::RadioCheckAck;
-const SignalInfo_SignalType SignalInfo::RadioStun;
-const SignalInfo_SignalType SignalInfo::RadioStunAck;
-const SignalInfo_SignalType SignalInfo::RadioRevive;
-const SignalInfo_SignalType SignalInfo::RadioReviveAck;
-const SignalInfo_SignalType SignalInfo::NormalPre;
-const SignalInfo_SignalType SignalInfo::EmergencyPre;
-const SignalInfo_SignalType SignalInfo::SignalType_MIN;
-const SignalInfo_SignalType SignalInfo::SignalType_MAX;
-const int SignalInfo::SignalType_ARRAYSIZE;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+#if (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
+constexpr SignalInfo_SignalType SignalInfo::Normal;
+constexpr SignalInfo_SignalType SignalInfo::Emergency;
+constexpr SignalInfo_SignalType SignalInfo::EmergencyAck;
+constexpr SignalInfo_SignalType SignalInfo::RadioCheck;
+constexpr SignalInfo_SignalType SignalInfo::RadioCheckAck;
+constexpr SignalInfo_SignalType SignalInfo::RadioStun;
+constexpr SignalInfo_SignalType SignalInfo::RadioStunAck;
+constexpr SignalInfo_SignalType SignalInfo::RadioRevive;
+constexpr SignalInfo_SignalType SignalInfo::RadioReviveAck;
+constexpr SignalInfo_SignalType SignalInfo::NormalPre;
+constexpr SignalInfo_SignalType SignalInfo::EmergencyPre;
+constexpr SignalInfo_SignalType SignalInfo::SignalType_MIN;
+constexpr SignalInfo_SignalType SignalInfo::SignalType_MAX;
+constexpr int SignalInfo::SignalType_ARRAYSIZE;
+#endif  // (__cplusplus < 201703) && (!defined(_MSC_VER) || (_MSC_VER >= 1900 && _MSC_VER < 1912))
 
 // ===================================================================
 
-void AudioSample::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int AudioSample::kRecorderNumFieldNumber;
-const int AudioSample::kSampleFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class AudioSample::_Internal {
+ public:
+};
 
-AudioSample::AudioSample()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_AudioSample.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.AudioSample)
+AudioSample::AudioSample(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.AudioSample)
 }
 AudioSample::AudioSample(const AudioSample& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  sample_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.sample().size() > 0) {
-    sample_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.sample_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  AudioSample* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.sample_){}
+    , decltype(_impl_.recorder_num_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.sample_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sample_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_sample().empty()) {
+    _this->_impl_.sample_.Set(from._internal_sample(), 
+      _this->GetArenaForAllocation());
   }
-  recorder_num_ = from.recorder_num_;
+  _this->_impl_.recorder_num_ = from._impl_.recorder_num_;
   // @@protoc_insertion_point(copy_constructor:streamer.AudioSample)
 }
 
-void AudioSample::SharedCtor() {
-  sample_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  recorder_num_ = 0;
+inline void AudioSample::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.sample_){}
+    , decltype(_impl_.recorder_num_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.sample_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.sample_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 AudioSample::~AudioSample() {
   // @@protoc_insertion_point(destructor:streamer.AudioSample)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void AudioSample::SharedDtor() {
-  sample_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
+inline void AudioSample::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.sample_.Destroy();
 }
 
 void AudioSample::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* AudioSample::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const AudioSample& AudioSample::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_AudioSample.base);
-  return *internal_default_instance();
-}
-
 
 void AudioSample::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.AudioSample)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  sample_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  recorder_num_ = 0;
-  _internal_metadata_.Clear();
+  _impl_.sample_.ClearToEmpty();
+  _impl_.recorder_num_ = 0;
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool AudioSample::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.AudioSample)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* AudioSample::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // int32 recorder_num = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &recorder_num_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.recorder_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bytes sample = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(18u /* 18 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadBytes(
-                input, this->mutable_sample()));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_sample();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.AudioSample)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.AudioSample)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void AudioSample::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.AudioSample)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(1, this->recorder_num(), output);
-  }
-
-  // bytes sample = 2;
-  if (this->sample().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBytesMaybeAliased(
-      2, this->sample(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.AudioSample)
-}
-
-::google::protobuf::uint8* AudioSample::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* AudioSample::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.AudioSample)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(1, this->recorder_num(), target);
+  if (this->_internal_recorder_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_recorder_num(), target);
   }
 
   // bytes sample = 2;
-  if (this->sample().size() > 0) {
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteBytesToArray(
-        2, this->sample(), target);
+  if (!this->_internal_sample().empty()) {
+    target = stream->WriteBytesMaybeAliased(
+        2, this->_internal_sample(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.AudioSample)
   return target;
@@ -691,66 +655,47 @@ size_t AudioSample::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.AudioSample)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // bytes sample = 2;
-  if (this->sample().size() > 0) {
+  if (!this->_internal_sample().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::BytesSize(
-        this->sample());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::BytesSize(
+        this->_internal_sample());
   }
 
   // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->recorder_num());
+  if (this->_internal_recorder_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_recorder_num());
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void AudioSample::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.AudioSample)
-  GOOGLE_DCHECK_NE(&from, this);
-  const AudioSample* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const AudioSample>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.AudioSample)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.AudioSample)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData AudioSample::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    AudioSample::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*AudioSample::GetClassData() const { return &_class_data_; }
 
-void AudioSample::MergeFrom(const AudioSample& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.AudioSample)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void AudioSample::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<AudioSample*>(&to_msg);
+  auto& from = static_cast<const AudioSample&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.AudioSample)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.sample().size() > 0) {
-
-    sample_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.sample_);
+  if (!from._internal_sample().empty()) {
+    _this->_internal_set_sample(from._internal_sample());
   }
-  if (from.recorder_num() != 0) {
-    set_recorder_num(from.recorder_num());
+  if (from._internal_recorder_num() != 0) {
+    _this->_internal_set_recorder_num(from._internal_recorder_num());
   }
-}
-
-void AudioSample::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.AudioSample)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void AudioSample::CopyFrom(const AudioSample& from) {
@@ -764,512 +709,393 @@ bool AudioSample::IsInitialized() const {
   return true;
 }
 
-void AudioSample::Swap(AudioSample* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void AudioSample::InternalSwap(AudioSample* other) {
   using std::swap;
-  sample_.Swap(&other->sample_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(recorder_num_, other->recorder_num_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.sample_, lhs_arena,
+      &other->_impl_.sample_, rhs_arena
+  );
+  swap(_impl_.recorder_num_, other->_impl_.recorder_num_);
 }
 
-::google::protobuf::Metadata AudioSample::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata AudioSample::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[0]);
 }
-
 
 // ===================================================================
 
-void RecorderInfo::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int RecorderInfo::kRecorderNumFieldNumber;
-const int RecorderInfo::kRecorderTypeFieldNumber;
-const int RecorderInfo::kSourceNumFieldNumber;
-const int RecorderInfo::kIdFieldNumber;
-const int RecorderInfo::kRecorderCountFieldNumber;
-const int RecorderInfo::kRecorderDurationFieldNumber;
-const int RecorderInfo::kRecorderStateFieldNumber;
-const int RecorderInfo::kStatusLenFieldNumber;
-const int RecorderInfo::kStatusErrorFieldNumber;
-const int RecorderInfo::kStatusSpikeFieldNumber;
-const int RecorderInfo::kAudioSampleRateFieldNumber;
-const int RecorderInfo::kAudioChannelsFieldNumber;
-const int RecorderInfo::kAudioFormatFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class RecorderInfo::_Internal {
+ public:
+};
 
-RecorderInfo::RecorderInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_RecorderInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.RecorderInfo)
+RecorderInfo::RecorderInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.RecorderInfo)
 }
 RecorderInfo::RecorderInfo(const RecorderInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  recorder_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.recorder_type().size() > 0) {
-    recorder_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.recorder_type_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  RecorderInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.recorder_type_){}
+    , decltype(_impl_.id_){}
+    , decltype(_impl_.recorder_num_){}
+    , decltype(_impl_.source_num_){}
+    , decltype(_impl_.recorder_duration_){}
+    , decltype(_impl_.recorder_count_){}
+    , decltype(_impl_.recorder_state_){}
+    , decltype(_impl_.status_len_){}
+    , decltype(_impl_.status_error_){}
+    , decltype(_impl_.status_spike_){}
+    , decltype(_impl_.audio_sample_rate_){}
+    , decltype(_impl_.audio_channels_){}
+    , decltype(_impl_.audio_format_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.recorder_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.recorder_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_recorder_type().empty()) {
+    _this->_impl_.recorder_type_.Set(from._internal_recorder_type(), 
+      _this->GetArenaForAllocation());
   }
-  id_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.id().size() > 0) {
-    id_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.id_);
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_id().empty()) {
+    _this->_impl_.id_.Set(from._internal_id(), 
+      _this->GetArenaForAllocation());
   }
-  ::memcpy(&recorder_num_, &from.recorder_num_,
-    static_cast<size_t>(reinterpret_cast<char*>(&audio_format_) -
-    reinterpret_cast<char*>(&recorder_num_)) + sizeof(audio_format_));
+  ::memcpy(&_impl_.recorder_num_, &from._impl_.recorder_num_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.audio_format_) -
+    reinterpret_cast<char*>(&_impl_.recorder_num_)) + sizeof(_impl_.audio_format_));
   // @@protoc_insertion_point(copy_constructor:streamer.RecorderInfo)
 }
 
-void RecorderInfo::SharedCtor() {
-  recorder_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  id_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&recorder_num_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&audio_format_) -
-      reinterpret_cast<char*>(&recorder_num_)) + sizeof(audio_format_));
+inline void RecorderInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.recorder_type_){}
+    , decltype(_impl_.id_){}
+    , decltype(_impl_.recorder_num_){0}
+    , decltype(_impl_.source_num_){0}
+    , decltype(_impl_.recorder_duration_){0}
+    , decltype(_impl_.recorder_count_){0}
+    , decltype(_impl_.recorder_state_){0}
+    , decltype(_impl_.status_len_){0}
+    , decltype(_impl_.status_error_){0}
+    , decltype(_impl_.status_spike_){0}
+    , decltype(_impl_.audio_sample_rate_){0}
+    , decltype(_impl_.audio_channels_){0}
+    , decltype(_impl_.audio_format_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.recorder_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.recorder_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 RecorderInfo::~RecorderInfo() {
   // @@protoc_insertion_point(destructor:streamer.RecorderInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void RecorderInfo::SharedDtor() {
-  recorder_type_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  id_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
+inline void RecorderInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.recorder_type_.Destroy();
+  _impl_.id_.Destroy();
 }
 
 void RecorderInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* RecorderInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const RecorderInfo& RecorderInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_RecorderInfo.base);
-  return *internal_default_instance();
-}
-
 
 void RecorderInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.RecorderInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  recorder_type_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  id_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&recorder_num_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&audio_format_) -
-      reinterpret_cast<char*>(&recorder_num_)) + sizeof(audio_format_));
-  _internal_metadata_.Clear();
+  _impl_.recorder_type_.ClearToEmpty();
+  _impl_.id_.ClearToEmpty();
+  ::memset(&_impl_.recorder_num_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.audio_format_) -
+      reinterpret_cast<char*>(&_impl_.recorder_num_)) + sizeof(_impl_.audio_format_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool RecorderInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.RecorderInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* RecorderInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // int32 recorder_num = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &recorder_num_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.recorder_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string recorder_type = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(18u /* 18 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_recorder_type()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->recorder_type().data(), static_cast<int>(this->recorder_type().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.RecorderInfo.recorder_type"));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_recorder_type();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.RecorderInfo.recorder_type"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 source_num = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(24u /* 24 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &source_num_)));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.source_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string id = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(34u /* 34 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_id()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->id().data(), static_cast<int>(this->id().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.RecorderInfo.id"));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_id();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.RecorderInfo.id"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 recorder_count = 5;
-      case 5: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(40u /* 40 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &recorder_count_)));
-        } else {
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.recorder_count_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double recorder_duration = 6;
-      case 6: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(49u /* 49 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &recorder_duration_)));
-        } else {
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 49)) {
+          _impl_.recorder_duration_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.RecorderInfo.RecorderState recorder_state = 7;
-      case 7: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(56u /* 56 & 0xFF */)) {
-          int value;
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   int, ::google::protobuf::internal::WireFormatLite::TYPE_ENUM>(
-                 input, &value)));
-          set_recorder_state(static_cast< ::streamer::RecorderInfo_RecorderState >(value));
-        } else {
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_recorder_state(static_cast<::streamer::RecorderInfo_RecorderState>(val));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double status_len = 8;
-      case 8: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(65u /* 65 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &status_len_)));
-        } else {
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 65)) {
+          _impl_.status_len_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double status_error = 9;
-      case 9: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(73u /* 73 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &status_error_)));
-        } else {
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 73)) {
+          _impl_.status_error_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double status_spike = 10;
-      case 10: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(81u /* 81 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &status_spike_)));
-        } else {
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 81)) {
+          _impl_.status_spike_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 audio_sample_rate = 11;
-      case 11: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(88u /* 88 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &audio_sample_rate_)));
-        } else {
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.audio_sample_rate_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 audio_channels = 12;
-      case 12: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(96u /* 96 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &audio_channels_)));
-        } else {
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
+          _impl_.audio_channels_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.RecorderInfo.AudioFormat audio_format = 13;
-      case 13: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(104u /* 104 & 0xFF */)) {
-          int value;
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   int, ::google::protobuf::internal::WireFormatLite::TYPE_ENUM>(
-                 input, &value)));
-          set_audio_format(static_cast< ::streamer::RecorderInfo_AudioFormat >(value));
-        } else {
+      case 13:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 104)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_audio_format(static_cast<::streamer::RecorderInfo_AudioFormat>(val));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.RecorderInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.RecorderInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void RecorderInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.RecorderInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(1, this->recorder_num(), output);
-  }
-
-  // string recorder_type = 2;
-  if (this->recorder_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->recorder_type().data(), static_cast<int>(this->recorder_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.RecorderInfo.recorder_type");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      2, this->recorder_type(), output);
-  }
-
-  // int32 source_num = 3;
-  if (this->source_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(3, this->source_num(), output);
-  }
-
-  // string id = 4;
-  if (this->id().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->id().data(), static_cast<int>(this->id().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.RecorderInfo.id");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      4, this->id(), output);
-  }
-
-  // int32 recorder_count = 5;
-  if (this->recorder_count() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(5, this->recorder_count(), output);
-  }
-
-  // double recorder_duration = 6;
-  if (this->recorder_duration() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(6, this->recorder_duration(), output);
-  }
-
-  // .streamer.RecorderInfo.RecorderState recorder_state = 7;
-  if (this->recorder_state() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteEnum(
-      7, this->recorder_state(), output);
-  }
-
-  // double status_len = 8;
-  if (this->status_len() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(8, this->status_len(), output);
-  }
-
-  // double status_error = 9;
-  if (this->status_error() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(9, this->status_error(), output);
-  }
-
-  // double status_spike = 10;
-  if (this->status_spike() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(10, this->status_spike(), output);
-  }
-
-  // int32 audio_sample_rate = 11;
-  if (this->audio_sample_rate() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(11, this->audio_sample_rate(), output);
-  }
-
-  // int32 audio_channels = 12;
-  if (this->audio_channels() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(12, this->audio_channels(), output);
-  }
-
-  // .streamer.RecorderInfo.AudioFormat audio_format = 13;
-  if (this->audio_format() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteEnum(
-      13, this->audio_format(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.RecorderInfo)
-}
-
-::google::protobuf::uint8* RecorderInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* RecorderInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.RecorderInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(1, this->recorder_num(), target);
+  if (this->_internal_recorder_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_recorder_num(), target);
   }
 
   // string recorder_type = 2;
-  if (this->recorder_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->recorder_type().data(), static_cast<int>(this->recorder_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_recorder_type().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_recorder_type().data(), static_cast<int>(this->_internal_recorder_type().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.RecorderInfo.recorder_type");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        2, this->recorder_type(), target);
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_recorder_type(), target);
   }
 
   // int32 source_num = 3;
-  if (this->source_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(3, this->source_num(), target);
+  if (this->_internal_source_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(3, this->_internal_source_num(), target);
   }
 
   // string id = 4;
-  if (this->id().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->id().data(), static_cast<int>(this->id().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_id().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_id().data(), static_cast<int>(this->_internal_id().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.RecorderInfo.id");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        4, this->id(), target);
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_id(), target);
   }
 
   // int32 recorder_count = 5;
-  if (this->recorder_count() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(5, this->recorder_count(), target);
+  if (this->_internal_recorder_count() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(5, this->_internal_recorder_count(), target);
   }
 
   // double recorder_duration = 6;
-  if (this->recorder_duration() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(6, this->recorder_duration(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_recorder_duration = this->_internal_recorder_duration();
+  uint64_t raw_recorder_duration;
+  memcpy(&raw_recorder_duration, &tmp_recorder_duration, sizeof(tmp_recorder_duration));
+  if (raw_recorder_duration != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(6, this->_internal_recorder_duration(), target);
   }
 
   // .streamer.RecorderInfo.RecorderState recorder_state = 7;
-  if (this->recorder_state() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteEnumToArray(
-      7, this->recorder_state(), target);
+  if (this->_internal_recorder_state() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      7, this->_internal_recorder_state(), target);
   }
 
   // double status_len = 8;
-  if (this->status_len() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(8, this->status_len(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_len = this->_internal_status_len();
+  uint64_t raw_status_len;
+  memcpy(&raw_status_len, &tmp_status_len, sizeof(tmp_status_len));
+  if (raw_status_len != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(8, this->_internal_status_len(), target);
   }
 
   // double status_error = 9;
-  if (this->status_error() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(9, this->status_error(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_error = this->_internal_status_error();
+  uint64_t raw_status_error;
+  memcpy(&raw_status_error, &tmp_status_error, sizeof(tmp_status_error));
+  if (raw_status_error != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(9, this->_internal_status_error(), target);
   }
 
   // double status_spike = 10;
-  if (this->status_spike() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(10, this->status_spike(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_spike = this->_internal_status_spike();
+  uint64_t raw_status_spike;
+  memcpy(&raw_status_spike, &tmp_status_spike, sizeof(tmp_status_spike));
+  if (raw_status_spike != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(10, this->_internal_status_spike(), target);
   }
 
   // int32 audio_sample_rate = 11;
-  if (this->audio_sample_rate() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(11, this->audio_sample_rate(), target);
+  if (this->_internal_audio_sample_rate() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(11, this->_internal_audio_sample_rate(), target);
   }
 
   // int32 audio_channels = 12;
-  if (this->audio_channels() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(12, this->audio_channels(), target);
+  if (this->_internal_audio_channels() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(12, this->_internal_audio_channels(), target);
   }
 
   // .streamer.RecorderInfo.AudioFormat audio_format = 13;
-  if (this->audio_format() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteEnumToArray(
-      13, this->audio_format(), target);
+  if (this->_internal_audio_format() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      13, this->_internal_audio_format(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.RecorderInfo)
   return target;
@@ -1279,167 +1105,171 @@ size_t RecorderInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.RecorderInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // string recorder_type = 2;
-  if (this->recorder_type().size() > 0) {
+  if (!this->_internal_recorder_type().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->recorder_type());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_recorder_type());
   }
 
   // string id = 4;
-  if (this->id().size() > 0) {
+  if (!this->_internal_id().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->id());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_id());
   }
 
   // int32 recorder_num = 1;
-  if (this->recorder_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->recorder_num());
+  if (this->_internal_recorder_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_recorder_num());
   }
 
   // int32 source_num = 3;
-  if (this->source_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->source_num());
+  if (this->_internal_source_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_source_num());
   }
 
   // double recorder_duration = 6;
-  if (this->recorder_duration() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_recorder_duration = this->_internal_recorder_duration();
+  uint64_t raw_recorder_duration;
+  memcpy(&raw_recorder_duration, &tmp_recorder_duration, sizeof(tmp_recorder_duration));
+  if (raw_recorder_duration != 0) {
     total_size += 1 + 8;
   }
 
   // int32 recorder_count = 5;
-  if (this->recorder_count() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->recorder_count());
+  if (this->_internal_recorder_count() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_recorder_count());
   }
 
   // .streamer.RecorderInfo.RecorderState recorder_state = 7;
-  if (this->recorder_state() != 0) {
+  if (this->_internal_recorder_state() != 0) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::EnumSize(this->recorder_state());
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_recorder_state());
   }
 
   // double status_len = 8;
-  if (this->status_len() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_len = this->_internal_status_len();
+  uint64_t raw_status_len;
+  memcpy(&raw_status_len, &tmp_status_len, sizeof(tmp_status_len));
+  if (raw_status_len != 0) {
     total_size += 1 + 8;
   }
 
   // double status_error = 9;
-  if (this->status_error() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_error = this->_internal_status_error();
+  uint64_t raw_status_error;
+  memcpy(&raw_status_error, &tmp_status_error, sizeof(tmp_status_error));
+  if (raw_status_error != 0) {
     total_size += 1 + 8;
   }
 
   // double status_spike = 10;
-  if (this->status_spike() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_spike = this->_internal_status_spike();
+  uint64_t raw_status_spike;
+  memcpy(&raw_status_spike, &tmp_status_spike, sizeof(tmp_status_spike));
+  if (raw_status_spike != 0) {
     total_size += 1 + 8;
   }
 
   // int32 audio_sample_rate = 11;
-  if (this->audio_sample_rate() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->audio_sample_rate());
+  if (this->_internal_audio_sample_rate() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_audio_sample_rate());
   }
 
   // int32 audio_channels = 12;
-  if (this->audio_channels() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->audio_channels());
+  if (this->_internal_audio_channels() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_audio_channels());
   }
 
   // .streamer.RecorderInfo.AudioFormat audio_format = 13;
-  if (this->audio_format() != 0) {
+  if (this->_internal_audio_format() != 0) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::EnumSize(this->audio_format());
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_audio_format());
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void RecorderInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.RecorderInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const RecorderInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const RecorderInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.RecorderInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.RecorderInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData RecorderInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    RecorderInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*RecorderInfo::GetClassData() const { return &_class_data_; }
 
-void RecorderInfo::MergeFrom(const RecorderInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.RecorderInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void RecorderInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<RecorderInfo*>(&to_msg);
+  auto& from = static_cast<const RecorderInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.RecorderInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.recorder_type().size() > 0) {
-
-    recorder_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.recorder_type_);
+  if (!from._internal_recorder_type().empty()) {
+    _this->_internal_set_recorder_type(from._internal_recorder_type());
   }
-  if (from.id().size() > 0) {
-
-    id_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.id_);
+  if (!from._internal_id().empty()) {
+    _this->_internal_set_id(from._internal_id());
   }
-  if (from.recorder_num() != 0) {
-    set_recorder_num(from.recorder_num());
+  if (from._internal_recorder_num() != 0) {
+    _this->_internal_set_recorder_num(from._internal_recorder_num());
   }
-  if (from.source_num() != 0) {
-    set_source_num(from.source_num());
+  if (from._internal_source_num() != 0) {
+    _this->_internal_set_source_num(from._internal_source_num());
   }
-  if (from.recorder_duration() != 0) {
-    set_recorder_duration(from.recorder_duration());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_recorder_duration = from._internal_recorder_duration();
+  uint64_t raw_recorder_duration;
+  memcpy(&raw_recorder_duration, &tmp_recorder_duration, sizeof(tmp_recorder_duration));
+  if (raw_recorder_duration != 0) {
+    _this->_internal_set_recorder_duration(from._internal_recorder_duration());
   }
-  if (from.recorder_count() != 0) {
-    set_recorder_count(from.recorder_count());
+  if (from._internal_recorder_count() != 0) {
+    _this->_internal_set_recorder_count(from._internal_recorder_count());
   }
-  if (from.recorder_state() != 0) {
-    set_recorder_state(from.recorder_state());
+  if (from._internal_recorder_state() != 0) {
+    _this->_internal_set_recorder_state(from._internal_recorder_state());
   }
-  if (from.status_len() != 0) {
-    set_status_len(from.status_len());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_len = from._internal_status_len();
+  uint64_t raw_status_len;
+  memcpy(&raw_status_len, &tmp_status_len, sizeof(tmp_status_len));
+  if (raw_status_len != 0) {
+    _this->_internal_set_status_len(from._internal_status_len());
   }
-  if (from.status_error() != 0) {
-    set_status_error(from.status_error());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_error = from._internal_status_error();
+  uint64_t raw_status_error;
+  memcpy(&raw_status_error, &tmp_status_error, sizeof(tmp_status_error));
+  if (raw_status_error != 0) {
+    _this->_internal_set_status_error(from._internal_status_error());
   }
-  if (from.status_spike() != 0) {
-    set_status_spike(from.status_spike());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_status_spike = from._internal_status_spike();
+  uint64_t raw_status_spike;
+  memcpy(&raw_status_spike, &tmp_status_spike, sizeof(tmp_status_spike));
+  if (raw_status_spike != 0) {
+    _this->_internal_set_status_spike(from._internal_status_spike());
   }
-  if (from.audio_sample_rate() != 0) {
-    set_audio_sample_rate(from.audio_sample_rate());
+  if (from._internal_audio_sample_rate() != 0) {
+    _this->_internal_set_audio_sample_rate(from._internal_audio_sample_rate());
   }
-  if (from.audio_channels() != 0) {
-    set_audio_channels(from.audio_channels());
+  if (from._internal_audio_channels() != 0) {
+    _this->_internal_set_audio_channels(from._internal_audio_channels());
   }
-  if (from.audio_format() != 0) {
-    set_audio_format(from.audio_format());
+  if (from._internal_audio_format() != 0) {
+    _this->_internal_set_audio_format(from._internal_audio_format());
   }
-}
-
-void RecorderInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.RecorderInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void RecorderInfo::CopyFrom(const RecorderInfo& from) {
@@ -1453,713 +1283,534 @@ bool RecorderInfo::IsInitialized() const {
   return true;
 }
 
-void RecorderInfo::Swap(RecorderInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void RecorderInfo::InternalSwap(RecorderInfo* other) {
   using std::swap;
-  recorder_type_.Swap(&other->recorder_type_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  id_.Swap(&other->id_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(recorder_num_, other->recorder_num_);
-  swap(source_num_, other->source_num_);
-  swap(recorder_duration_, other->recorder_duration_);
-  swap(recorder_count_, other->recorder_count_);
-  swap(recorder_state_, other->recorder_state_);
-  swap(status_len_, other->status_len_);
-  swap(status_error_, other->status_error_);
-  swap(status_spike_, other->status_spike_);
-  swap(audio_sample_rate_, other->audio_sample_rate_);
-  swap(audio_channels_, other->audio_channels_);
-  swap(audio_format_, other->audio_format_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.recorder_type_, lhs_arena,
+      &other->_impl_.recorder_type_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.id_, lhs_arena,
+      &other->_impl_.id_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(RecorderInfo, _impl_.audio_format_)
+      + sizeof(RecorderInfo::_impl_.audio_format_)
+      - PROTOBUF_FIELD_OFFSET(RecorderInfo, _impl_.recorder_num_)>(
+          reinterpret_cast<char*>(&_impl_.recorder_num_),
+          reinterpret_cast<char*>(&other->_impl_.recorder_num_));
 }
 
-::google::protobuf::Metadata RecorderInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata RecorderInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[1]);
 }
-
 
 // ===================================================================
 
-void SourceInfo::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int SourceInfo::kSourceNumFieldNumber;
-const int SourceInfo::kMinHzFieldNumber;
-const int SourceInfo::kMaxHzFieldNumber;
-const int SourceInfo::kCenterHzFieldNumber;
-const int SourceInfo::kRateFieldNumber;
-const int SourceInfo::kDriverFieldNumber;
-const int SourceInfo::kDeviceFieldNumber;
-const int SourceInfo::kAntennaFieldNumber;
-const int SourceInfo::kErrorFieldNumber;
-const int SourceInfo::kMixGainFieldNumber;
-const int SourceInfo::kLnaGainFieldNumber;
-const int SourceInfo::kVga1GainFieldNumber;
-const int SourceInfo::kVga2GainFieldNumber;
-const int SourceInfo::kBbGainFieldNumber;
-const int SourceInfo::kGainFieldNumber;
-const int SourceInfo::kIfGainFieldNumber;
-const int SourceInfo::kAnalogRecordersFieldNumber;
-const int SourceInfo::kDigitalRecordersFieldNumber;
-const int SourceInfo::kDebugRecordersFieldNumber;
-const int SourceInfo::kSigmfRecordersFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class SourceInfo::_Internal {
+ public:
+};
 
-SourceInfo::SourceInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_SourceInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.SourceInfo)
+SourceInfo::SourceInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.SourceInfo)
 }
 SourceInfo::SourceInfo(const SourceInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  driver_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.driver().size() > 0) {
-    driver_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.driver_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  SourceInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.driver_){}
+    , decltype(_impl_.device_){}
+    , decltype(_impl_.antenna_){}
+    , decltype(_impl_.min_hz_){}
+    , decltype(_impl_.max_hz_){}
+    , decltype(_impl_.center_hz_){}
+    , decltype(_impl_.rate_){}
+    , decltype(_impl_.source_num_){}
+    , decltype(_impl_.mix_gain_){}
+    , decltype(_impl_.error_){}
+    , decltype(_impl_.lna_gain_){}
+    , decltype(_impl_.vga1_gain_){}
+    , decltype(_impl_.vga2_gain_){}
+    , decltype(_impl_.bb_gain_){}
+    , decltype(_impl_.gain_){}
+    , decltype(_impl_.if_gain_){}
+    , decltype(_impl_.analog_recorders_){}
+    , decltype(_impl_.digital_recorders_){}
+    , decltype(_impl_.debug_recorders_){}
+    , decltype(_impl_.sigmf_recorders_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.driver_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.driver_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_driver().empty()) {
+    _this->_impl_.driver_.Set(from._internal_driver(), 
+      _this->GetArenaForAllocation());
   }
-  device_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.device().size() > 0) {
-    device_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.device_);
+  _impl_.device_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.device_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_device().empty()) {
+    _this->_impl_.device_.Set(from._internal_device(), 
+      _this->GetArenaForAllocation());
   }
-  antenna_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.antenna().size() > 0) {
-    antenna_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.antenna_);
+  _impl_.antenna_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.antenna_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_antenna().empty()) {
+    _this->_impl_.antenna_.Set(from._internal_antenna(), 
+      _this->GetArenaForAllocation());
   }
-  ::memcpy(&min_hz_, &from.min_hz_,
-    static_cast<size_t>(reinterpret_cast<char*>(&sigmf_recorders_) -
-    reinterpret_cast<char*>(&min_hz_)) + sizeof(sigmf_recorders_));
+  ::memcpy(&_impl_.min_hz_, &from._impl_.min_hz_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.sigmf_recorders_) -
+    reinterpret_cast<char*>(&_impl_.min_hz_)) + sizeof(_impl_.sigmf_recorders_));
   // @@protoc_insertion_point(copy_constructor:streamer.SourceInfo)
 }
 
-void SourceInfo::SharedCtor() {
-  driver_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  device_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  antenna_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&min_hz_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&sigmf_recorders_) -
-      reinterpret_cast<char*>(&min_hz_)) + sizeof(sigmf_recorders_));
+inline void SourceInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.driver_){}
+    , decltype(_impl_.device_){}
+    , decltype(_impl_.antenna_){}
+    , decltype(_impl_.min_hz_){0}
+    , decltype(_impl_.max_hz_){0}
+    , decltype(_impl_.center_hz_){0}
+    , decltype(_impl_.rate_){0}
+    , decltype(_impl_.source_num_){0}
+    , decltype(_impl_.mix_gain_){0}
+    , decltype(_impl_.error_){0}
+    , decltype(_impl_.lna_gain_){0}
+    , decltype(_impl_.vga1_gain_){0}
+    , decltype(_impl_.vga2_gain_){0}
+    , decltype(_impl_.bb_gain_){0}
+    , decltype(_impl_.gain_){0}
+    , decltype(_impl_.if_gain_){0}
+    , decltype(_impl_.analog_recorders_){0}
+    , decltype(_impl_.digital_recorders_){0}
+    , decltype(_impl_.debug_recorders_){0}
+    , decltype(_impl_.sigmf_recorders_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.driver_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.driver_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.device_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.device_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.antenna_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.antenna_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 SourceInfo::~SourceInfo() {
   // @@protoc_insertion_point(destructor:streamer.SourceInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void SourceInfo::SharedDtor() {
-  driver_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  device_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  antenna_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
+inline void SourceInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.driver_.Destroy();
+  _impl_.device_.Destroy();
+  _impl_.antenna_.Destroy();
 }
 
 void SourceInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* SourceInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const SourceInfo& SourceInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_SourceInfo.base);
-  return *internal_default_instance();
-}
-
 
 void SourceInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.SourceInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  driver_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  device_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  antenna_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&min_hz_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&sigmf_recorders_) -
-      reinterpret_cast<char*>(&min_hz_)) + sizeof(sigmf_recorders_));
-  _internal_metadata_.Clear();
+  _impl_.driver_.ClearToEmpty();
+  _impl_.device_.ClearToEmpty();
+  _impl_.antenna_.ClearToEmpty();
+  ::memset(&_impl_.min_hz_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.sigmf_recorders_) -
+      reinterpret_cast<char*>(&_impl_.min_hz_)) + sizeof(_impl_.sigmf_recorders_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool SourceInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.SourceInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(16383u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* SourceInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // int32 source_num = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &source_num_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.source_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double min_hz = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(17u /* 17 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &min_hz_)));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 17)) {
+          _impl_.min_hz_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double max_hz = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(25u /* 25 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &max_hz_)));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 25)) {
+          _impl_.max_hz_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double center_hz = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(33u /* 33 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &center_hz_)));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 33)) {
+          _impl_.center_hz_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double rate = 5;
-      case 5: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(41u /* 41 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &rate_)));
-        } else {
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 41)) {
+          _impl_.rate_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string driver = 6;
-      case 6: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(50u /* 50 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_driver()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->driver().data(), static_cast<int>(this->driver().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SourceInfo.driver"));
-        } else {
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          auto str = _internal_mutable_driver();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SourceInfo.driver"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string device = 7;
-      case 7: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(58u /* 58 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_device()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->device().data(), static_cast<int>(this->device().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SourceInfo.device"));
-        } else {
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          auto str = _internal_mutable_device();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SourceInfo.device"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string antenna = 8;
-      case 8: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(66u /* 66 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_antenna()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->antenna().data(), static_cast<int>(this->antenna().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SourceInfo.antenna"));
-        } else {
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          auto str = _internal_mutable_antenna();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SourceInfo.antenna"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double error = 9;
-      case 9: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(73u /* 73 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &error_)));
-        } else {
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 73)) {
+          _impl_.error_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 mix_gain = 10;
-      case 10: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(80u /* 80 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &mix_gain_)));
-        } else {
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 80)) {
+          _impl_.mix_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 lna_gain = 11;
-      case 11: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(88u /* 88 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &lna_gain_)));
-        } else {
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.lna_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 vga1_gain = 12;
-      case 12: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(96u /* 96 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &vga1_gain_)));
-        } else {
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 96)) {
+          _impl_.vga1_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 vga2_gain = 13;
-      case 13: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(104u /* 104 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &vga2_gain_)));
-        } else {
+      case 13:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 104)) {
+          _impl_.vga2_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 bb_gain = 14;
-      case 14: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(112u /* 112 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &bb_gain_)));
-        } else {
+      case 14:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 112)) {
+          _impl_.bb_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 gain = 15;
-      case 15: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(120u /* 120 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &gain_)));
-        } else {
+      case 15:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 120)) {
+          _impl_.gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 if_gain = 16;
-      case 16: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(128u /* 128 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &if_gain_)));
-        } else {
+      case 16:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 128)) {
+          _impl_.if_gain_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 analog_recorders = 17;
-      case 17: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(136u /* 136 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &analog_recorders_)));
-        } else {
+      case 17:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 136)) {
+          _impl_.analog_recorders_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 digital_recorders = 18;
-      case 18: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(144u /* 144 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &digital_recorders_)));
-        } else {
+      case 18:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 144)) {
+          _impl_.digital_recorders_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 debug_recorders = 19;
-      case 19: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(152u /* 152 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &debug_recorders_)));
-        } else {
+      case 19:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 152)) {
+          _impl_.debug_recorders_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 sigmf_recorders = 20;
-      case 20: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(160u /* 160 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &sigmf_recorders_)));
-        } else {
+      case 20:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 160)) {
+          _impl_.sigmf_recorders_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.SourceInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.SourceInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void SourceInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.SourceInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // int32 source_num = 1;
-  if (this->source_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(1, this->source_num(), output);
-  }
-
-  // double min_hz = 2;
-  if (this->min_hz() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(2, this->min_hz(), output);
-  }
-
-  // double max_hz = 3;
-  if (this->max_hz() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(3, this->max_hz(), output);
-  }
-
-  // double center_hz = 4;
-  if (this->center_hz() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(4, this->center_hz(), output);
-  }
-
-  // double rate = 5;
-  if (this->rate() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(5, this->rate(), output);
-  }
-
-  // string driver = 6;
-  if (this->driver().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->driver().data(), static_cast<int>(this->driver().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SourceInfo.driver");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      6, this->driver(), output);
-  }
-
-  // string device = 7;
-  if (this->device().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->device().data(), static_cast<int>(this->device().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SourceInfo.device");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      7, this->device(), output);
-  }
-
-  // string antenna = 8;
-  if (this->antenna().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->antenna().data(), static_cast<int>(this->antenna().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SourceInfo.antenna");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      8, this->antenna(), output);
-  }
-
-  // double error = 9;
-  if (this->error() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(9, this->error(), output);
-  }
-
-  // int32 mix_gain = 10;
-  if (this->mix_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(10, this->mix_gain(), output);
-  }
-
-  // int32 lna_gain = 11;
-  if (this->lna_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(11, this->lna_gain(), output);
-  }
-
-  // int32 vga1_gain = 12;
-  if (this->vga1_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(12, this->vga1_gain(), output);
-  }
-
-  // int32 vga2_gain = 13;
-  if (this->vga2_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(13, this->vga2_gain(), output);
-  }
-
-  // int32 bb_gain = 14;
-  if (this->bb_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(14, this->bb_gain(), output);
-  }
-
-  // int32 gain = 15;
-  if (this->gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(15, this->gain(), output);
-  }
-
-  // int32 if_gain = 16;
-  if (this->if_gain() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(16, this->if_gain(), output);
-  }
-
-  // int32 analog_recorders = 17;
-  if (this->analog_recorders() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(17, this->analog_recorders(), output);
-  }
-
-  // int32 digital_recorders = 18;
-  if (this->digital_recorders() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(18, this->digital_recorders(), output);
-  }
-
-  // int32 debug_recorders = 19;
-  if (this->debug_recorders() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(19, this->debug_recorders(), output);
-  }
-
-  // int32 sigmf_recorders = 20;
-  if (this->sigmf_recorders() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(20, this->sigmf_recorders(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.SourceInfo)
-}
-
-::google::protobuf::uint8* SourceInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* SourceInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.SourceInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // int32 source_num = 1;
-  if (this->source_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(1, this->source_num(), target);
+  if (this->_internal_source_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_source_num(), target);
   }
 
   // double min_hz = 2;
-  if (this->min_hz() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(2, this->min_hz(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_min_hz = this->_internal_min_hz();
+  uint64_t raw_min_hz;
+  memcpy(&raw_min_hz, &tmp_min_hz, sizeof(tmp_min_hz));
+  if (raw_min_hz != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(2, this->_internal_min_hz(), target);
   }
 
   // double max_hz = 3;
-  if (this->max_hz() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(3, this->max_hz(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_max_hz = this->_internal_max_hz();
+  uint64_t raw_max_hz;
+  memcpy(&raw_max_hz, &tmp_max_hz, sizeof(tmp_max_hz));
+  if (raw_max_hz != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(3, this->_internal_max_hz(), target);
   }
 
   // double center_hz = 4;
-  if (this->center_hz() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(4, this->center_hz(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_center_hz = this->_internal_center_hz();
+  uint64_t raw_center_hz;
+  memcpy(&raw_center_hz, &tmp_center_hz, sizeof(tmp_center_hz));
+  if (raw_center_hz != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(4, this->_internal_center_hz(), target);
   }
 
   // double rate = 5;
-  if (this->rate() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(5, this->rate(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_rate = this->_internal_rate();
+  uint64_t raw_rate;
+  memcpy(&raw_rate, &tmp_rate, sizeof(tmp_rate));
+  if (raw_rate != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(5, this->_internal_rate(), target);
   }
 
   // string driver = 6;
-  if (this->driver().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->driver().data(), static_cast<int>(this->driver().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_driver().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_driver().data(), static_cast<int>(this->_internal_driver().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SourceInfo.driver");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        6, this->driver(), target);
+    target = stream->WriteStringMaybeAliased(
+        6, this->_internal_driver(), target);
   }
 
   // string device = 7;
-  if (this->device().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->device().data(), static_cast<int>(this->device().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_device().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_device().data(), static_cast<int>(this->_internal_device().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SourceInfo.device");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        7, this->device(), target);
+    target = stream->WriteStringMaybeAliased(
+        7, this->_internal_device(), target);
   }
 
   // string antenna = 8;
-  if (this->antenna().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->antenna().data(), static_cast<int>(this->antenna().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_antenna().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_antenna().data(), static_cast<int>(this->_internal_antenna().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SourceInfo.antenna");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        8, this->antenna(), target);
+    target = stream->WriteStringMaybeAliased(
+        8, this->_internal_antenna(), target);
   }
 
   // double error = 9;
-  if (this->error() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(9, this->error(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_error = this->_internal_error();
+  uint64_t raw_error;
+  memcpy(&raw_error, &tmp_error, sizeof(tmp_error));
+  if (raw_error != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(9, this->_internal_error(), target);
   }
 
   // int32 mix_gain = 10;
-  if (this->mix_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(10, this->mix_gain(), target);
+  if (this->_internal_mix_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(10, this->_internal_mix_gain(), target);
   }
 
   // int32 lna_gain = 11;
-  if (this->lna_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(11, this->lna_gain(), target);
+  if (this->_internal_lna_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(11, this->_internal_lna_gain(), target);
   }
 
   // int32 vga1_gain = 12;
-  if (this->vga1_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(12, this->vga1_gain(), target);
+  if (this->_internal_vga1_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(12, this->_internal_vga1_gain(), target);
   }
 
   // int32 vga2_gain = 13;
-  if (this->vga2_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(13, this->vga2_gain(), target);
+  if (this->_internal_vga2_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(13, this->_internal_vga2_gain(), target);
   }
 
   // int32 bb_gain = 14;
-  if (this->bb_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(14, this->bb_gain(), target);
+  if (this->_internal_bb_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(14, this->_internal_bb_gain(), target);
   }
 
   // int32 gain = 15;
-  if (this->gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(15, this->gain(), target);
+  if (this->_internal_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(15, this->_internal_gain(), target);
   }
 
   // int32 if_gain = 16;
-  if (this->if_gain() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(16, this->if_gain(), target);
+  if (this->_internal_if_gain() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(16, this->_internal_if_gain(), target);
   }
 
   // int32 analog_recorders = 17;
-  if (this->analog_recorders() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(17, this->analog_recorders(), target);
+  if (this->_internal_analog_recorders() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(17, this->_internal_analog_recorders(), target);
   }
 
   // int32 digital_recorders = 18;
-  if (this->digital_recorders() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(18, this->digital_recorders(), target);
+  if (this->_internal_digital_recorders() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(18, this->_internal_digital_recorders(), target);
   }
 
   // int32 debug_recorders = 19;
-  if (this->debug_recorders() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(19, this->debug_recorders(), target);
+  if (this->_internal_debug_recorders() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(19, this->_internal_debug_recorders(), target);
   }
 
   // int32 sigmf_recorders = 20;
-  if (this->sigmf_recorders() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(20, this->sigmf_recorders(), target);
+  if (this->_internal_sigmf_recorders() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(20, this->_internal_sigmf_recorders(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.SourceInfo)
   return target;
@@ -2169,238 +1820,245 @@ size_t SourceInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.SourceInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // string driver = 6;
-  if (this->driver().size() > 0) {
+  if (!this->_internal_driver().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->driver());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_driver());
   }
 
   // string device = 7;
-  if (this->device().size() > 0) {
+  if (!this->_internal_device().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->device());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_device());
   }
 
   // string antenna = 8;
-  if (this->antenna().size() > 0) {
+  if (!this->_internal_antenna().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->antenna());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_antenna());
   }
 
   // double min_hz = 2;
-  if (this->min_hz() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_min_hz = this->_internal_min_hz();
+  uint64_t raw_min_hz;
+  memcpy(&raw_min_hz, &tmp_min_hz, sizeof(tmp_min_hz));
+  if (raw_min_hz != 0) {
     total_size += 1 + 8;
   }
 
   // double max_hz = 3;
-  if (this->max_hz() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_max_hz = this->_internal_max_hz();
+  uint64_t raw_max_hz;
+  memcpy(&raw_max_hz, &tmp_max_hz, sizeof(tmp_max_hz));
+  if (raw_max_hz != 0) {
     total_size += 1 + 8;
   }
 
   // double center_hz = 4;
-  if (this->center_hz() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_center_hz = this->_internal_center_hz();
+  uint64_t raw_center_hz;
+  memcpy(&raw_center_hz, &tmp_center_hz, sizeof(tmp_center_hz));
+  if (raw_center_hz != 0) {
     total_size += 1 + 8;
   }
 
   // double rate = 5;
-  if (this->rate() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_rate = this->_internal_rate();
+  uint64_t raw_rate;
+  memcpy(&raw_rate, &tmp_rate, sizeof(tmp_rate));
+  if (raw_rate != 0) {
     total_size += 1 + 8;
   }
 
   // int32 source_num = 1;
-  if (this->source_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->source_num());
+  if (this->_internal_source_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_source_num());
   }
 
   // int32 mix_gain = 10;
-  if (this->mix_gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->mix_gain());
+  if (this->_internal_mix_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_mix_gain());
   }
 
   // double error = 9;
-  if (this->error() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_error = this->_internal_error();
+  uint64_t raw_error;
+  memcpy(&raw_error, &tmp_error, sizeof(tmp_error));
+  if (raw_error != 0) {
     total_size += 1 + 8;
   }
 
   // int32 lna_gain = 11;
-  if (this->lna_gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->lna_gain());
+  if (this->_internal_lna_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_lna_gain());
   }
 
   // int32 vga1_gain = 12;
-  if (this->vga1_gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->vga1_gain());
+  if (this->_internal_vga1_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_vga1_gain());
   }
 
   // int32 vga2_gain = 13;
-  if (this->vga2_gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->vga2_gain());
+  if (this->_internal_vga2_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_vga2_gain());
   }
 
   // int32 bb_gain = 14;
-  if (this->bb_gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->bb_gain());
+  if (this->_internal_bb_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_bb_gain());
   }
 
   // int32 gain = 15;
-  if (this->gain() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->gain());
+  if (this->_internal_gain() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_gain());
   }
 
   // int32 if_gain = 16;
-  if (this->if_gain() != 0) {
+  if (this->_internal_if_gain() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->if_gain());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_if_gain());
   }
 
   // int32 analog_recorders = 17;
-  if (this->analog_recorders() != 0) {
+  if (this->_internal_analog_recorders() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->analog_recorders());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_analog_recorders());
   }
 
   // int32 digital_recorders = 18;
-  if (this->digital_recorders() != 0) {
+  if (this->_internal_digital_recorders() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->digital_recorders());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_digital_recorders());
   }
 
   // int32 debug_recorders = 19;
-  if (this->debug_recorders() != 0) {
+  if (this->_internal_debug_recorders() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->debug_recorders());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_debug_recorders());
   }
 
   // int32 sigmf_recorders = 20;
-  if (this->sigmf_recorders() != 0) {
+  if (this->_internal_sigmf_recorders() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->sigmf_recorders());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_sigmf_recorders());
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void SourceInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.SourceInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const SourceInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const SourceInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.SourceInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.SourceInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData SourceInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    SourceInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*SourceInfo::GetClassData() const { return &_class_data_; }
 
-void SourceInfo::MergeFrom(const SourceInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.SourceInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void SourceInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<SourceInfo*>(&to_msg);
+  auto& from = static_cast<const SourceInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.SourceInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.driver().size() > 0) {
-
-    driver_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.driver_);
+  if (!from._internal_driver().empty()) {
+    _this->_internal_set_driver(from._internal_driver());
   }
-  if (from.device().size() > 0) {
-
-    device_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.device_);
+  if (!from._internal_device().empty()) {
+    _this->_internal_set_device(from._internal_device());
   }
-  if (from.antenna().size() > 0) {
-
-    antenna_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.antenna_);
+  if (!from._internal_antenna().empty()) {
+    _this->_internal_set_antenna(from._internal_antenna());
   }
-  if (from.min_hz() != 0) {
-    set_min_hz(from.min_hz());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_min_hz = from._internal_min_hz();
+  uint64_t raw_min_hz;
+  memcpy(&raw_min_hz, &tmp_min_hz, sizeof(tmp_min_hz));
+  if (raw_min_hz != 0) {
+    _this->_internal_set_min_hz(from._internal_min_hz());
   }
-  if (from.max_hz() != 0) {
-    set_max_hz(from.max_hz());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_max_hz = from._internal_max_hz();
+  uint64_t raw_max_hz;
+  memcpy(&raw_max_hz, &tmp_max_hz, sizeof(tmp_max_hz));
+  if (raw_max_hz != 0) {
+    _this->_internal_set_max_hz(from._internal_max_hz());
   }
-  if (from.center_hz() != 0) {
-    set_center_hz(from.center_hz());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_center_hz = from._internal_center_hz();
+  uint64_t raw_center_hz;
+  memcpy(&raw_center_hz, &tmp_center_hz, sizeof(tmp_center_hz));
+  if (raw_center_hz != 0) {
+    _this->_internal_set_center_hz(from._internal_center_hz());
   }
-  if (from.rate() != 0) {
-    set_rate(from.rate());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_rate = from._internal_rate();
+  uint64_t raw_rate;
+  memcpy(&raw_rate, &tmp_rate, sizeof(tmp_rate));
+  if (raw_rate != 0) {
+    _this->_internal_set_rate(from._internal_rate());
   }
-  if (from.source_num() != 0) {
-    set_source_num(from.source_num());
+  if (from._internal_source_num() != 0) {
+    _this->_internal_set_source_num(from._internal_source_num());
   }
-  if (from.mix_gain() != 0) {
-    set_mix_gain(from.mix_gain());
+  if (from._internal_mix_gain() != 0) {
+    _this->_internal_set_mix_gain(from._internal_mix_gain());
   }
-  if (from.error() != 0) {
-    set_error(from.error());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_error = from._internal_error();
+  uint64_t raw_error;
+  memcpy(&raw_error, &tmp_error, sizeof(tmp_error));
+  if (raw_error != 0) {
+    _this->_internal_set_error(from._internal_error());
   }
-  if (from.lna_gain() != 0) {
-    set_lna_gain(from.lna_gain());
+  if (from._internal_lna_gain() != 0) {
+    _this->_internal_set_lna_gain(from._internal_lna_gain());
   }
-  if (from.vga1_gain() != 0) {
-    set_vga1_gain(from.vga1_gain());
+  if (from._internal_vga1_gain() != 0) {
+    _this->_internal_set_vga1_gain(from._internal_vga1_gain());
   }
-  if (from.vga2_gain() != 0) {
-    set_vga2_gain(from.vga2_gain());
+  if (from._internal_vga2_gain() != 0) {
+    _this->_internal_set_vga2_gain(from._internal_vga2_gain());
   }
-  if (from.bb_gain() != 0) {
-    set_bb_gain(from.bb_gain());
+  if (from._internal_bb_gain() != 0) {
+    _this->_internal_set_bb_gain(from._internal_bb_gain());
   }
-  if (from.gain() != 0) {
-    set_gain(from.gain());
+  if (from._internal_gain() != 0) {
+    _this->_internal_set_gain(from._internal_gain());
   }
-  if (from.if_gain() != 0) {
-    set_if_gain(from.if_gain());
+  if (from._internal_if_gain() != 0) {
+    _this->_internal_set_if_gain(from._internal_if_gain());
   }
-  if (from.analog_recorders() != 0) {
-    set_analog_recorders(from.analog_recorders());
+  if (from._internal_analog_recorders() != 0) {
+    _this->_internal_set_analog_recorders(from._internal_analog_recorders());
   }
-  if (from.digital_recorders() != 0) {
-    set_digital_recorders(from.digital_recorders());
+  if (from._internal_digital_recorders() != 0) {
+    _this->_internal_set_digital_recorders(from._internal_digital_recorders());
   }
-  if (from.debug_recorders() != 0) {
-    set_debug_recorders(from.debug_recorders());
+  if (from._internal_debug_recorders() != 0) {
+    _this->_internal_set_debug_recorders(from._internal_debug_recorders());
   }
-  if (from.sigmf_recorders() != 0) {
-    set_sigmf_recorders(from.sigmf_recorders());
+  if (from._internal_sigmf_recorders() != 0) {
+    _this->_internal_set_sigmf_recorders(from._internal_sigmf_recorders());
   }
-}
-
-void SourceInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.SourceInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void SourceInfo::CopyFrom(const SourceInfo& from) {
@@ -2414,755 +2072,534 @@ bool SourceInfo::IsInitialized() const {
   return true;
 }
 
-void SourceInfo::Swap(SourceInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void SourceInfo::InternalSwap(SourceInfo* other) {
   using std::swap;
-  driver_.Swap(&other->driver_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  device_.Swap(&other->device_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  antenna_.Swap(&other->antenna_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(min_hz_, other->min_hz_);
-  swap(max_hz_, other->max_hz_);
-  swap(center_hz_, other->center_hz_);
-  swap(rate_, other->rate_);
-  swap(source_num_, other->source_num_);
-  swap(mix_gain_, other->mix_gain_);
-  swap(error_, other->error_);
-  swap(lna_gain_, other->lna_gain_);
-  swap(vga1_gain_, other->vga1_gain_);
-  swap(vga2_gain_, other->vga2_gain_);
-  swap(bb_gain_, other->bb_gain_);
-  swap(gain_, other->gain_);
-  swap(if_gain_, other->if_gain_);
-  swap(analog_recorders_, other->analog_recorders_);
-  swap(digital_recorders_, other->digital_recorders_);
-  swap(debug_recorders_, other->debug_recorders_);
-  swap(sigmf_recorders_, other->sigmf_recorders_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.driver_, lhs_arena,
+      &other->_impl_.driver_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.device_, lhs_arena,
+      &other->_impl_.device_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.antenna_, lhs_arena,
+      &other->_impl_.antenna_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SourceInfo, _impl_.sigmf_recorders_)
+      + sizeof(SourceInfo::_impl_.sigmf_recorders_)
+      - PROTOBUF_FIELD_OFFSET(SourceInfo, _impl_.min_hz_)>(
+          reinterpret_cast<char*>(&_impl_.min_hz_),
+          reinterpret_cast<char*>(&other->_impl_.min_hz_));
 }
 
-::google::protobuf::Metadata SourceInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata SourceInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[2]);
 }
-
 
 // ===================================================================
 
-void SystemInfo::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int SystemInfo::kSystemNumFieldNumber;
-const int SystemInfo::kSystemTypeFieldNumber;
-const int SystemInfo::kSystemNameFieldNumber;
-const int SystemInfo::kAudioArchiveFieldNumber;
-const int SystemInfo::kUploadScriptFieldNumber;
-const int SystemInfo::kRecordUnknownFieldNumber;
-const int SystemInfo::kCallLogFieldNumber;
-const int SystemInfo::kTalkgroupsFileFieldNumber;
-const int SystemInfo::kAnalogLevelsFieldNumber;
-const int SystemInfo::kDigitalLevelsFieldNumber;
-const int SystemInfo::kQpskFieldNumber;
-const int SystemInfo::kSquelchDbFieldNumber;
-const int SystemInfo::kChannelsFieldNumber;
-const int SystemInfo::kBandplanFieldNumber;
-const int SystemInfo::kBandfreqFieldNumber;
-const int SystemInfo::kBandplanBaseFieldNumber;
-const int SystemInfo::kBandplanHighFieldNumber;
-const int SystemInfo::kBandplanSpacingFieldNumber;
-const int SystemInfo::kBandplanOffsetFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class SystemInfo::_Internal {
+ public:
+};
 
-SystemInfo::SystemInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_SystemInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.SystemInfo)
+SystemInfo::SystemInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.SystemInfo)
 }
 SystemInfo::SystemInfo(const SystemInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL),
-      channels_(from.channels_) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  system_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.system_type().size() > 0) {
-    system_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.system_type_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  SystemInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.channels_){from._impl_.channels_}
+    , decltype(_impl_.system_type_){}
+    , decltype(_impl_.system_name_){}
+    , decltype(_impl_.talkgroups_file_){}
+    , decltype(_impl_.bandplan_){}
+    , decltype(_impl_.system_num_){}
+    , decltype(_impl_.audio_archive_){}
+    , decltype(_impl_.record_unknown_){}
+    , decltype(_impl_.call_log_){}
+    , decltype(_impl_.qpsk_){}
+    , decltype(_impl_.analog_levels_){}
+    , decltype(_impl_.digital_levels_){}
+    , decltype(_impl_.squelch_db_){}
+    , decltype(_impl_.bandplan_base_){}
+    , decltype(_impl_.bandplan_high_){}
+    , decltype(_impl_.bandfreq_){}
+    , decltype(_impl_.bandplan_offset_){}
+    , decltype(_impl_.bandplan_spacing_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.system_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.system_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_system_type().empty()) {
+    _this->_impl_.system_type_.Set(from._internal_system_type(), 
+      _this->GetArenaForAllocation());
   }
-  system_name_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.system_name().size() > 0) {
-    system_name_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.system_name_);
+  _impl_.system_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.system_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_system_name().empty()) {
+    _this->_impl_.system_name_.Set(from._internal_system_name(), 
+      _this->GetArenaForAllocation());
   }
-  upload_script_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.upload_script().size() > 0) {
-    upload_script_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.upload_script_);
+  _impl_.talkgroups_file_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.talkgroups_file_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_talkgroups_file().empty()) {
+    _this->_impl_.talkgroups_file_.Set(from._internal_talkgroups_file(), 
+      _this->GetArenaForAllocation());
   }
-  talkgroups_file_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.talkgroups_file().size() > 0) {
-    talkgroups_file_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.talkgroups_file_);
+  _impl_.bandplan_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.bandplan_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_bandplan().empty()) {
+    _this->_impl_.bandplan_.Set(from._internal_bandplan(), 
+      _this->GetArenaForAllocation());
   }
-  bandplan_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.bandplan().size() > 0) {
-    bandplan_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.bandplan_);
-  }
-  ::memcpy(&system_num_, &from.system_num_,
-    static_cast<size_t>(reinterpret_cast<char*>(&bandplan_spacing_) -
-    reinterpret_cast<char*>(&system_num_)) + sizeof(bandplan_spacing_));
+  ::memcpy(&_impl_.system_num_, &from._impl_.system_num_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.bandplan_spacing_) -
+    reinterpret_cast<char*>(&_impl_.system_num_)) + sizeof(_impl_.bandplan_spacing_));
   // @@protoc_insertion_point(copy_constructor:streamer.SystemInfo)
 }
 
-void SystemInfo::SharedCtor() {
-  system_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  system_name_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_script_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  talkgroups_file_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  bandplan_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&system_num_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&bandplan_spacing_) -
-      reinterpret_cast<char*>(&system_num_)) + sizeof(bandplan_spacing_));
+inline void SystemInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.channels_){arena}
+    , decltype(_impl_.system_type_){}
+    , decltype(_impl_.system_name_){}
+    , decltype(_impl_.talkgroups_file_){}
+    , decltype(_impl_.bandplan_){}
+    , decltype(_impl_.system_num_){0}
+    , decltype(_impl_.audio_archive_){false}
+    , decltype(_impl_.record_unknown_){false}
+    , decltype(_impl_.call_log_){false}
+    , decltype(_impl_.qpsk_){false}
+    , decltype(_impl_.analog_levels_){0}
+    , decltype(_impl_.digital_levels_){0}
+    , decltype(_impl_.squelch_db_){0}
+    , decltype(_impl_.bandplan_base_){0}
+    , decltype(_impl_.bandplan_high_){0}
+    , decltype(_impl_.bandfreq_){0}
+    , decltype(_impl_.bandplan_offset_){0}
+    , decltype(_impl_.bandplan_spacing_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.system_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.system_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.system_name_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.system_name_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.talkgroups_file_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.talkgroups_file_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.bandplan_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.bandplan_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 SystemInfo::~SystemInfo() {
   // @@protoc_insertion_point(destructor:streamer.SystemInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void SystemInfo::SharedDtor() {
-  system_type_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  system_name_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_script_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  talkgroups_file_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  bandplan_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
+inline void SystemInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.channels_.~RepeatedField();
+  _impl_.system_type_.Destroy();
+  _impl_.system_name_.Destroy();
+  _impl_.talkgroups_file_.Destroy();
+  _impl_.bandplan_.Destroy();
 }
 
 void SystemInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* SystemInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const SystemInfo& SystemInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_SystemInfo.base);
-  return *internal_default_instance();
-}
-
 
 void SystemInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.SystemInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  channels_.Clear();
-  system_type_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  system_name_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_script_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  talkgroups_file_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  bandplan_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&system_num_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&bandplan_spacing_) -
-      reinterpret_cast<char*>(&system_num_)) + sizeof(bandplan_spacing_));
-  _internal_metadata_.Clear();
+  _impl_.channels_.Clear();
+  _impl_.system_type_.ClearToEmpty();
+  _impl_.system_name_.ClearToEmpty();
+  _impl_.talkgroups_file_.ClearToEmpty();
+  _impl_.bandplan_.ClearToEmpty();
+  ::memset(&_impl_.system_num_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.bandplan_spacing_) -
+      reinterpret_cast<char*>(&_impl_.system_num_)) + sizeof(_impl_.bandplan_spacing_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool SystemInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.SystemInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(16383u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* SystemInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // int32 system_num = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &system_num_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.system_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string system_type = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(18u /* 18 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_system_type()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->system_type().data(), static_cast<int>(this->system_type().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SystemInfo.system_type"));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_system_type();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SystemInfo.system_type"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string system_name = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(26u /* 26 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_system_name()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->system_name().data(), static_cast<int>(this->system_name().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SystemInfo.system_name"));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_system_name();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SystemInfo.system_name"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool audio_archive = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(32u /* 32 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &audio_archive_)));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 32)) {
+          _impl_.audio_archive_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      // string upload_script = 5;
-      case 5: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(42u /* 42 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_upload_script()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->upload_script().data(), static_cast<int>(this->upload_script().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SystemInfo.upload_script"));
-        } else {
-          goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool record_unknown = 6;
-      case 6: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(48u /* 48 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &record_unknown_)));
-        } else {
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.record_unknown_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool call_log = 7;
-      case 7: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(56u /* 56 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &call_log_)));
-        } else {
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 56)) {
+          _impl_.call_log_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string talkgroups_file = 8;
-      case 8: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(66u /* 66 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_talkgroups_file()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->talkgroups_file().data(), static_cast<int>(this->talkgroups_file().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SystemInfo.talkgroups_file"));
-        } else {
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          auto str = _internal_mutable_talkgroups_file();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SystemInfo.talkgroups_file"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double analog_levels = 9;
-      case 9: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(73u /* 73 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &analog_levels_)));
-        } else {
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 73)) {
+          _impl_.analog_levels_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double digital_levels = 10;
-      case 10: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(81u /* 81 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &digital_levels_)));
-        } else {
+      case 10:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 81)) {
+          _impl_.digital_levels_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool qpsk = 11;
-      case 11: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(88u /* 88 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &qpsk_)));
-        } else {
+      case 11:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 88)) {
+          _impl_.qpsk_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double squelch_db = 12;
-      case 12: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(97u /* 97 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &squelch_db_)));
-        } else {
+      case 12:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 97)) {
+          _impl_.squelch_db_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // repeated double channels = 13;
-      case 13: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(106u /* 106 & 0xFF */)) {
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPackedPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, this->mutable_channels())));
-        } else if (
-            static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(105u /* 105 & 0xFF */)) {
-          DO_((::google::protobuf::internal::WireFormatLite::ReadRepeatedPrimitiveNoInline<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 1, 106u, input, this->mutable_channels())));
-        } else {
+      case 13:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 106)) {
+          ptr = ::PROTOBUF_NAMESPACE_ID::internal::PackedDoubleParser(_internal_mutable_channels(), ptr, ctx);
+          CHK_(ptr);
+        } else if (static_cast<uint8_t>(tag) == 105) {
+          _internal_add_channels(::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr));
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string bandplan = 14;
-      case 14: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(114u /* 114 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_bandplan()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->bandplan().data(), static_cast<int>(this->bandplan().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SystemInfo.bandplan"));
-        } else {
+      case 14:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 114)) {
+          auto str = _internal_mutable_bandplan();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SystemInfo.bandplan"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 bandfreq = 15;
-      case 15: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(120u /* 120 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &bandfreq_)));
-        } else {
+      case 15:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 120)) {
+          _impl_.bandfreq_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double bandplan_base = 16;
-      case 16: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(129u /* 129 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &bandplan_base_)));
-        } else {
+      case 16:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 129)) {
+          _impl_.bandplan_base_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double bandplan_high = 17;
-      case 17: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(137u /* 137 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &bandplan_high_)));
-        } else {
+      case 17:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 137)) {
+          _impl_.bandplan_high_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double bandplan_spacing = 18;
-      case 18: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(145u /* 145 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &bandplan_spacing_)));
-        } else {
+      case 18:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 145)) {
+          _impl_.bandplan_spacing_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 bandplan_offset = 19;
-      case 19: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(152u /* 152 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &bandplan_offset_)));
-        } else {
+      case 19:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 152)) {
+          _impl_.bandplan_offset_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.SystemInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.SystemInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void SystemInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.SystemInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // int32 system_num = 1;
-  if (this->system_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(1, this->system_num(), output);
-  }
-
-  // string system_type = 2;
-  if (this->system_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->system_type().data(), static_cast<int>(this->system_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.system_type");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      2, this->system_type(), output);
-  }
-
-  // string system_name = 3;
-  if (this->system_name().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->system_name().data(), static_cast<int>(this->system_name().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.system_name");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      3, this->system_name(), output);
-  }
-
-  // bool audio_archive = 4;
-  if (this->audio_archive() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(4, this->audio_archive(), output);
-  }
-
-  // string upload_script = 5;
-  if (this->upload_script().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->upload_script().data(), static_cast<int>(this->upload_script().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.upload_script");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      5, this->upload_script(), output);
-  }
-
-  // bool record_unknown = 6;
-  if (this->record_unknown() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(6, this->record_unknown(), output);
-  }
-
-  // bool call_log = 7;
-  if (this->call_log() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(7, this->call_log(), output);
-  }
-
-  // string talkgroups_file = 8;
-  if (this->talkgroups_file().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->talkgroups_file().data(), static_cast<int>(this->talkgroups_file().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.talkgroups_file");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      8, this->talkgroups_file(), output);
-  }
-
-  // double analog_levels = 9;
-  if (this->analog_levels() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(9, this->analog_levels(), output);
-  }
-
-  // double digital_levels = 10;
-  if (this->digital_levels() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(10, this->digital_levels(), output);
-  }
-
-  // bool qpsk = 11;
-  if (this->qpsk() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(11, this->qpsk(), output);
-  }
-
-  // double squelch_db = 12;
-  if (this->squelch_db() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(12, this->squelch_db(), output);
-  }
-
-  // repeated double channels = 13;
-  if (this->channels_size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteTag(13, ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED, output);
-    output->WriteVarint32(static_cast< ::google::protobuf::uint32>(
-        _channels_cached_byte_size_));
-    ::google::protobuf::internal::WireFormatLite::WriteDoubleArray(
-      this->channels().data(), this->channels_size(), output);
-  }
-
-  // string bandplan = 14;
-  if (this->bandplan().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->bandplan().data(), static_cast<int>(this->bandplan().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.bandplan");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      14, this->bandplan(), output);
-  }
-
-  // int32 bandfreq = 15;
-  if (this->bandfreq() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(15, this->bandfreq(), output);
-  }
-
-  // double bandplan_base = 16;
-  if (this->bandplan_base() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(16, this->bandplan_base(), output);
-  }
-
-  // double bandplan_high = 17;
-  if (this->bandplan_high() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(17, this->bandplan_high(), output);
-  }
-
-  // double bandplan_spacing = 18;
-  if (this->bandplan_spacing() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(18, this->bandplan_spacing(), output);
-  }
-
-  // int32 bandplan_offset = 19;
-  if (this->bandplan_offset() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(19, this->bandplan_offset(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.SystemInfo)
-}
-
-::google::protobuf::uint8* SystemInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* SystemInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.SystemInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // int32 system_num = 1;
-  if (this->system_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(1, this->system_num(), target);
+  if (this->_internal_system_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(1, this->_internal_system_num(), target);
   }
 
   // string system_type = 2;
-  if (this->system_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->system_type().data(), static_cast<int>(this->system_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_system_type().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_system_type().data(), static_cast<int>(this->_internal_system_type().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SystemInfo.system_type");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        2, this->system_type(), target);
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_system_type(), target);
   }
 
   // string system_name = 3;
-  if (this->system_name().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->system_name().data(), static_cast<int>(this->system_name().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_system_name().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_system_name().data(), static_cast<int>(this->_internal_system_name().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SystemInfo.system_name");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        3, this->system_name(), target);
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_system_name(), target);
   }
 
   // bool audio_archive = 4;
-  if (this->audio_archive() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(4, this->audio_archive(), target);
-  }
-
-  // string upload_script = 5;
-  if (this->upload_script().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->upload_script().data(), static_cast<int>(this->upload_script().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SystemInfo.upload_script");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        5, this->upload_script(), target);
+  if (this->_internal_audio_archive() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(4, this->_internal_audio_archive(), target);
   }
 
   // bool record_unknown = 6;
-  if (this->record_unknown() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(6, this->record_unknown(), target);
+  if (this->_internal_record_unknown() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(6, this->_internal_record_unknown(), target);
   }
 
   // bool call_log = 7;
-  if (this->call_log() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(7, this->call_log(), target);
+  if (this->_internal_call_log() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(7, this->_internal_call_log(), target);
   }
 
   // string talkgroups_file = 8;
-  if (this->talkgroups_file().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->talkgroups_file().data(), static_cast<int>(this->talkgroups_file().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_talkgroups_file().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_talkgroups_file().data(), static_cast<int>(this->_internal_talkgroups_file().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SystemInfo.talkgroups_file");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        8, this->talkgroups_file(), target);
+    target = stream->WriteStringMaybeAliased(
+        8, this->_internal_talkgroups_file(), target);
   }
 
   // double analog_levels = 9;
-  if (this->analog_levels() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(9, this->analog_levels(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_analog_levels = this->_internal_analog_levels();
+  uint64_t raw_analog_levels;
+  memcpy(&raw_analog_levels, &tmp_analog_levels, sizeof(tmp_analog_levels));
+  if (raw_analog_levels != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(9, this->_internal_analog_levels(), target);
   }
 
   // double digital_levels = 10;
-  if (this->digital_levels() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(10, this->digital_levels(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_digital_levels = this->_internal_digital_levels();
+  uint64_t raw_digital_levels;
+  memcpy(&raw_digital_levels, &tmp_digital_levels, sizeof(tmp_digital_levels));
+  if (raw_digital_levels != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(10, this->_internal_digital_levels(), target);
   }
 
   // bool qpsk = 11;
-  if (this->qpsk() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(11, this->qpsk(), target);
+  if (this->_internal_qpsk() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(11, this->_internal_qpsk(), target);
   }
 
   // double squelch_db = 12;
-  if (this->squelch_db() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(12, this->squelch_db(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_squelch_db = this->_internal_squelch_db();
+  uint64_t raw_squelch_db;
+  memcpy(&raw_squelch_db, &tmp_squelch_db, sizeof(tmp_squelch_db));
+  if (raw_squelch_db != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(12, this->_internal_squelch_db(), target);
   }
 
   // repeated double channels = 13;
-  if (this->channels_size() > 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteTagToArray(
-      13,
-      ::google::protobuf::internal::WireFormatLite::WIRETYPE_LENGTH_DELIMITED,
-      target);
-    target = ::google::protobuf::io::CodedOutputStream::WriteVarint32ToArray(
-        static_cast< ::google::protobuf::int32>(
-            _channels_cached_byte_size_), target);
-    target = ::google::protobuf::internal::WireFormatLite::
-      WriteDoubleNoTagToArray(this->channels_, target);
+  if (this->_internal_channels_size() > 0) {
+    target = stream->WriteFixedPacked(13, _internal_channels(), target);
   }
 
   // string bandplan = 14;
-  if (this->bandplan().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->bandplan().data(), static_cast<int>(this->bandplan().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_bandplan().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_bandplan().data(), static_cast<int>(this->_internal_bandplan().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SystemInfo.bandplan");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        14, this->bandplan(), target);
+    target = stream->WriteStringMaybeAliased(
+        14, this->_internal_bandplan(), target);
   }
 
   // int32 bandfreq = 15;
-  if (this->bandfreq() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(15, this->bandfreq(), target);
+  if (this->_internal_bandfreq() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(15, this->_internal_bandfreq(), target);
   }
 
   // double bandplan_base = 16;
-  if (this->bandplan_base() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(16, this->bandplan_base(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_base = this->_internal_bandplan_base();
+  uint64_t raw_bandplan_base;
+  memcpy(&raw_bandplan_base, &tmp_bandplan_base, sizeof(tmp_bandplan_base));
+  if (raw_bandplan_base != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(16, this->_internal_bandplan_base(), target);
   }
 
   // double bandplan_high = 17;
-  if (this->bandplan_high() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(17, this->bandplan_high(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_high = this->_internal_bandplan_high();
+  uint64_t raw_bandplan_high;
+  memcpy(&raw_bandplan_high, &tmp_bandplan_high, sizeof(tmp_bandplan_high));
+  if (raw_bandplan_high != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(17, this->_internal_bandplan_high(), target);
   }
 
   // double bandplan_spacing = 18;
-  if (this->bandplan_spacing() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(18, this->bandplan_spacing(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_spacing = this->_internal_bandplan_spacing();
+  uint64_t raw_bandplan_spacing;
+  memcpy(&raw_bandplan_spacing, &tmp_bandplan_spacing, sizeof(tmp_bandplan_spacing));
+  if (raw_bandplan_spacing != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(18, this->_internal_bandplan_spacing(), target);
   }
 
   // int32 bandplan_offset = 19;
-  if (this->bandplan_offset() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(19, this->bandplan_offset(), target);
+  if (this->_internal_bandplan_offset() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(19, this->_internal_bandplan_offset(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.SystemInfo)
   return target;
@@ -3172,227 +2609,235 @@ size_t SystemInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.SystemInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // repeated double channels = 13;
   {
-    unsigned int count = static_cast<unsigned int>(this->channels_size());
+    unsigned int count = static_cast<unsigned int>(this->_internal_channels_size());
     size_t data_size = 8UL * count;
     if (data_size > 0) {
       total_size += 1 +
-        ::google::protobuf::internal::WireFormatLite::Int32Size(
-            static_cast< ::google::protobuf::int32>(data_size));
+        ::_pbi::WireFormatLite::Int32Size(static_cast<int32_t>(data_size));
     }
-    int cached_size = ::google::protobuf::internal::ToCachedSize(data_size);
-    GOOGLE_SAFE_CONCURRENT_WRITES_BEGIN();
-    _channels_cached_byte_size_ = cached_size;
-    GOOGLE_SAFE_CONCURRENT_WRITES_END();
     total_size += data_size;
   }
 
   // string system_type = 2;
-  if (this->system_type().size() > 0) {
+  if (!this->_internal_system_type().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->system_type());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_system_type());
   }
 
   // string system_name = 3;
-  if (this->system_name().size() > 0) {
+  if (!this->_internal_system_name().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->system_name());
-  }
-
-  // string upload_script = 5;
-  if (this->upload_script().size() > 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->upload_script());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_system_name());
   }
 
   // string talkgroups_file = 8;
-  if (this->talkgroups_file().size() > 0) {
+  if (!this->_internal_talkgroups_file().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->talkgroups_file());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_talkgroups_file());
   }
 
   // string bandplan = 14;
-  if (this->bandplan().size() > 0) {
+  if (!this->_internal_bandplan().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->bandplan());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_bandplan());
   }
 
   // int32 system_num = 1;
-  if (this->system_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->system_num());
+  if (this->_internal_system_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_system_num());
   }
 
   // bool audio_archive = 4;
-  if (this->audio_archive() != 0) {
+  if (this->_internal_audio_archive() != 0) {
     total_size += 1 + 1;
   }
 
   // bool record_unknown = 6;
-  if (this->record_unknown() != 0) {
+  if (this->_internal_record_unknown() != 0) {
     total_size += 1 + 1;
   }
 
   // bool call_log = 7;
-  if (this->call_log() != 0) {
+  if (this->_internal_call_log() != 0) {
     total_size += 1 + 1;
   }
 
   // bool qpsk = 11;
-  if (this->qpsk() != 0) {
+  if (this->_internal_qpsk() != 0) {
     total_size += 1 + 1;
   }
 
   // double analog_levels = 9;
-  if (this->analog_levels() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_analog_levels = this->_internal_analog_levels();
+  uint64_t raw_analog_levels;
+  memcpy(&raw_analog_levels, &tmp_analog_levels, sizeof(tmp_analog_levels));
+  if (raw_analog_levels != 0) {
     total_size += 1 + 8;
   }
 
   // double digital_levels = 10;
-  if (this->digital_levels() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_digital_levels = this->_internal_digital_levels();
+  uint64_t raw_digital_levels;
+  memcpy(&raw_digital_levels, &tmp_digital_levels, sizeof(tmp_digital_levels));
+  if (raw_digital_levels != 0) {
     total_size += 1 + 8;
   }
 
   // double squelch_db = 12;
-  if (this->squelch_db() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_squelch_db = this->_internal_squelch_db();
+  uint64_t raw_squelch_db;
+  memcpy(&raw_squelch_db, &tmp_squelch_db, sizeof(tmp_squelch_db));
+  if (raw_squelch_db != 0) {
     total_size += 1 + 8;
   }
 
   // double bandplan_base = 16;
-  if (this->bandplan_base() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_base = this->_internal_bandplan_base();
+  uint64_t raw_bandplan_base;
+  memcpy(&raw_bandplan_base, &tmp_bandplan_base, sizeof(tmp_bandplan_base));
+  if (raw_bandplan_base != 0) {
     total_size += 2 + 8;
   }
 
   // double bandplan_high = 17;
-  if (this->bandplan_high() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_high = this->_internal_bandplan_high();
+  uint64_t raw_bandplan_high;
+  memcpy(&raw_bandplan_high, &tmp_bandplan_high, sizeof(tmp_bandplan_high));
+  if (raw_bandplan_high != 0) {
     total_size += 2 + 8;
   }
 
   // int32 bandfreq = 15;
-  if (this->bandfreq() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->bandfreq());
+  if (this->_internal_bandfreq() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_bandfreq());
   }
 
   // int32 bandplan_offset = 19;
-  if (this->bandplan_offset() != 0) {
+  if (this->_internal_bandplan_offset() != 0) {
     total_size += 2 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->bandplan_offset());
+      ::_pbi::WireFormatLite::Int32Size(
+        this->_internal_bandplan_offset());
   }
 
   // double bandplan_spacing = 18;
-  if (this->bandplan_spacing() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_spacing = this->_internal_bandplan_spacing();
+  uint64_t raw_bandplan_spacing;
+  memcpy(&raw_bandplan_spacing, &tmp_bandplan_spacing, sizeof(tmp_bandplan_spacing));
+  if (raw_bandplan_spacing != 0) {
     total_size += 2 + 8;
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void SystemInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.SystemInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const SystemInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const SystemInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.SystemInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.SystemInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData SystemInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    SystemInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*SystemInfo::GetClassData() const { return &_class_data_; }
 
-void SystemInfo::MergeFrom(const SystemInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.SystemInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void SystemInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<SystemInfo*>(&to_msg);
+  auto& from = static_cast<const SystemInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.SystemInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  channels_.MergeFrom(from.channels_);
-  if (from.system_type().size() > 0) {
-
-    system_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.system_type_);
+  _this->_impl_.channels_.MergeFrom(from._impl_.channels_);
+  if (!from._internal_system_type().empty()) {
+    _this->_internal_set_system_type(from._internal_system_type());
   }
-  if (from.system_name().size() > 0) {
-
-    system_name_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.system_name_);
+  if (!from._internal_system_name().empty()) {
+    _this->_internal_set_system_name(from._internal_system_name());
   }
-  if (from.upload_script().size() > 0) {
-
-    upload_script_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.upload_script_);
+  if (!from._internal_talkgroups_file().empty()) {
+    _this->_internal_set_talkgroups_file(from._internal_talkgroups_file());
   }
-  if (from.talkgroups_file().size() > 0) {
-
-    talkgroups_file_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.talkgroups_file_);
+  if (!from._internal_bandplan().empty()) {
+    _this->_internal_set_bandplan(from._internal_bandplan());
   }
-  if (from.bandplan().size() > 0) {
-
-    bandplan_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.bandplan_);
+  if (from._internal_system_num() != 0) {
+    _this->_internal_set_system_num(from._internal_system_num());
   }
-  if (from.system_num() != 0) {
-    set_system_num(from.system_num());
+  if (from._internal_audio_archive() != 0) {
+    _this->_internal_set_audio_archive(from._internal_audio_archive());
   }
-  if (from.audio_archive() != 0) {
-    set_audio_archive(from.audio_archive());
+  if (from._internal_record_unknown() != 0) {
+    _this->_internal_set_record_unknown(from._internal_record_unknown());
   }
-  if (from.record_unknown() != 0) {
-    set_record_unknown(from.record_unknown());
+  if (from._internal_call_log() != 0) {
+    _this->_internal_set_call_log(from._internal_call_log());
   }
-  if (from.call_log() != 0) {
-    set_call_log(from.call_log());
+  if (from._internal_qpsk() != 0) {
+    _this->_internal_set_qpsk(from._internal_qpsk());
   }
-  if (from.qpsk() != 0) {
-    set_qpsk(from.qpsk());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_analog_levels = from._internal_analog_levels();
+  uint64_t raw_analog_levels;
+  memcpy(&raw_analog_levels, &tmp_analog_levels, sizeof(tmp_analog_levels));
+  if (raw_analog_levels != 0) {
+    _this->_internal_set_analog_levels(from._internal_analog_levels());
   }
-  if (from.analog_levels() != 0) {
-    set_analog_levels(from.analog_levels());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_digital_levels = from._internal_digital_levels();
+  uint64_t raw_digital_levels;
+  memcpy(&raw_digital_levels, &tmp_digital_levels, sizeof(tmp_digital_levels));
+  if (raw_digital_levels != 0) {
+    _this->_internal_set_digital_levels(from._internal_digital_levels());
   }
-  if (from.digital_levels() != 0) {
-    set_digital_levels(from.digital_levels());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_squelch_db = from._internal_squelch_db();
+  uint64_t raw_squelch_db;
+  memcpy(&raw_squelch_db, &tmp_squelch_db, sizeof(tmp_squelch_db));
+  if (raw_squelch_db != 0) {
+    _this->_internal_set_squelch_db(from._internal_squelch_db());
   }
-  if (from.squelch_db() != 0) {
-    set_squelch_db(from.squelch_db());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_base = from._internal_bandplan_base();
+  uint64_t raw_bandplan_base;
+  memcpy(&raw_bandplan_base, &tmp_bandplan_base, sizeof(tmp_bandplan_base));
+  if (raw_bandplan_base != 0) {
+    _this->_internal_set_bandplan_base(from._internal_bandplan_base());
   }
-  if (from.bandplan_base() != 0) {
-    set_bandplan_base(from.bandplan_base());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_high = from._internal_bandplan_high();
+  uint64_t raw_bandplan_high;
+  memcpy(&raw_bandplan_high, &tmp_bandplan_high, sizeof(tmp_bandplan_high));
+  if (raw_bandplan_high != 0) {
+    _this->_internal_set_bandplan_high(from._internal_bandplan_high());
   }
-  if (from.bandplan_high() != 0) {
-    set_bandplan_high(from.bandplan_high());
+  if (from._internal_bandfreq() != 0) {
+    _this->_internal_set_bandfreq(from._internal_bandfreq());
   }
-  if (from.bandfreq() != 0) {
-    set_bandfreq(from.bandfreq());
+  if (from._internal_bandplan_offset() != 0) {
+    _this->_internal_set_bandplan_offset(from._internal_bandplan_offset());
   }
-  if (from.bandplan_offset() != 0) {
-    set_bandplan_offset(from.bandplan_offset());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_bandplan_spacing = from._internal_bandplan_spacing();
+  uint64_t raw_bandplan_spacing;
+  memcpy(&raw_bandplan_spacing, &tmp_bandplan_spacing, sizeof(tmp_bandplan_spacing));
+  if (raw_bandplan_spacing != 0) {
+    _this->_internal_set_bandplan_spacing(from._internal_bandplan_spacing());
   }
-  if (from.bandplan_spacing() != 0) {
-    set_bandplan_spacing(from.bandplan_spacing());
-  }
-}
-
-void SystemInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.SystemInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void SystemInfo::CopyFrom(const SystemInfo& from) {
@@ -3406,481 +2851,385 @@ bool SystemInfo::IsInitialized() const {
   return true;
 }
 
-void SystemInfo::Swap(SystemInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void SystemInfo::InternalSwap(SystemInfo* other) {
   using std::swap;
-  channels_.InternalSwap(&other->channels_);
-  system_type_.Swap(&other->system_type_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  system_name_.Swap(&other->system_name_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  upload_script_.Swap(&other->upload_script_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  talkgroups_file_.Swap(&other->talkgroups_file_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  bandplan_.Swap(&other->bandplan_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(system_num_, other->system_num_);
-  swap(audio_archive_, other->audio_archive_);
-  swap(record_unknown_, other->record_unknown_);
-  swap(call_log_, other->call_log_);
-  swap(qpsk_, other->qpsk_);
-  swap(analog_levels_, other->analog_levels_);
-  swap(digital_levels_, other->digital_levels_);
-  swap(squelch_db_, other->squelch_db_);
-  swap(bandplan_base_, other->bandplan_base_);
-  swap(bandplan_high_, other->bandplan_high_);
-  swap(bandfreq_, other->bandfreq_);
-  swap(bandplan_offset_, other->bandplan_offset_);
-  swap(bandplan_spacing_, other->bandplan_spacing_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.channels_.InternalSwap(&other->_impl_.channels_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.system_type_, lhs_arena,
+      &other->_impl_.system_type_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.system_name_, lhs_arena,
+      &other->_impl_.system_name_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.talkgroups_file_, lhs_arena,
+      &other->_impl_.talkgroups_file_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.bandplan_, lhs_arena,
+      &other->_impl_.bandplan_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SystemInfo, _impl_.bandplan_spacing_)
+      + sizeof(SystemInfo::_impl_.bandplan_spacing_)
+      - PROTOBUF_FIELD_OFFSET(SystemInfo, _impl_.system_num_)>(
+          reinterpret_cast<char*>(&_impl_.system_num_),
+          reinterpret_cast<char*>(&other->_impl_.system_num_));
 }
 
-::google::protobuf::Metadata SystemInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata SystemInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[3]);
 }
-
 
 // ===================================================================
 
-void ConfigInfo::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int ConfigInfo::kSourcesFieldNumber;
-const int ConfigInfo::kSystemsFieldNumber;
-const int ConfigInfo::kCaptureDirFieldNumber;
-const int ConfigInfo::kUploadServerFieldNumber;
-const int ConfigInfo::kCallTimeoutFieldNumber;
-const int ConfigInfo::kLogFileFieldNumber;
-const int ConfigInfo::kInstanceIdFieldNumber;
-const int ConfigInfo::kInstanceKeyFieldNumber;
-const int ConfigInfo::kBroadcastSignalsFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class ConfigInfo::_Internal {
+ public:
+};
 
-ConfigInfo::ConfigInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_ConfigInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.ConfigInfo)
+ConfigInfo::ConfigInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.ConfigInfo)
 }
 ConfigInfo::ConfigInfo(const ConfigInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL),
-      sources_(from.sources_),
-      systems_(from.systems_) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  capture_dir_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.capture_dir().size() > 0) {
-    capture_dir_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.capture_dir_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  ConfigInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.sources_){from._impl_.sources_}
+    , decltype(_impl_.systems_){from._impl_.systems_}
+    , decltype(_impl_.capture_dir_){}
+    , decltype(_impl_.upload_server_){}
+    , decltype(_impl_.instance_id_){}
+    , decltype(_impl_.instance_key_){}
+    , decltype(_impl_.call_timeout_){}
+    , decltype(_impl_.log_file_){}
+    , decltype(_impl_.broadcast_signals_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.capture_dir_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.capture_dir_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_capture_dir().empty()) {
+    _this->_impl_.capture_dir_.Set(from._internal_capture_dir(), 
+      _this->GetArenaForAllocation());
   }
-  upload_server_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.upload_server().size() > 0) {
-    upload_server_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.upload_server_);
+  _impl_.upload_server_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.upload_server_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_upload_server().empty()) {
+    _this->_impl_.upload_server_.Set(from._internal_upload_server(), 
+      _this->GetArenaForAllocation());
   }
-  instance_id_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.instance_id().size() > 0) {
-    instance_id_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.instance_id_);
+  _impl_.instance_id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.instance_id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_instance_id().empty()) {
+    _this->_impl_.instance_id_.Set(from._internal_instance_id(), 
+      _this->GetArenaForAllocation());
   }
-  instance_key_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.instance_key().size() > 0) {
-    instance_key_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.instance_key_);
+  _impl_.instance_key_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.instance_key_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_instance_key().empty()) {
+    _this->_impl_.instance_key_.Set(from._internal_instance_key(), 
+      _this->GetArenaForAllocation());
   }
-  ::memcpy(&call_timeout_, &from.call_timeout_,
-    static_cast<size_t>(reinterpret_cast<char*>(&broadcast_signals_) -
-    reinterpret_cast<char*>(&call_timeout_)) + sizeof(broadcast_signals_));
+  ::memcpy(&_impl_.call_timeout_, &from._impl_.call_timeout_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.broadcast_signals_) -
+    reinterpret_cast<char*>(&_impl_.call_timeout_)) + sizeof(_impl_.broadcast_signals_));
   // @@protoc_insertion_point(copy_constructor:streamer.ConfigInfo)
 }
 
-void ConfigInfo::SharedCtor() {
-  capture_dir_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_server_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_id_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_key_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&call_timeout_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&broadcast_signals_) -
-      reinterpret_cast<char*>(&call_timeout_)) + sizeof(broadcast_signals_));
+inline void ConfigInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.sources_){arena}
+    , decltype(_impl_.systems_){arena}
+    , decltype(_impl_.capture_dir_){}
+    , decltype(_impl_.upload_server_){}
+    , decltype(_impl_.instance_id_){}
+    , decltype(_impl_.instance_key_){}
+    , decltype(_impl_.call_timeout_){0}
+    , decltype(_impl_.log_file_){false}
+    , decltype(_impl_.broadcast_signals_){false}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.capture_dir_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.capture_dir_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.upload_server_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.upload_server_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.instance_id_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.instance_id_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  _impl_.instance_key_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.instance_key_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 ConfigInfo::~ConfigInfo() {
   // @@protoc_insertion_point(destructor:streamer.ConfigInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void ConfigInfo::SharedDtor() {
-  capture_dir_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_server_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_id_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_key_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
+inline void ConfigInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.sources_.~RepeatedPtrField();
+  _impl_.systems_.~RepeatedPtrField();
+  _impl_.capture_dir_.Destroy();
+  _impl_.upload_server_.Destroy();
+  _impl_.instance_id_.Destroy();
+  _impl_.instance_key_.Destroy();
 }
 
 void ConfigInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* ConfigInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const ConfigInfo& ConfigInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_ConfigInfo.base);
-  return *internal_default_instance();
-}
-
 
 void ConfigInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.ConfigInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  sources_.Clear();
-  systems_.Clear();
-  capture_dir_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  upload_server_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_id_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  instance_key_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&call_timeout_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&broadcast_signals_) -
-      reinterpret_cast<char*>(&call_timeout_)) + sizeof(broadcast_signals_));
-  _internal_metadata_.Clear();
+  _impl_.sources_.Clear();
+  _impl_.systems_.Clear();
+  _impl_.capture_dir_.ClearToEmpty();
+  _impl_.upload_server_.ClearToEmpty();
+  _impl_.instance_id_.ClearToEmpty();
+  _impl_.instance_key_.ClearToEmpty();
+  ::memset(&_impl_.call_timeout_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.broadcast_signals_) -
+      reinterpret_cast<char*>(&_impl_.call_timeout_)) + sizeof(_impl_.broadcast_signals_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool ConfigInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.ConfigInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* ConfigInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // repeated .streamer.SourceInfo sources = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(10u /* 10 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(
-                input, add_sources()));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 10)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_sources(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<10>(ptr));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // repeated .streamer.SystemInfo systems = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(18u /* 18 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(
-                input, add_systems()));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          ptr -= 1;
+          do {
+            ptr += 1;
+            ptr = ctx->ParseMessage(_internal_add_systems(), ptr);
+            CHK_(ptr);
+            if (!ctx->DataAvailable(ptr)) break;
+          } while (::PROTOBUF_NAMESPACE_ID::internal::ExpectTag<18>(ptr));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string capture_dir = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(26u /* 26 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_capture_dir()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->capture_dir().data(), static_cast<int>(this->capture_dir().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.ConfigInfo.capture_dir"));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 26)) {
+          auto str = _internal_mutable_capture_dir();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.ConfigInfo.capture_dir"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string upload_server = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(34u /* 34 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_upload_server()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->upload_server().data(), static_cast<int>(this->upload_server().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.ConfigInfo.upload_server"));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          auto str = _internal_mutable_upload_server();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.ConfigInfo.upload_server"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 call_timeout = 5;
-      case 5: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(40u /* 40 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &call_timeout_)));
-        } else {
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 40)) {
+          _impl_.call_timeout_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool log_file = 6;
-      case 6: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(48u /* 48 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &log_file_)));
-        } else {
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 48)) {
+          _impl_.log_file_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string instance_id = 7;
-      case 7: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(58u /* 58 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_instance_id()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->instance_id().data(), static_cast<int>(this->instance_id().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.ConfigInfo.instance_id"));
-        } else {
+      case 7:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 58)) {
+          auto str = _internal_mutable_instance_id();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.ConfigInfo.instance_id"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string instance_key = 8;
-      case 8: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(66u /* 66 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_instance_key()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->instance_key().data(), static_cast<int>(this->instance_key().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.ConfigInfo.instance_key"));
-        } else {
+      case 8:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 66)) {
+          auto str = _internal_mutable_instance_key();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.ConfigInfo.instance_key"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // bool broadcast_signals = 9;
-      case 9: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(72u /* 72 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &broadcast_signals_)));
-        } else {
+      case 9:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 72)) {
+          _impl_.broadcast_signals_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.ConfigInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.ConfigInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void ConfigInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.ConfigInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // repeated .streamer.SourceInfo sources = 1;
-  for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->sources_size()); i < n; i++) {
-    ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      1,
-      this->sources(static_cast<int>(i)),
-      output);
-  }
-
-  // repeated .streamer.SystemInfo systems = 2;
-  for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->systems_size()); i < n; i++) {
-    ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      2,
-      this->systems(static_cast<int>(i)),
-      output);
-  }
-
-  // string capture_dir = 3;
-  if (this->capture_dir().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->capture_dir().data(), static_cast<int>(this->capture_dir().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.ConfigInfo.capture_dir");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      3, this->capture_dir(), output);
-  }
-
-  // string upload_server = 4;
-  if (this->upload_server().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->upload_server().data(), static_cast<int>(this->upload_server().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.ConfigInfo.upload_server");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      4, this->upload_server(), output);
-  }
-
-  // int32 call_timeout = 5;
-  if (this->call_timeout() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(5, this->call_timeout(), output);
-  }
-
-  // bool log_file = 6;
-  if (this->log_file() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(6, this->log_file(), output);
-  }
-
-  // string instance_id = 7;
-  if (this->instance_id().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->instance_id().data(), static_cast<int>(this->instance_id().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.ConfigInfo.instance_id");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      7, this->instance_id(), output);
-  }
-
-  // string instance_key = 8;
-  if (this->instance_key().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->instance_key().data(), static_cast<int>(this->instance_key().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.ConfigInfo.instance_key");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      8, this->instance_key(), output);
-  }
-
-  // bool broadcast_signals = 9;
-  if (this->broadcast_signals() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(9, this->broadcast_signals(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.ConfigInfo)
-}
-
-::google::protobuf::uint8* ConfigInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* ConfigInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.ConfigInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // repeated .streamer.SourceInfo sources = 1;
-  for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->sources_size()); i < n; i++) {
-    target = ::google::protobuf::internal::WireFormatLite::
-      InternalWriteMessageToArray(
-        1, this->sources(static_cast<int>(i)), deterministic, target);
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_sources_size()); i < n; i++) {
+    const auto& repfield = this->_internal_sources(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(1, repfield, repfield.GetCachedSize(), target, stream);
   }
 
   // repeated .streamer.SystemInfo systems = 2;
-  for (unsigned int i = 0,
-      n = static_cast<unsigned int>(this->systems_size()); i < n; i++) {
-    target = ::google::protobuf::internal::WireFormatLite::
-      InternalWriteMessageToArray(
-        2, this->systems(static_cast<int>(i)), deterministic, target);
+  for (unsigned i = 0,
+      n = static_cast<unsigned>(this->_internal_systems_size()); i < n; i++) {
+    const auto& repfield = this->_internal_systems(i);
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+        InternalWriteMessage(2, repfield, repfield.GetCachedSize(), target, stream);
   }
 
   // string capture_dir = 3;
-  if (this->capture_dir().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->capture_dir().data(), static_cast<int>(this->capture_dir().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_capture_dir().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_capture_dir().data(), static_cast<int>(this->_internal_capture_dir().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.ConfigInfo.capture_dir");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        3, this->capture_dir(), target);
+    target = stream->WriteStringMaybeAliased(
+        3, this->_internal_capture_dir(), target);
   }
 
   // string upload_server = 4;
-  if (this->upload_server().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->upload_server().data(), static_cast<int>(this->upload_server().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_upload_server().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_upload_server().data(), static_cast<int>(this->_internal_upload_server().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.ConfigInfo.upload_server");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        4, this->upload_server(), target);
+    target = stream->WriteStringMaybeAliased(
+        4, this->_internal_upload_server(), target);
   }
 
   // int32 call_timeout = 5;
-  if (this->call_timeout() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(5, this->call_timeout(), target);
+  if (this->_internal_call_timeout() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(5, this->_internal_call_timeout(), target);
   }
 
   // bool log_file = 6;
-  if (this->log_file() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(6, this->log_file(), target);
+  if (this->_internal_log_file() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(6, this->_internal_log_file(), target);
   }
 
   // string instance_id = 7;
-  if (this->instance_id().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->instance_id().data(), static_cast<int>(this->instance_id().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_instance_id().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_instance_id().data(), static_cast<int>(this->_internal_instance_id().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.ConfigInfo.instance_id");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        7, this->instance_id(), target);
+    target = stream->WriteStringMaybeAliased(
+        7, this->_internal_instance_id(), target);
   }
 
   // string instance_key = 8;
-  if (this->instance_key().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->instance_key().data(), static_cast<int>(this->instance_key().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_instance_key().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_instance_key().data(), static_cast<int>(this->_internal_instance_key().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.ConfigInfo.instance_key");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        8, this->instance_key(), target);
+    target = stream->WriteStringMaybeAliased(
+        8, this->_internal_instance_key(), target);
   }
 
   // bool broadcast_signals = 9;
-  if (this->broadcast_signals() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(9, this->broadcast_signals(), target);
+  if (this->_internal_broadcast_signals() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(9, this->_internal_broadcast_signals(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.ConfigInfo)
   return target;
@@ -3890,139 +3239,109 @@ size_t ConfigInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.ConfigInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // repeated .streamer.SourceInfo sources = 1;
-  {
-    unsigned int count = static_cast<unsigned int>(this->sources_size());
-    total_size += 1UL * count;
-    for (unsigned int i = 0; i < count; i++) {
-      total_size +=
-        ::google::protobuf::internal::WireFormatLite::MessageSize(
-          this->sources(static_cast<int>(i)));
-    }
+  total_size += 1UL * this->_internal_sources_size();
+  for (const auto& msg : this->_impl_.sources_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
   // repeated .streamer.SystemInfo systems = 2;
-  {
-    unsigned int count = static_cast<unsigned int>(this->systems_size());
-    total_size += 1UL * count;
-    for (unsigned int i = 0; i < count; i++) {
-      total_size +=
-        ::google::protobuf::internal::WireFormatLite::MessageSize(
-          this->systems(static_cast<int>(i)));
-    }
+  total_size += 1UL * this->_internal_systems_size();
+  for (const auto& msg : this->_impl_.systems_) {
+    total_size +=
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(msg);
   }
 
   // string capture_dir = 3;
-  if (this->capture_dir().size() > 0) {
+  if (!this->_internal_capture_dir().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->capture_dir());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_capture_dir());
   }
 
   // string upload_server = 4;
-  if (this->upload_server().size() > 0) {
+  if (!this->_internal_upload_server().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->upload_server());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_upload_server());
   }
 
   // string instance_id = 7;
-  if (this->instance_id().size() > 0) {
+  if (!this->_internal_instance_id().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->instance_id());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_instance_id());
   }
 
   // string instance_key = 8;
-  if (this->instance_key().size() > 0) {
+  if (!this->_internal_instance_key().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->instance_key());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_instance_key());
   }
 
   // int32 call_timeout = 5;
-  if (this->call_timeout() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->call_timeout());
+  if (this->_internal_call_timeout() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_call_timeout());
   }
 
   // bool log_file = 6;
-  if (this->log_file() != 0) {
+  if (this->_internal_log_file() != 0) {
     total_size += 1 + 1;
   }
 
   // bool broadcast_signals = 9;
-  if (this->broadcast_signals() != 0) {
+  if (this->_internal_broadcast_signals() != 0) {
     total_size += 1 + 1;
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void ConfigInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.ConfigInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const ConfigInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const ConfigInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.ConfigInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.ConfigInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData ConfigInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    ConfigInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*ConfigInfo::GetClassData() const { return &_class_data_; }
 
-void ConfigInfo::MergeFrom(const ConfigInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.ConfigInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void ConfigInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<ConfigInfo*>(&to_msg);
+  auto& from = static_cast<const ConfigInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.ConfigInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  sources_.MergeFrom(from.sources_);
-  systems_.MergeFrom(from.systems_);
-  if (from.capture_dir().size() > 0) {
-
-    capture_dir_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.capture_dir_);
+  _this->_impl_.sources_.MergeFrom(from._impl_.sources_);
+  _this->_impl_.systems_.MergeFrom(from._impl_.systems_);
+  if (!from._internal_capture_dir().empty()) {
+    _this->_internal_set_capture_dir(from._internal_capture_dir());
   }
-  if (from.upload_server().size() > 0) {
-
-    upload_server_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.upload_server_);
+  if (!from._internal_upload_server().empty()) {
+    _this->_internal_set_upload_server(from._internal_upload_server());
   }
-  if (from.instance_id().size() > 0) {
-
-    instance_id_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.instance_id_);
+  if (!from._internal_instance_id().empty()) {
+    _this->_internal_set_instance_id(from._internal_instance_id());
   }
-  if (from.instance_key().size() > 0) {
-
-    instance_key_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.instance_key_);
+  if (!from._internal_instance_key().empty()) {
+    _this->_internal_set_instance_key(from._internal_instance_key());
   }
-  if (from.call_timeout() != 0) {
-    set_call_timeout(from.call_timeout());
+  if (from._internal_call_timeout() != 0) {
+    _this->_internal_set_call_timeout(from._internal_call_timeout());
   }
-  if (from.log_file() != 0) {
-    set_log_file(from.log_file());
+  if (from._internal_log_file() != 0) {
+    _this->_internal_set_log_file(from._internal_log_file());
   }
-  if (from.broadcast_signals() != 0) {
-    set_broadcast_signals(from.broadcast_signals());
+  if (from._internal_broadcast_signals() != 0) {
+    _this->_internal_set_broadcast_signals(from._internal_broadcast_signals());
   }
-}
-
-void ConfigInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.ConfigInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void ConfigInfo::CopyFrom(const ConfigInfo& from) {
@@ -4036,251 +3355,212 @@ bool ConfigInfo::IsInitialized() const {
   return true;
 }
 
-void ConfigInfo::Swap(ConfigInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void ConfigInfo::InternalSwap(ConfigInfo* other) {
   using std::swap;
-  CastToBase(&sources_)->InternalSwap(CastToBase(&other->sources_));
-  CastToBase(&systems_)->InternalSwap(CastToBase(&other->systems_));
-  capture_dir_.Swap(&other->capture_dir_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  upload_server_.Swap(&other->upload_server_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  instance_id_.Swap(&other->instance_id_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  instance_key_.Swap(&other->instance_key_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(call_timeout_, other->call_timeout_);
-  swap(log_file_, other->log_file_);
-  swap(broadcast_signals_, other->broadcast_signals_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  _impl_.sources_.InternalSwap(&other->_impl_.sources_);
+  _impl_.systems_.InternalSwap(&other->_impl_.systems_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.capture_dir_, lhs_arena,
+      &other->_impl_.capture_dir_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.upload_server_, lhs_arena,
+      &other->_impl_.upload_server_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.instance_id_, lhs_arena,
+      &other->_impl_.instance_id_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.instance_key_, lhs_arena,
+      &other->_impl_.instance_key_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(ConfigInfo, _impl_.broadcast_signals_)
+      + sizeof(ConfigInfo::_impl_.broadcast_signals_)
+      - PROTOBUF_FIELD_OFFSET(ConfigInfo, _impl_.call_timeout_)>(
+          reinterpret_cast<char*>(&_impl_.call_timeout_),
+          reinterpret_cast<char*>(&other->_impl_.call_timeout_));
 }
 
-::google::protobuf::Metadata ConfigInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata ConfigInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[4]);
 }
-
 
 // ===================================================================
 
-void CallInfo::InitAsDefaultInstance() {
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int CallInfo::kCallActiveFieldNumber;
-const int CallInfo::kRecorderNumFieldNumber;
-const int CallInfo::kSystemNumFieldNumber;
-const int CallInfo::kCurrFreqFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class CallInfo::_Internal {
+ public:
+};
 
-CallInfo::CallInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_CallInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.CallInfo)
+CallInfo::CallInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.CallInfo)
 }
 CallInfo::CallInfo(const CallInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::memcpy(&call_active_, &from.call_active_,
-    static_cast<size_t>(reinterpret_cast<char*>(&system_num_) -
-    reinterpret_cast<char*>(&call_active_)) + sizeof(system_num_));
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  CallInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.call_active_){}
+    , decltype(_impl_.recorder_num_){}
+    , decltype(_impl_.curr_freq_){}
+    , decltype(_impl_.system_num_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  ::memcpy(&_impl_.call_active_, &from._impl_.call_active_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.system_num_) -
+    reinterpret_cast<char*>(&_impl_.call_active_)) + sizeof(_impl_.system_num_));
   // @@protoc_insertion_point(copy_constructor:streamer.CallInfo)
 }
 
-void CallInfo::SharedCtor() {
-  ::memset(&call_active_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&system_num_) -
-      reinterpret_cast<char*>(&call_active_)) + sizeof(system_num_));
+inline void CallInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.call_active_){false}
+    , decltype(_impl_.recorder_num_){0}
+    , decltype(_impl_.curr_freq_){0}
+    , decltype(_impl_.system_num_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
 }
 
 CallInfo::~CallInfo() {
   // @@protoc_insertion_point(destructor:streamer.CallInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void CallInfo::SharedDtor() {
+inline void CallInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
 }
 
 void CallInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* CallInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const CallInfo& CallInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_CallInfo.base);
-  return *internal_default_instance();
-}
-
 
 void CallInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.CallInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  ::memset(&call_active_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&system_num_) -
-      reinterpret_cast<char*>(&call_active_)) + sizeof(system_num_));
-  _internal_metadata_.Clear();
+  ::memset(&_impl_.call_active_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.system_num_) -
+      reinterpret_cast<char*>(&_impl_.call_active_)) + sizeof(_impl_.system_num_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool CallInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.CallInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* CallInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // bool call_active = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   bool, ::google::protobuf::internal::WireFormatLite::TYPE_BOOL>(
-                 input, &call_active_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.call_active_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 recorder_num = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(16u /* 16 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &recorder_num_)));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 16)) {
+          _impl_.recorder_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // int32 system_num = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(24u /* 24 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int32, ::google::protobuf::internal::WireFormatLite::TYPE_INT32>(
-                 input, &system_num_)));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          _impl_.system_num_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint32(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // double curr_freq = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(33u /* 33 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   double, ::google::protobuf::internal::WireFormatLite::TYPE_DOUBLE>(
-                 input, &curr_freq_)));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 33)) {
+          _impl_.curr_freq_ = ::PROTOBUF_NAMESPACE_ID::internal::UnalignedLoad<double>(ptr);
+          ptr += sizeof(double);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.CallInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.CallInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void CallInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.CallInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // bool call_active = 1;
-  if (this->call_active() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteBool(1, this->call_active(), output);
-  }
-
-  // int32 recorder_num = 2;
-  if (this->recorder_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(2, this->recorder_num(), output);
-  }
-
-  // int32 system_num = 3;
-  if (this->system_num() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt32(3, this->system_num(), output);
-  }
-
-  // double curr_freq = 4;
-  if (this->curr_freq() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteDouble(4, this->curr_freq(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.CallInfo)
-}
-
-::google::protobuf::uint8* CallInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* CallInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.CallInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // bool call_active = 1;
-  if (this->call_active() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteBoolToArray(1, this->call_active(), target);
+  if (this->_internal_call_active() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteBoolToArray(1, this->_internal_call_active(), target);
   }
 
   // int32 recorder_num = 2;
-  if (this->recorder_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(2, this->recorder_num(), target);
+  if (this->_internal_recorder_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(2, this->_internal_recorder_num(), target);
   }
 
   // int32 system_num = 3;
-  if (this->system_num() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt32ToArray(3, this->system_num(), target);
+  if (this->_internal_system_num() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt32ToArray(3, this->_internal_system_num(), target);
   }
 
   // double curr_freq = 4;
-  if (this->curr_freq() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteDoubleToArray(4, this->curr_freq(), target);
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_curr_freq = this->_internal_curr_freq();
+  uint64_t raw_curr_freq;
+  memcpy(&raw_curr_freq, &tmp_curr_freq, sizeof(tmp_curr_freq));
+  if (raw_curr_freq != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteDoubleToArray(4, this->_internal_curr_freq(), target);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.CallInfo)
   return target;
@@ -4290,81 +3570,69 @@ size_t CallInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.CallInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // bool call_active = 1;
-  if (this->call_active() != 0) {
+  if (this->_internal_call_active() != 0) {
     total_size += 1 + 1;
   }
 
   // int32 recorder_num = 2;
-  if (this->recorder_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->recorder_num());
+  if (this->_internal_recorder_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_recorder_num());
   }
 
   // double curr_freq = 4;
-  if (this->curr_freq() != 0) {
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_curr_freq = this->_internal_curr_freq();
+  uint64_t raw_curr_freq;
+  memcpy(&raw_curr_freq, &tmp_curr_freq, sizeof(tmp_curr_freq));
+  if (raw_curr_freq != 0) {
     total_size += 1 + 8;
   }
 
   // int32 system_num = 3;
-  if (this->system_num() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int32Size(
-        this->system_num());
+  if (this->_internal_system_num() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int32SizePlusOne(this->_internal_system_num());
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void CallInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.CallInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const CallInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const CallInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.CallInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.CallInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData CallInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    CallInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*CallInfo::GetClassData() const { return &_class_data_; }
 
-void CallInfo::MergeFrom(const CallInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.CallInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void CallInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<CallInfo*>(&to_msg);
+  auto& from = static_cast<const CallInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.CallInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.call_active() != 0) {
-    set_call_active(from.call_active());
+  if (from._internal_call_active() != 0) {
+    _this->_internal_set_call_active(from._internal_call_active());
   }
-  if (from.recorder_num() != 0) {
-    set_recorder_num(from.recorder_num());
+  if (from._internal_recorder_num() != 0) {
+    _this->_internal_set_recorder_num(from._internal_recorder_num());
   }
-  if (from.curr_freq() != 0) {
-    set_curr_freq(from.curr_freq());
+  static_assert(sizeof(uint64_t) == sizeof(double), "Code assumes uint64_t and double are the same size.");
+  double tmp_curr_freq = from._internal_curr_freq();
+  uint64_t raw_curr_freq;
+  memcpy(&raw_curr_freq, &tmp_curr_freq, sizeof(tmp_curr_freq));
+  if (raw_curr_freq != 0) {
+    _this->_internal_set_curr_freq(from._internal_curr_freq());
   }
-  if (from.system_num() != 0) {
-    set_system_num(from.system_num());
+  if (from._internal_system_num() != 0) {
+    _this->_internal_set_system_num(from._internal_system_num());
   }
-}
-
-void CallInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.CallInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void CallInfo::CopyFrom(const CallInfo& from) {
@@ -4378,354 +3646,284 @@ bool CallInfo::IsInitialized() const {
   return true;
 }
 
-void CallInfo::Swap(CallInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void CallInfo::InternalSwap(CallInfo* other) {
   using std::swap;
-  swap(call_active_, other->call_active_);
-  swap(recorder_num_, other->recorder_num_);
-  swap(curr_freq_, other->curr_freq_);
-  swap(system_num_, other->system_num_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(CallInfo, _impl_.system_num_)
+      + sizeof(CallInfo::_impl_.system_num_)
+      - PROTOBUF_FIELD_OFFSET(CallInfo, _impl_.call_active_)>(
+          reinterpret_cast<char*>(&_impl_.call_active_),
+          reinterpret_cast<char*>(&other->_impl_.call_active_));
 }
 
-::google::protobuf::Metadata CallInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata CallInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[5]);
 }
-
 
 // ===================================================================
 
-void SignalInfo::InitAsDefaultInstance() {
-  ::streamer::_SignalInfo_default_instance_._instance.get_mutable()->call_info_ = const_cast< ::streamer::CallInfo*>(
-      ::streamer::CallInfo::internal_default_instance());
-  ::streamer::_SignalInfo_default_instance_._instance.get_mutable()->system_info_ = const_cast< ::streamer::SystemInfo*>(
-      ::streamer::SystemInfo::internal_default_instance());
-  ::streamer::_SignalInfo_default_instance_._instance.get_mutable()->recorder_info_ = const_cast< ::streamer::RecorderInfo*>(
-      ::streamer::RecorderInfo::internal_default_instance());
-}
-#if !defined(_MSC_VER) || _MSC_VER >= 1900
-const int SignalInfo::kUnitIdFieldNumber;
-const int SignalInfo::kSignalingTypeFieldNumber;
-const int SignalInfo::kSignalTypeFieldNumber;
-const int SignalInfo::kCallInfoFieldNumber;
-const int SignalInfo::kSystemInfoFieldNumber;
-const int SignalInfo::kRecorderInfoFieldNumber;
-#endif  // !defined(_MSC_VER) || _MSC_VER >= 1900
+class SignalInfo::_Internal {
+ public:
+  static const ::streamer::CallInfo& call_info(const SignalInfo* msg);
+  static const ::streamer::SystemInfo& system_info(const SignalInfo* msg);
+  static const ::streamer::RecorderInfo& recorder_info(const SignalInfo* msg);
+};
 
-SignalInfo::SignalInfo()
-  : ::google::protobuf::Message(), _internal_metadata_(NULL) {
-  ::google::protobuf::internal::InitSCC(
-      &protobuf_streamer_2eproto::scc_info_SignalInfo.base);
-  SharedCtor();
-  // @@protoc_insertion_point(constructor:streamer.SignalInfo)
+const ::streamer::CallInfo&
+SignalInfo::_Internal::call_info(const SignalInfo* msg) {
+  return *msg->_impl_.call_info_;
+}
+const ::streamer::SystemInfo&
+SignalInfo::_Internal::system_info(const SignalInfo* msg) {
+  return *msg->_impl_.system_info_;
+}
+const ::streamer::RecorderInfo&
+SignalInfo::_Internal::recorder_info(const SignalInfo* msg) {
+  return *msg->_impl_.recorder_info_;
+}
+SignalInfo::SignalInfo(::PROTOBUF_NAMESPACE_ID::Arena* arena,
+                         bool is_message_owned)
+  : ::PROTOBUF_NAMESPACE_ID::Message(arena, is_message_owned) {
+  SharedCtor(arena, is_message_owned);
+  // @@protoc_insertion_point(arena_constructor:streamer.SignalInfo)
 }
 SignalInfo::SignalInfo(const SignalInfo& from)
-  : ::google::protobuf::Message(),
-      _internal_metadata_(NULL) {
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  signaling_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (from.signaling_type().size() > 0) {
-    signaling_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.signaling_type_);
+  : ::PROTOBUF_NAMESPACE_ID::Message() {
+  SignalInfo* const _this = this; (void)_this;
+  new (&_impl_) Impl_{
+      decltype(_impl_.signaling_type_){}
+    , decltype(_impl_.call_info_){nullptr}
+    , decltype(_impl_.system_info_){nullptr}
+    , decltype(_impl_.recorder_info_){nullptr}
+    , decltype(_impl_.unit_id_){}
+    , decltype(_impl_.signal_type_){}
+    , /*decltype(_impl_._cached_size_)*/{}};
+
+  _internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
+  _impl_.signaling_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.signaling_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
+  if (!from._internal_signaling_type().empty()) {
+    _this->_impl_.signaling_type_.Set(from._internal_signaling_type(), 
+      _this->GetArenaForAllocation());
   }
-  if (from.has_call_info()) {
-    call_info_ = new ::streamer::CallInfo(*from.call_info_);
-  } else {
-    call_info_ = NULL;
+  if (from._internal_has_call_info()) {
+    _this->_impl_.call_info_ = new ::streamer::CallInfo(*from._impl_.call_info_);
   }
-  if (from.has_system_info()) {
-    system_info_ = new ::streamer::SystemInfo(*from.system_info_);
-  } else {
-    system_info_ = NULL;
+  if (from._internal_has_system_info()) {
+    _this->_impl_.system_info_ = new ::streamer::SystemInfo(*from._impl_.system_info_);
   }
-  if (from.has_recorder_info()) {
-    recorder_info_ = new ::streamer::RecorderInfo(*from.recorder_info_);
-  } else {
-    recorder_info_ = NULL;
+  if (from._internal_has_recorder_info()) {
+    _this->_impl_.recorder_info_ = new ::streamer::RecorderInfo(*from._impl_.recorder_info_);
   }
-  ::memcpy(&unit_id_, &from.unit_id_,
-    static_cast<size_t>(reinterpret_cast<char*>(&signal_type_) -
-    reinterpret_cast<char*>(&unit_id_)) + sizeof(signal_type_));
+  ::memcpy(&_impl_.unit_id_, &from._impl_.unit_id_,
+    static_cast<size_t>(reinterpret_cast<char*>(&_impl_.signal_type_) -
+    reinterpret_cast<char*>(&_impl_.unit_id_)) + sizeof(_impl_.signal_type_));
   // @@protoc_insertion_point(copy_constructor:streamer.SignalInfo)
 }
 
-void SignalInfo::SharedCtor() {
-  signaling_type_.UnsafeSetDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  ::memset(&call_info_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&signal_type_) -
-      reinterpret_cast<char*>(&call_info_)) + sizeof(signal_type_));
+inline void SignalInfo::SharedCtor(
+    ::_pb::Arena* arena, bool is_message_owned) {
+  (void)arena;
+  (void)is_message_owned;
+  new (&_impl_) Impl_{
+      decltype(_impl_.signaling_type_){}
+    , decltype(_impl_.call_info_){nullptr}
+    , decltype(_impl_.system_info_){nullptr}
+    , decltype(_impl_.recorder_info_){nullptr}
+    , decltype(_impl_.unit_id_){int64_t{0}}
+    , decltype(_impl_.signal_type_){0}
+    , /*decltype(_impl_._cached_size_)*/{}
+  };
+  _impl_.signaling_type_.InitDefault();
+  #ifdef PROTOBUF_FORCE_COPY_DEFAULT_STRING
+    _impl_.signaling_type_.Set("", GetArenaForAllocation());
+  #endif // PROTOBUF_FORCE_COPY_DEFAULT_STRING
 }
 
 SignalInfo::~SignalInfo() {
   // @@protoc_insertion_point(destructor:streamer.SignalInfo)
+  if (auto *arena = _internal_metadata_.DeleteReturnArena<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>()) {
+  (void)arena;
+    return;
+  }
   SharedDtor();
 }
 
-void SignalInfo::SharedDtor() {
-  signaling_type_.DestroyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (this != internal_default_instance()) delete call_info_;
-  if (this != internal_default_instance()) delete system_info_;
-  if (this != internal_default_instance()) delete recorder_info_;
+inline void SignalInfo::SharedDtor() {
+  GOOGLE_DCHECK(GetArenaForAllocation() == nullptr);
+  _impl_.signaling_type_.Destroy();
+  if (this != internal_default_instance()) delete _impl_.call_info_;
+  if (this != internal_default_instance()) delete _impl_.system_info_;
+  if (this != internal_default_instance()) delete _impl_.recorder_info_;
 }
 
 void SignalInfo::SetCachedSize(int size) const {
-  _cached_size_.Set(size);
+  _impl_._cached_size_.Set(size);
 }
-const ::google::protobuf::Descriptor* SignalInfo::descriptor() {
-  ::protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages].descriptor;
-}
-
-const SignalInfo& SignalInfo::default_instance() {
-  ::google::protobuf::internal::InitSCC(&protobuf_streamer_2eproto::scc_info_SignalInfo.base);
-  return *internal_default_instance();
-}
-
 
 void SignalInfo::Clear() {
 // @@protoc_insertion_point(message_clear_start:streamer.SignalInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   // Prevent compiler warnings about cached_has_bits being unused
   (void) cached_has_bits;
 
-  signaling_type_.ClearToEmptyNoArena(&::google::protobuf::internal::GetEmptyStringAlreadyInited());
-  if (GetArenaNoVirtual() == NULL && call_info_ != NULL) {
-    delete call_info_;
+  _impl_.signaling_type_.ClearToEmpty();
+  if (GetArenaForAllocation() == nullptr && _impl_.call_info_ != nullptr) {
+    delete _impl_.call_info_;
   }
-  call_info_ = NULL;
-  if (GetArenaNoVirtual() == NULL && system_info_ != NULL) {
-    delete system_info_;
+  _impl_.call_info_ = nullptr;
+  if (GetArenaForAllocation() == nullptr && _impl_.system_info_ != nullptr) {
+    delete _impl_.system_info_;
   }
-  system_info_ = NULL;
-  if (GetArenaNoVirtual() == NULL && recorder_info_ != NULL) {
-    delete recorder_info_;
+  _impl_.system_info_ = nullptr;
+  if (GetArenaForAllocation() == nullptr && _impl_.recorder_info_ != nullptr) {
+    delete _impl_.recorder_info_;
   }
-  recorder_info_ = NULL;
-  ::memset(&unit_id_, 0, static_cast<size_t>(
-      reinterpret_cast<char*>(&signal_type_) -
-      reinterpret_cast<char*>(&unit_id_)) + sizeof(signal_type_));
-  _internal_metadata_.Clear();
+  _impl_.recorder_info_ = nullptr;
+  ::memset(&_impl_.unit_id_, 0, static_cast<size_t>(
+      reinterpret_cast<char*>(&_impl_.signal_type_) -
+      reinterpret_cast<char*>(&_impl_.unit_id_)) + sizeof(_impl_.signal_type_));
+  _internal_metadata_.Clear<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>();
 }
 
-bool SignalInfo::MergePartialFromCodedStream(
-    ::google::protobuf::io::CodedInputStream* input) {
-#define DO_(EXPRESSION) if (!GOOGLE_PREDICT_TRUE(EXPRESSION)) goto failure
-  ::google::protobuf::uint32 tag;
-  // @@protoc_insertion_point(parse_start:streamer.SignalInfo)
-  for (;;) {
-    ::std::pair<::google::protobuf::uint32, bool> p = input->ReadTagWithCutoffNoLastTag(127u);
-    tag = p.first;
-    if (!p.second) goto handle_unusual;
-    switch (::google::protobuf::internal::WireFormatLite::GetTagFieldNumber(tag)) {
+const char* SignalInfo::_InternalParse(const char* ptr, ::_pbi::ParseContext* ctx) {
+#define CHK_(x) if (PROTOBUF_PREDICT_FALSE(!(x))) goto failure
+  while (!ctx->Done(&ptr)) {
+    uint32_t tag;
+    ptr = ::_pbi::ReadTag(ptr, &tag);
+    switch (tag >> 3) {
       // int64 unit_id = 1;
-      case 1: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(8u /* 8 & 0xFF */)) {
-
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   ::google::protobuf::int64, ::google::protobuf::internal::WireFormatLite::TYPE_INT64>(
-                 input, &unit_id_)));
-        } else {
+      case 1:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 8)) {
+          _impl_.unit_id_ = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // string signaling_type = 2;
-      case 2: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(18u /* 18 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadString(
-                input, this->mutable_signaling_type()));
-          DO_(::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-            this->signaling_type().data(), static_cast<int>(this->signaling_type().length()),
-            ::google::protobuf::internal::WireFormatLite::PARSE,
-            "streamer.SignalInfo.signaling_type"));
-        } else {
+      case 2:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 18)) {
+          auto str = _internal_mutable_signaling_type();
+          ptr = ::_pbi::InlineGreedyStringParser(str, ptr, ctx);
+          CHK_(ptr);
+          CHK_(::_pbi::VerifyUTF8(str, "streamer.SignalInfo.signaling_type"));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.SignalInfo.SignalType signal_type = 3;
-      case 3: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(24u /* 24 & 0xFF */)) {
-          int value;
-          DO_((::google::protobuf::internal::WireFormatLite::ReadPrimitive<
-                   int, ::google::protobuf::internal::WireFormatLite::TYPE_ENUM>(
-                 input, &value)));
-          set_signal_type(static_cast< ::streamer::SignalInfo_SignalType >(value));
-        } else {
+      case 3:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 24)) {
+          uint64_t val = ::PROTOBUF_NAMESPACE_ID::internal::ReadVarint64(&ptr);
+          CHK_(ptr);
+          _internal_set_signal_type(static_cast<::streamer::SignalInfo_SignalType>(val));
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.CallInfo call_info = 4;
-      case 4: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(34u /* 34 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(
-               input, mutable_call_info()));
-        } else {
+      case 4:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 34)) {
+          ptr = ctx->ParseMessage(_internal_mutable_call_info(), ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.SystemInfo system_info = 5;
-      case 5: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(42u /* 42 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(
-               input, mutable_system_info()));
-        } else {
+      case 5:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 42)) {
+          ptr = ctx->ParseMessage(_internal_mutable_system_info(), ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
+        continue;
       // .streamer.RecorderInfo recorder_info = 6;
-      case 6: {
-        if (static_cast< ::google::protobuf::uint8>(tag) ==
-            static_cast< ::google::protobuf::uint8>(50u /* 50 & 0xFF */)) {
-          DO_(::google::protobuf::internal::WireFormatLite::ReadMessage(
-               input, mutable_recorder_info()));
-        } else {
+      case 6:
+        if (PROTOBUF_PREDICT_TRUE(static_cast<uint8_t>(tag) == 50)) {
+          ptr = ctx->ParseMessage(_internal_mutable_recorder_info(), ptr);
+          CHK_(ptr);
+        } else
           goto handle_unusual;
-        }
-        break;
-      }
-
-      default: {
-      handle_unusual:
-        if (tag == 0) {
-          goto success;
-        }
-        DO_(::google::protobuf::internal::WireFormat::SkipField(
-              input, tag, _internal_metadata_.mutable_unknown_fields()));
-        break;
-      }
+        continue;
+      default:
+        goto handle_unusual;
+    }  // switch
+  handle_unusual:
+    if ((tag == 0) || ((tag & 7) == 4)) {
+      CHK_(ptr);
+      ctx->SetLastTag(tag);
+      goto message_done;
     }
-  }
-success:
-  // @@protoc_insertion_point(parse_success:streamer.SignalInfo)
-  return true;
+    ptr = UnknownFieldParse(
+        tag,
+        _internal_metadata_.mutable_unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(),
+        ptr, ctx);
+    CHK_(ptr != nullptr);
+  }  // while
+message_done:
+  return ptr;
 failure:
-  // @@protoc_insertion_point(parse_failure:streamer.SignalInfo)
-  return false;
-#undef DO_
+  ptr = nullptr;
+  goto message_done;
+#undef CHK_
 }
 
-void SignalInfo::SerializeWithCachedSizes(
-    ::google::protobuf::io::CodedOutputStream* output) const {
-  // @@protoc_insertion_point(serialize_start:streamer.SignalInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
-  (void) cached_has_bits;
-
-  // int64 unit_id = 1;
-  if (this->unit_id() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteInt64(1, this->unit_id(), output);
-  }
-
-  // string signaling_type = 2;
-  if (this->signaling_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->signaling_type().data(), static_cast<int>(this->signaling_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
-      "streamer.SignalInfo.signaling_type");
-    ::google::protobuf::internal::WireFormatLite::WriteStringMaybeAliased(
-      2, this->signaling_type(), output);
-  }
-
-  // .streamer.SignalInfo.SignalType signal_type = 3;
-  if (this->signal_type() != 0) {
-    ::google::protobuf::internal::WireFormatLite::WriteEnum(
-      3, this->signal_type(), output);
-  }
-
-  // .streamer.CallInfo call_info = 4;
-  if (this->has_call_info()) {
-    ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      4, this->_internal_call_info(), output);
-  }
-
-  // .streamer.SystemInfo system_info = 5;
-  if (this->has_system_info()) {
-    ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      5, this->_internal_system_info(), output);
-  }
-
-  // .streamer.RecorderInfo recorder_info = 6;
-  if (this->has_recorder_info()) {
-    ::google::protobuf::internal::WireFormatLite::WriteMessageMaybeToArray(
-      6, this->_internal_recorder_info(), output);
-  }
-
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    ::google::protobuf::internal::WireFormat::SerializeUnknownFields(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), output);
-  }
-  // @@protoc_insertion_point(serialize_end:streamer.SignalInfo)
-}
-
-::google::protobuf::uint8* SignalInfo::InternalSerializeWithCachedSizesToArray(
-    bool deterministic, ::google::protobuf::uint8* target) const {
-  (void)deterministic; // Unused
+uint8_t* SignalInfo::_InternalSerialize(
+    uint8_t* target, ::PROTOBUF_NAMESPACE_ID::io::EpsCopyOutputStream* stream) const {
   // @@protoc_insertion_point(serialize_to_array_start:streamer.SignalInfo)
-  ::google::protobuf::uint32 cached_has_bits = 0;
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
   // int64 unit_id = 1;
-  if (this->unit_id() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteInt64ToArray(1, this->unit_id(), target);
+  if (this->_internal_unit_id() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteInt64ToArray(1, this->_internal_unit_id(), target);
   }
 
   // string signaling_type = 2;
-  if (this->signaling_type().size() > 0) {
-    ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
-      this->signaling_type().data(), static_cast<int>(this->signaling_type().length()),
-      ::google::protobuf::internal::WireFormatLite::SERIALIZE,
+  if (!this->_internal_signaling_type().empty()) {
+    ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::VerifyUtf8String(
+      this->_internal_signaling_type().data(), static_cast<int>(this->_internal_signaling_type().length()),
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::SERIALIZE,
       "streamer.SignalInfo.signaling_type");
-    target =
-      ::google::protobuf::internal::WireFormatLite::WriteStringToArray(
-        2, this->signaling_type(), target);
+    target = stream->WriteStringMaybeAliased(
+        2, this->_internal_signaling_type(), target);
   }
 
   // .streamer.SignalInfo.SignalType signal_type = 3;
-  if (this->signal_type() != 0) {
-    target = ::google::protobuf::internal::WireFormatLite::WriteEnumToArray(
-      3, this->signal_type(), target);
+  if (this->_internal_signal_type() != 0) {
+    target = stream->EnsureSpace(target);
+    target = ::_pbi::WireFormatLite::WriteEnumToArray(
+      3, this->_internal_signal_type(), target);
   }
 
   // .streamer.CallInfo call_info = 4;
-  if (this->has_call_info()) {
-    target = ::google::protobuf::internal::WireFormatLite::
-      InternalWriteMessageToArray(
-        4, this->_internal_call_info(), deterministic, target);
+  if (this->_internal_has_call_info()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(4, _Internal::call_info(this),
+        _Internal::call_info(this).GetCachedSize(), target, stream);
   }
 
   // .streamer.SystemInfo system_info = 5;
-  if (this->has_system_info()) {
-    target = ::google::protobuf::internal::WireFormatLite::
-      InternalWriteMessageToArray(
-        5, this->_internal_system_info(), deterministic, target);
+  if (this->_internal_has_system_info()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(5, _Internal::system_info(this),
+        _Internal::system_info(this).GetCachedSize(), target, stream);
   }
 
   // .streamer.RecorderInfo recorder_info = 6;
-  if (this->has_recorder_info()) {
-    target = ::google::protobuf::internal::WireFormatLite::
-      InternalWriteMessageToArray(
-        6, this->_internal_recorder_info(), deterministic, target);
+  if (this->_internal_has_recorder_info()) {
+    target = ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::
+      InternalWriteMessage(6, _Internal::recorder_info(this),
+        _Internal::recorder_info(this).GetCachedSize(), target, stream);
   }
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    target = ::google::protobuf::internal::WireFormat::SerializeUnknownFieldsToArray(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()), target);
+  if (PROTOBUF_PREDICT_FALSE(_internal_metadata_.have_unknown_fields())) {
+    target = ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+        _internal_metadata_.unknown_fields<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(::PROTOBUF_NAMESPACE_ID::UnknownFieldSet::default_instance), target, stream);
   }
   // @@protoc_insertion_point(serialize_to_array_end:streamer.SignalInfo)
   return target;
@@ -4735,105 +3933,89 @@ size_t SignalInfo::ByteSizeLong() const {
 // @@protoc_insertion_point(message_byte_size_start:streamer.SignalInfo)
   size_t total_size = 0;
 
-  if ((_internal_metadata_.have_unknown_fields() &&  ::google::protobuf::internal::GetProto3PreserveUnknownsDefault())) {
-    total_size +=
-      ::google::protobuf::internal::WireFormat::ComputeUnknownFieldsSize(
-        (::google::protobuf::internal::GetProto3PreserveUnknownsDefault()   ? _internal_metadata_.unknown_fields()   : _internal_metadata_.default_instance()));
-  }
+  uint32_t cached_has_bits = 0;
+  // Prevent compiler warnings about cached_has_bits being unused
+  (void) cached_has_bits;
+
   // string signaling_type = 2;
-  if (this->signaling_type().size() > 0) {
+  if (!this->_internal_signaling_type().empty()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::StringSize(
-        this->signaling_type());
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::StringSize(
+        this->_internal_signaling_type());
   }
 
   // .streamer.CallInfo call_info = 4;
-  if (this->has_call_info()) {
+  if (this->_internal_has_call_info()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::MessageSize(
-        *call_info_);
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *_impl_.call_info_);
   }
 
   // .streamer.SystemInfo system_info = 5;
-  if (this->has_system_info()) {
+  if (this->_internal_has_system_info()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::MessageSize(
-        *system_info_);
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *_impl_.system_info_);
   }
 
   // .streamer.RecorderInfo recorder_info = 6;
-  if (this->has_recorder_info()) {
+  if (this->_internal_has_recorder_info()) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::MessageSize(
-        *recorder_info_);
+      ::PROTOBUF_NAMESPACE_ID::internal::WireFormatLite::MessageSize(
+        *_impl_.recorder_info_);
   }
 
   // int64 unit_id = 1;
-  if (this->unit_id() != 0) {
-    total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::Int64Size(
-        this->unit_id());
+  if (this->_internal_unit_id() != 0) {
+    total_size += ::_pbi::WireFormatLite::Int64SizePlusOne(this->_internal_unit_id());
   }
 
   // .streamer.SignalInfo.SignalType signal_type = 3;
-  if (this->signal_type() != 0) {
+  if (this->_internal_signal_type() != 0) {
     total_size += 1 +
-      ::google::protobuf::internal::WireFormatLite::EnumSize(this->signal_type());
+      ::_pbi::WireFormatLite::EnumSize(this->_internal_signal_type());
   }
 
-  int cached_size = ::google::protobuf::internal::ToCachedSize(total_size);
-  SetCachedSize(cached_size);
-  return total_size;
+  return MaybeComputeUnknownFieldsSize(total_size, &_impl_._cached_size_);
 }
 
-void SignalInfo::MergeFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_merge_from_start:streamer.SignalInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  const SignalInfo* source =
-      ::google::protobuf::internal::DynamicCastToGenerated<const SignalInfo>(
-          &from);
-  if (source == NULL) {
-  // @@protoc_insertion_point(generalized_merge_from_cast_fail:streamer.SignalInfo)
-    ::google::protobuf::internal::ReflectionOps::Merge(from, this);
-  } else {
-  // @@protoc_insertion_point(generalized_merge_from_cast_success:streamer.SignalInfo)
-    MergeFrom(*source);
-  }
-}
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData SignalInfo::_class_data_ = {
+    ::PROTOBUF_NAMESPACE_ID::Message::CopyWithSourceCheck,
+    SignalInfo::MergeImpl
+};
+const ::PROTOBUF_NAMESPACE_ID::Message::ClassData*SignalInfo::GetClassData() const { return &_class_data_; }
 
-void SignalInfo::MergeFrom(const SignalInfo& from) {
-// @@protoc_insertion_point(class_specific_merge_from_start:streamer.SignalInfo)
-  GOOGLE_DCHECK_NE(&from, this);
-  _internal_metadata_.MergeFrom(from._internal_metadata_);
-  ::google::protobuf::uint32 cached_has_bits = 0;
+
+void SignalInfo::MergeImpl(::PROTOBUF_NAMESPACE_ID::Message& to_msg, const ::PROTOBUF_NAMESPACE_ID::Message& from_msg) {
+  auto* const _this = static_cast<SignalInfo*>(&to_msg);
+  auto& from = static_cast<const SignalInfo&>(from_msg);
+  // @@protoc_insertion_point(class_specific_merge_from_start:streamer.SignalInfo)
+  GOOGLE_DCHECK_NE(&from, _this);
+  uint32_t cached_has_bits = 0;
   (void) cached_has_bits;
 
-  if (from.signaling_type().size() > 0) {
-
-    signaling_type_.AssignWithDefault(&::google::protobuf::internal::GetEmptyStringAlreadyInited(), from.signaling_type_);
+  if (!from._internal_signaling_type().empty()) {
+    _this->_internal_set_signaling_type(from._internal_signaling_type());
   }
-  if (from.has_call_info()) {
-    mutable_call_info()->::streamer::CallInfo::MergeFrom(from.call_info());
+  if (from._internal_has_call_info()) {
+    _this->_internal_mutable_call_info()->::streamer::CallInfo::MergeFrom(
+        from._internal_call_info());
   }
-  if (from.has_system_info()) {
-    mutable_system_info()->::streamer::SystemInfo::MergeFrom(from.system_info());
+  if (from._internal_has_system_info()) {
+    _this->_internal_mutable_system_info()->::streamer::SystemInfo::MergeFrom(
+        from._internal_system_info());
   }
-  if (from.has_recorder_info()) {
-    mutable_recorder_info()->::streamer::RecorderInfo::MergeFrom(from.recorder_info());
+  if (from._internal_has_recorder_info()) {
+    _this->_internal_mutable_recorder_info()->::streamer::RecorderInfo::MergeFrom(
+        from._internal_recorder_info());
   }
-  if (from.unit_id() != 0) {
-    set_unit_id(from.unit_id());
+  if (from._internal_unit_id() != 0) {
+    _this->_internal_set_unit_id(from._internal_unit_id());
   }
-  if (from.signal_type() != 0) {
-    set_signal_type(from.signal_type());
+  if (from._internal_signal_type() != 0) {
+    _this->_internal_set_signal_type(from._internal_signal_type());
   }
-}
-
-void SignalInfo::CopyFrom(const ::google::protobuf::Message& from) {
-// @@protoc_insertion_point(generalized_copy_from_start:streamer.SignalInfo)
-  if (&from == this) return;
-  Clear();
-  MergeFrom(from);
+  _this->_internal_metadata_.MergeFrom<::PROTOBUF_NAMESPACE_ID::UnknownFieldSet>(from._internal_metadata_);
 }
 
 void SignalInfo::CopyFrom(const SignalInfo& from) {
@@ -4847,54 +4029,61 @@ bool SignalInfo::IsInitialized() const {
   return true;
 }
 
-void SignalInfo::Swap(SignalInfo* other) {
-  if (other == this) return;
-  InternalSwap(other);
-}
 void SignalInfo::InternalSwap(SignalInfo* other) {
   using std::swap;
-  signaling_type_.Swap(&other->signaling_type_, &::google::protobuf::internal::GetEmptyStringAlreadyInited(),
-    GetArenaNoVirtual());
-  swap(call_info_, other->call_info_);
-  swap(system_info_, other->system_info_);
-  swap(recorder_info_, other->recorder_info_);
-  swap(unit_id_, other->unit_id_);
-  swap(signal_type_, other->signal_type_);
-  _internal_metadata_.Swap(&other->_internal_metadata_);
+  auto* lhs_arena = GetArenaForAllocation();
+  auto* rhs_arena = other->GetArenaForAllocation();
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  ::PROTOBUF_NAMESPACE_ID::internal::ArenaStringPtr::InternalSwap(
+      &_impl_.signaling_type_, lhs_arena,
+      &other->_impl_.signaling_type_, rhs_arena
+  );
+  ::PROTOBUF_NAMESPACE_ID::internal::memswap<
+      PROTOBUF_FIELD_OFFSET(SignalInfo, _impl_.signal_type_)
+      + sizeof(SignalInfo::_impl_.signal_type_)
+      - PROTOBUF_FIELD_OFFSET(SignalInfo, _impl_.call_info_)>(
+          reinterpret_cast<char*>(&_impl_.call_info_),
+          reinterpret_cast<char*>(&other->_impl_.call_info_));
 }
 
-::google::protobuf::Metadata SignalInfo::GetMetadata() const {
-  protobuf_streamer_2eproto::protobuf_AssignDescriptorsOnce();
-  return ::protobuf_streamer_2eproto::file_level_metadata[kIndexInFileMessages];
+::PROTOBUF_NAMESPACE_ID::Metadata SignalInfo::GetMetadata() const {
+  return ::_pbi::AssignDescriptors(
+      &descriptor_table_streamer_2eproto_getter, &descriptor_table_streamer_2eproto_once,
+      file_level_metadata_streamer_2eproto[6]);
 }
-
 
 // @@protoc_insertion_point(namespace_scope)
 }  // namespace streamer
-namespace google {
-namespace protobuf {
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::AudioSample* Arena::CreateMaybeMessage< ::streamer::AudioSample >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::AudioSample >(arena);
+PROTOBUF_NAMESPACE_OPEN
+template<> PROTOBUF_NOINLINE ::streamer::AudioSample*
+Arena::CreateMaybeMessage< ::streamer::AudioSample >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::AudioSample >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::RecorderInfo* Arena::CreateMaybeMessage< ::streamer::RecorderInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::RecorderInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::RecorderInfo*
+Arena::CreateMaybeMessage< ::streamer::RecorderInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::RecorderInfo >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::SourceInfo* Arena::CreateMaybeMessage< ::streamer::SourceInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::SourceInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::SourceInfo*
+Arena::CreateMaybeMessage< ::streamer::SourceInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::SourceInfo >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::SystemInfo* Arena::CreateMaybeMessage< ::streamer::SystemInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::SystemInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::SystemInfo*
+Arena::CreateMaybeMessage< ::streamer::SystemInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::SystemInfo >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::ConfigInfo* Arena::CreateMaybeMessage< ::streamer::ConfigInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::ConfigInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::ConfigInfo*
+Arena::CreateMaybeMessage< ::streamer::ConfigInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::ConfigInfo >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::CallInfo* Arena::CreateMaybeMessage< ::streamer::CallInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::CallInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::CallInfo*
+Arena::CreateMaybeMessage< ::streamer::CallInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::CallInfo >(arena);
 }
-template<> GOOGLE_PROTOBUF_ATTRIBUTE_NOINLINE ::streamer::SignalInfo* Arena::CreateMaybeMessage< ::streamer::SignalInfo >(Arena* arena) {
-  return Arena::CreateInternal< ::streamer::SignalInfo >(arena);
+template<> PROTOBUF_NOINLINE ::streamer::SignalInfo*
+Arena::CreateMaybeMessage< ::streamer::SignalInfo >(Arena* arena) {
+  return Arena::CreateMessageInternal< ::streamer::SignalInfo >(arena);
 }
-}  // namespace protobuf
-}  // namespace google
+PROTOBUF_NAMESPACE_CLOSE
 
 // @@protoc_insertion_point(global_scope)
+#include <google/protobuf/port_undef.inc>

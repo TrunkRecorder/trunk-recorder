@@ -345,8 +345,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Broadcastify API Key: " << system->get_bcfy_api_key();
         system->set_bcfy_system_id(element.value("broadcastifySystemId", 0));
         BOOST_LOG_TRIVIAL(info) << "Broadcastify Calls System ID: " << system->get_bcfy_system_id();
-        system->set_upload_script(element.value("uploadScript", ""));
-        BOOST_LOG_TRIVIAL(info) << "Upload Script: " << system->get_upload_script();
         system->set_compress_wav(element.value("compressWav", true));
         BOOST_LOG_TRIVIAL(info) << "Compress .wav Files: " << system->get_compress_wav();
         system->set_call_log(element.value("callLog", true));

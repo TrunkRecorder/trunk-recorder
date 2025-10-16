@@ -35,7 +35,6 @@ streamer::SystemInfo* ToSystemInfo(System *system) {
     si->set_system_type(system->get_system_type());
     si->set_system_name(system->get_short_name());
     si->set_audio_archive(system->get_audio_archive());
-    si->set_upload_script(system->get_upload_script());
     si->set_record_unknown(system->get_record_unknown());
     si->set_call_log(system->get_call_log());
     si->set_talkgroups_file(system->get_talkgroups_file());
