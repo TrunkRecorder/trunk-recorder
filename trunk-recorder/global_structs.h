@@ -1,5 +1,6 @@
 #ifndef GLOBAL_STRUCTS_H
 #define GLOBAL_STRUCTS_H
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -11,6 +12,8 @@ struct Transmission {
   long source;
   long start_time;
   long stop_time;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   long sample_count;
   long spike_count;
   long error_count;
@@ -20,7 +23,6 @@ struct Transmission {
 };
 
 struct Config {
-  std::string upload_script;
   std::string upload_server;
   std::string bcfy_calls_server;
   std::string status_server;
@@ -105,6 +107,8 @@ struct Call_Data_t {
   double noise;
   long start_time;
   long stop_time;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   long error_count;
   long spike_count;
   bool encrypted;
@@ -123,11 +127,11 @@ struct Call_Data_t {
 
   int sys_num;
   std::string short_name;
-  std::string upload_script;
   std::string audio_type;
 
   int tdma_slot;
   double length;
+  std::int64_t call_length_ms;
   bool phase2_tdma;
 
   std::vector<Call_Source> transmission_source_list;

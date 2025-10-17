@@ -49,8 +49,6 @@ public:
   static System *make(int sys_id);
   virtual std::string get_short_name() = 0;
   virtual void set_short_name(std::string short_name) = 0;
-  virtual std::string get_upload_script() = 0;
-  virtual void set_upload_script(std::string script) = 0;
   virtual bool get_compress_wav() = 0;
   virtual void set_compress_wav(bool compress) = 0;
   virtual std::string get_api_key() = 0;
