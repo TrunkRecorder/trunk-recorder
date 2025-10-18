@@ -108,6 +108,7 @@ public:
   bool is_squelched();
   double get_pwr();
   std::vector<Transmission> get_transmission_list();
+  std::vector<Transmission> get_transmission_list(int slot);
   State get_state();
   int lastupdate();
   long elapsed();

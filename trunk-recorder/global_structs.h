@@ -9,6 +9,9 @@ const int DB_UNSET = 999;
 
 struct Transmission {
   long source;
+  long talkgroup;
+  unsigned int slot;
+  unsigned int color_code;
   long start_time;
   long stop_time;
   long sample_count;
@@ -90,6 +93,7 @@ enum Recorder_Type { DEBUG,
 
 struct Call_Data_t {
   long talkgroup;
+  long color_code;
   std::vector<unsigned long> patched_talkgroups;
   std::string talkgroup_tag;
   std::string talkgroup_alpha_tag;

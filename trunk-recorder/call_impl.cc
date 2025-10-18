@@ -153,7 +153,7 @@ void Call_impl::conclude_call() {
     }
     freq_error = this->get_recorder()->get_freq_error();
     this->get_recorder()->stop();
-    transmission_list = this->get_recorder()->get_transmission_list();
+
     if (this->get_sigmf_recording() == true) {
       this->get_sigmf_recorder()->stop();
     }
@@ -162,10 +162,23 @@ void Call_impl::conclude_call() {
       this->get_debug_recorder()->stop();
     }
 
-    Call_Concluder::conclude_call(this, sys, config);
+    if (this->sys->get_system_type() == "conventionalDMR") {
+      dmr_recorder *recorder = dynamic_cast<dmr_recorder *>(this->get_recorder());
+      // Conventional DMR is recorded on two slots, so we need to conclude the call for each slot
+      transmission_list = recorder->get_transmission_list(0);
+      tdma_slot = 0;
+      Call_Concluder::conclude_call(this, sys, config);
+      transmission_list = recorder->get_transmission_list(1);
+      tdma_slot = 1;
+      Call_Concluder::conclude_call(this, sys, config);
+    } else {
+      // All other system types do not have multiple recorders
+      transmission_list = this->get_recorder()->get_transmission_list();
+      Call_Concluder::conclude_call(this, sys, config);
+   }
+
   }
 }
-
 void Call_impl::set_sigmf_recorder(Recorder *r) {
   sigmf_recorder = r;
 }

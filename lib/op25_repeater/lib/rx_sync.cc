@@ -474,6 +474,21 @@ int rx_sync::get_src_id(int slot) {
 	return -1;
 }
 
+int rx_sync::get_dst_id(int slot) {
+	if ((slot == 0) || (slot == 1)) {
+		return dmr.get_dst_id(slot);
+	}
+	fprintf(stderr, "Error, Slot given is not 0 or 1\n");
+	return -1;
+}
+
+int rx_sync::get_cc(int slot) {
+	if ((slot == 0) || (slot == 1)) {
+		return dmr.get_cc(slot);
+	}
+	fprintf(stderr, "Error, Slot given is not 0 or 1\n");
+	return -1;
+}
 
 void rx_sync::rx_sym(const uint8_t sym)
 {

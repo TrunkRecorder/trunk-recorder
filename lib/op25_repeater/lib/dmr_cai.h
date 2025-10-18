@@ -41,6 +41,8 @@ public:
 	inline int chan() { return d_chan; };
 	inline void set_slot_mask(int mask);
 	int get_src_id(int slot);
+	int get_dst_id(int slot);
+	int get_cc(int slot);
 	std::pair<bool,long> get_terminated(int slot);
 
 private:

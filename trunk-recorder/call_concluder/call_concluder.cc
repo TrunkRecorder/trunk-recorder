@@ -81,8 +81,10 @@ int create_call_json(Call_Data_t& call_info) {
           {"talkgroup_description", call_info.talkgroup_description},
           {"talkgroup_group_tag", call_info.talkgroup_tag},
           {"talkgroup_group", call_info.talkgroup_group},
+          {"color_code", call_info.color_code},
           {"audio_type", call_info.audio_type},
-          {"short_name", call_info.short_name}};
+          {"short_name", call_info.short_name}
+        };
   // Add any patched talkgroups
   if (call_info.patched_talkgroups.size() > 1) {
     BOOST_FOREACH (auto &TGID, call_info.patched_talkgroups) {
@@ -341,19 +343,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info.talkgroup_display = call->get_talkgroup_display();
   call_info.patched_talkgroups = sys->get_talkgroup_patch(call_info.talkgroup);
   call_info.min_transmissions_removed = 0;
-
-  Talkgroup *tg = sys->find_talkgroup(call->get_talkgroup());
-  if (tg != NULL) {
-    call_info.talkgroup_tag = tg->tag;
-    call_info.talkgroup_alpha_tag = tg->alpha_tag;
-    call_info.talkgroup_description = tg->description;
-    call_info.talkgroup_group = tg->group;
-  } else {
-    call_info.talkgroup_tag = "";
-    call_info.talkgroup_alpha_tag = "";
-    call_info.talkgroup_description = "";
-    call_info.talkgroup_group = "";
-  }
+  call_info.color_code = 0;
 
   if (call->get_is_analog()) {
     call_info.audio_type = "analog";
@@ -408,6 +398,19 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
       call_info.stop_time = t.stop_time;
     }
 
+    if (call_info.color_code == -1 && t.color_code != -1) {
+      call_info.color_code = t.color_code;
+      if (call_info.color_code != t.color_code) {
+        BOOST_LOG_TRIVIAL(warning) << loghdr << "Call has multiple Color Codes - previous Transmission Color Code: " << call_info.color_code << " current Transmission Color Code: " << t.color_code;
+      }
+    }
+
+    if (call_info.talkgroup != t.talkgroup) {
+      BOOST_LOG_TRIVIAL(warning) << loghdr << "Transmission has a different Talkgroup than Call - Call Talkgroup: " << call_info.talkgroup << " Transmission Talkgroup: " << t.talkgroup;
+      call_info.talkgroup = t.talkgroup;
+    }
+
+
     Call_Source call_source = {t.source, t.start_time, total_length, false, "", tag};
     Call_Error call_error = {t.start_time, total_length, t.length, t.error_count, t.spike_count};
     call_info.error_count = call_info.error_count + t.error_count;
@@ -418,6 +421,23 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     total_length = total_length + t.length;
     it++;
   }
+
+
+
+  Talkgroup *tg = sys->find_talkgroup(call_info.talkgroup);
+  if (tg != NULL) {
+    call_info.talkgroup_tag = tg->tag;
+    call_info.talkgroup_alpha_tag = tg->alpha_tag;
+    call_info.talkgroup_description = tg->description;
+    call_info.talkgroup_group = tg->group;
+  } else {
+    call_info.talkgroup_tag = "";
+    call_info.talkgroup_alpha_tag = "";
+    call_info.talkgroup_description = "";
+    call_info.talkgroup_group = "";
+  }
+
+
 
   call_info.length = total_length;
 

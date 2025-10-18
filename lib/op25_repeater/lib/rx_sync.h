@@ -124,6 +124,8 @@ public:
 	void set_nac(int nac);
 	void set_debug(int debug);
 	int get_src_id(int slot);
+	int get_dst_id(int slot);
+	int get_cc(int slot);
 	std::pair<bool,long> get_terminated(int slot);
 	rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue, std::array<std::deque<int16_t>, 2> &output_queue);
 	~rx_sync();

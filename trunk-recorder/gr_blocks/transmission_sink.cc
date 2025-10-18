@@ -117,22 +117,31 @@ bool transmission_sink::start_recording(Call *call) {
   d_current_call = call;
   d_current_call_num = call->get_call_num();
   d_current_call_freq = call->get_freq();
-  d_current_call_talkgroup = call->get_talkgroup();
-  d_current_call_talkgroup_display = call->get_talkgroup_display();
-  if (call->get_system_type() == "smartnet") {
-    d_current_call_talkgroup_encoded = (call->get_talkgroup() >> 4);
+  d_conventional = call->is_conventional();
+  if (d_conventional && ( (call->get_system_type() == "conventionalP25") || (call->get_system_type() == "conventionalDMR") )) {
+    BOOST_LOG_TRIVIAL(debug) << "transmission_sink::start_recording - Conventional flag is set for a digital system type - dynamically assigning talkgroups";
+    d_current_call_talkgroup = 0;
+    d_current_call_talkgroup_display = "N/A";
+    d_current_call_talkgroup_encoded = 0;
   } else {
-    d_current_call_talkgroup_encoded = call->get_talkgroup();
+    d_current_call_talkgroup = call->get_talkgroup();
+    d_current_call_talkgroup_display = call->get_talkgroup_display();
+    if (call->get_system_type() == "smartnet") {
+      d_current_call_talkgroup_encoded = (call->get_talkgroup() >> 4);
+    } else {
+      d_current_call_talkgroup_encoded = call->get_talkgroup();
+    }
   }
   d_current_call_short_name = call->get_short_name();
   d_current_call_temp_dir = call->get_temp_dir();
   d_prior_transmission_length = 0;
   d_error_count = 0;
   d_spike_count = 0;
+  d_current_color_code = -1;
   d_last_write_time = std::chrono::steady_clock::now(); // we want to make sure the call doesn't get cleaned up before data starts coming in.
 
   this->clear_transmission_list();
-  d_conventional = call->is_conventional();
+
 
   curr_src_id = d_current_call->get_current_source_id();
   d_sample_count = 0;
@@ -236,9 +245,14 @@ void transmission_sink::end_transmission() {
     transmission.sample_count = d_sample_count;
     transmission.spike_count = d_spike_count;
     transmission.error_count = d_error_count;
+    transmission.slot = d_slot;
+    transmission.color_code = d_current_color_code;
     transmission.length = length_in_seconds(); // length in seconds
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
     strcpy(transmission.filename, current_filename); // Copy the filename
+    transmission.talkgroup = d_current_call_talkgroup;
+
+    BOOST_LOG_TRIVIAL(info) << "Adding transmission: " << transmission.filename << " Slot: " << transmission.slot << " Talkgroup: " << transmission.talkgroup << " Length: " << transmission.length << " Samples: " << d_sample_count;
     this->add_transmission(transmission);
 
     // Reset the recorder to be ready to record the next Transmission
@@ -247,6 +261,8 @@ void transmission_sink::end_transmission() {
     d_error_count = 0;
     d_spike_count = 0;
     curr_src_id = -1;
+    d_current_color_code = -1;
+
  
   } else {
     BOOST_LOG_TRIVIAL(error) << "Trying to end a Transmission, but the sample_count is 0" << std::endl;
@@ -322,7 +338,8 @@ int transmission_sink::work(int noutput_items, gr_vector_const_void_star &input_
 
   std::vector<gr::tag_t> tags;
   pmt::pmt_t src_id_key(pmt::intern("src_id")); // This is the src id from Phase 1, Phase 2 and DMR
-  pmt::pmt_t grp_id_key(pmt::intern("grp_id")); // This is the src id from Phase 1, Phase 2 and DMR
+  pmt::pmt_t grp_id_key(pmt::intern("grp_id")); // This is the talkgroup id from Phase 1, Phase 2 and DMR
+  pmt::pmt_t cc_key(pmt::intern("cc"));         // This is the channel color code from DMR
   pmt::pmt_t terminate_key(pmt::intern("terminate"));
   pmt::pmt_t spike_count_key(pmt::intern("spike_count"));
   pmt::pmt_t error_count_key(pmt::intern("error_count"));
@@ -348,8 +365,29 @@ int transmission_sink::work(int noutput_items, gr_vector_const_void_star &input_
             }
             state = IGNORE;
           } else {
-            BOOST_LOG_TRIVIAL(debug) << loghdr << "Group Mismatch - Recorder Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming samples: " << noutput_items;
+            if (d_current_call_talkgroup != grp_id) {
+              if (d_current_call_talkgroup != 0) {
+                BOOST_LOG_TRIVIAL(info) << loghdr << "Conventional Call - TALKGROUP MISMATCH - Talkgroup already set - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
+                // this is where we would conclude the current call and start a new one.
+              }
+              BOOST_LOG_TRIVIAL(info) << loghdr << "Conventional Call - TALKGROUP set via Control Channel - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
+              d_current_call_talkgroup = grp_id;
+              d_current_call_talkgroup_encoded = grp_id;
+              d_current_call_talkgroup_display = std::to_string(grp_id);
+            }
           }
+        }
+      }
+    }
+    if (pmt::eq(cc_key, tags[i].key)) {
+      long cc = pmt::to_long(tags[i].value);
+
+      if ((state == RECORDING) || (state == IDLE)) {
+        if (cc != d_current_color_code) {
+          if (d_current_call->get_system_type() == "conventionalDMR") {
+            d_current_color_code = cc;
+            BOOST_LOG_TRIVIAL(info) << loghdr << "DMR Color Code set to: " << d_current_color_code << " Recorder state: " << format_state(state);
+          } 
         }
       }
     }

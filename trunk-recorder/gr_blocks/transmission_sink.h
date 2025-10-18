@@ -56,6 +56,7 @@ private:
   long d_spike_count;
   long d_error_count;
   long curr_src_id;
+  unsigned int d_current_color_code;
   char current_filename[255];
   Call *d_current_call;
   long d_current_call_num;

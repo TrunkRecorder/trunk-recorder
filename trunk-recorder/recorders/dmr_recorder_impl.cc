@@ -230,6 +230,17 @@ std::vector<Transmission> dmr_recorder_impl::get_transmission_list() {
   return return_list;
 }
 
+std::vector<Transmission> dmr_recorder_impl::get_transmission_list(int slot) {
+  std::vector<Transmission> return_list;
+  if (slot == 0) {
+    return_list = wav_sink_slot0->get_transmission_list();
+  } else {
+    return_list = wav_sink_slot1->get_transmission_list();
+  }
+  BOOST_LOG_TRIVIAL(info) << "Slot " << slot << ": " << return_list.size();
+  return return_list;
+}
+
 void dmr_recorder_impl::stop() {
   if (state == ACTIVE) {
 
