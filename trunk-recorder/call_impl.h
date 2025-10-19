@@ -68,6 +68,7 @@ public:
   void set_is_analog(bool a);
   const char *get_xor_mask();
   virtual time_t get_start_time() { return start_time; }
+  virtual std::int64_t get_start_time_ms();
   bool is_conventional() { return false; }
   void set_encrypted(bool m);
   bool get_encrypted();
@@ -114,6 +115,8 @@ protected:
   int idle_count;
   time_t stop_time;
   time_t start_time;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   bool debug_recording;
   bool sigmf_recording;
   bool was_update;

@@ -33,6 +33,7 @@
 #include <gnuradio/thread/thread.h>
 #include <stdexcept>
 #include <stdio.h>
+#include <chrono>
 
 // win32 (mingw/msvc) specific
 #ifdef HAVE_IO_H
@@ -78,24 +79,56 @@ transmission_sink::transmission_sink(int n_channels, unsigned int sample_rate, i
 }
 
 void transmission_sink::create_filename() {
-  time_t work_start_time = d_start_time;
-  std::stringstream temp_path_stream;
-  // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
+  using std::ostringstream;
+  using std::setw;
+  using std::setfill;
 
-  temp_path_stream << d_current_call_temp_dir << "/" << d_current_call_short_name;
-  std::string temp_path_string = temp_path_stream.str();
-  boost::filesystem::create_directories(temp_path_string);
+  // <temp>/<short_name>
+  boost::filesystem::path dir =
+      boost::filesystem::path(d_current_call_temp_dir) / d_current_call_short_name;
 
-  int nchars;
-
-  if (d_slot == -1) {
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq);
-  } else {
-    // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.%d.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq, d_slot);
+  boost::system::error_code ec;
+  boost::filesystem::create_directories(dir, ec);
+  if (ec) {
+    BOOST_LOG_TRIVIAL(error) << "create_directories failed for " << dir.string()
+                             << " : " << ec.message();
   }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
+
+  // Seconds.milliseconds from d_start_time_ms
+  const long long start_ms = static_cast<long long>(d_start_time_ms);
+  const long long sec     = start_ms / 1000;
+  const int       milli   = static_cast<int>(start_ms % 1000);
+
+  // Normalize frequency to integer
+  const long long freq_i  = static_cast<long long>(std::llround(d_current_call_freq));
+
+  auto make_stem = [&](int suffix) {
+    ostringstream ts;
+    ts << sec << '.' << setw(3) << setfill('0') << milli;   // e.g. 1718145678.042
+
+    ostringstream oss;
+    oss << d_current_call_talkgroup << "-" << ts.str() << "_" << freq_i;
+    if (d_slot != -1) oss << "." << d_slot;
+    if (suffix > 0)    oss << "-" << suffix;                // collision suffix
+    oss << ".wav";
+    return oss.str();
+  };
+
+  boost::filesystem::path candidate = dir / make_stem(0);
+  for (int i = 1; boost::filesystem::exists(candidate) && i <= 99; ++i) {
+    candidate = dir / make_stem(i);
+  }
+
+  const std::string cand_str = candidate.string();
+  const size_t cap = sizeof(current_filename);
+  if (cand_str.size() >= cap) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Call: Path longer than buffer (" << cap
+        << ") — truncating filename: " << cand_str;
+    std::snprintf(current_filename, cap, "%.*s",
+                  static_cast<int>(cap - 1), cand_str.c_str());
+  } else {
+    std::snprintf(current_filename, cap, "%s", cand_str.c_str());
   }
 }
 
@@ -228,15 +261,27 @@ void transmission_sink::end_transmission() {
     } else {
       BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
-    // if an Transmission has ended, send it to Call.
+
+    const std::int64_t dur_ms = (d_nchans > 0)
+        ? (std::int64_t)std::llround(1000.0 *
+           (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans))
+        : 0;
+
+    // Assign canonical stop time from sample count
+    d_stop_time_ms = d_start_time_ms + dur_ms;
+    d_stop_time    = static_cast<time_t>(d_stop_time_ms / 1000);
+
+    // Build Transmission using the canonical fields
     Transmission transmission;
-    transmission.source = curr_src_id;      // Source ID for the Call
-    transmission.start_time = d_start_time; // Start time of the Call
-    transmission.stop_time = d_stop_time;   // when the Call eneded
-    transmission.sample_count = d_sample_count;
-    transmission.spike_count = d_spike_count;
-    transmission.error_count = d_error_count;
-    transmission.length = length_in_seconds(); // length in seconds
+    transmission.source        = curr_src_id;
+    transmission.start_time    = d_start_time;
+    transmission.stop_time     = d_stop_time;
+    transmission.start_time_ms = d_start_time_ms;
+    transmission.stop_time_ms  = d_stop_time_ms;
+    transmission.sample_count  = d_sample_count;
+    transmission.spike_count   = d_spike_count;
+    transmission.error_count   = d_error_count;
+    transmission.length        = length_in_seconds();
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
     strcpy(transmission.filename, current_filename); // Copy the filename
     this->add_transmission(transmission);
@@ -499,12 +544,10 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
       close_wav(false);
     }
 
-    time_t current_time = time(NULL);
-    if (current_time == d_start_time) {
-      d_start_time = current_time + 1;
-    } else {
-      d_start_time = current_time;
-    }
+    auto now_sys = std::chrono::system_clock::now();
+    d_start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now_sys.time_since_epoch()).count();
+    d_start_time = static_cast<time_t>(d_start_time_ms / 1000);
 
     // create a new filename, based on the current time and source.
     create_filename();
@@ -548,7 +591,6 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
     }
   }
 
-  d_stop_time = time(NULL);
   d_last_write_time = std::chrono::steady_clock::now();
 
   if (nwritten < noutput_items) {
@@ -587,7 +629,7 @@ double transmission_sink::total_length_in_seconds() {
 }
 
 double transmission_sink::length_in_seconds() {
-  return (double)d_sample_count / (double)d_sample_rate;
+  return d_nchans > 0 ? (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans) : 0.0;
 }
 
 void transmission_sink::do_update() {}

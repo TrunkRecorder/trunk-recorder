@@ -80,11 +80,13 @@ message SourceInfo {
 }
 
 message SystemInfo {
+    reserved 5;
+    reserved "upload_script";
+
     int32 system_num = 1;
     string system_type = 2;
     string system_name = 3;
     bool audio_archive = 4;
-    string upload_script = 5;
     bool record_unknown = 6;
     bool call_log = 7;
     string talkgroups_file = 8;

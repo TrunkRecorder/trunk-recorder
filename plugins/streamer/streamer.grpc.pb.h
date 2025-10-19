@@ -7,23 +7,23 @@
 #include "streamer.pb.h"
 
 #include <functional>
-#include <grpcpp/impl/codegen/async_generic_service.h>
-#include <grpcpp/impl/codegen/async_stream.h>
-#include <grpcpp/impl/codegen/async_unary_call.h>
-#include <grpcpp/impl/codegen/method_handler_impl.h>
+#include <grpcpp/generic/async_generic_service.h>
+#include <grpcpp/support/async_stream.h>
+#include <grpcpp/support/async_unary_call.h>
+#include <grpcpp/support/client_callback.h>
+#include <grpcpp/client_context.h>
+#include <grpcpp/completion_queue.h>
+#include <grpcpp/support/message_allocator.h>
+#include <grpcpp/support/method_handler.h>
 #include <grpcpp/impl/codegen/proto_utils.h>
-#include <grpcpp/impl/codegen/rpc_method.h>
-#include <grpcpp/impl/codegen/service_type.h>
+#include <grpcpp/impl/rpc_method.h>
+#include <grpcpp/support/server_callback.h>
+#include <grpcpp/impl/codegen/server_callback_handlers.h>
+#include <grpcpp/server_context.h>
+#include <grpcpp/impl/service_type.h>
 #include <grpcpp/impl/codegen/status.h>
-#include <grpcpp/impl/codegen/stub_options.h>
-#include <grpcpp/impl/codegen/sync_stream.h>
-
-namespace grpc {
-class CompletionQueue;
-class Channel;
-class ServerCompletionQueue;
-class ServerContext;
-}  // namespace grpc
+#include <grpcpp/support/stub_options.h>
+#include <grpcpp/support/sync_stream.h>
 
 namespace streamer {
 
@@ -95,18 +95,28 @@ class TrunkRecorderStreamer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>> PrepareAsyncSetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReaderInterface< ::google::protobuf::Empty>>(PrepareAsyncSetupConfigRaw(context, request, cq));
     }
-    class experimental_async_interface {
+    class async_interface {
      public:
-      virtual ~experimental_async_interface() {}
+      virtual ~async_interface() {}
+      virtual void SendStream(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::ClientWriteReactor< ::streamer::AudioSample>* reactor) = 0;
+      virtual void SendSignal(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::ClientWriteReactor< ::streamer::SignalInfo>* reactor) = 0;
       virtual void CallStarted(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void CallStarted(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void CallEnded(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void CallEnded(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void SetupRecorder(::grpc::ClientContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SetupRecorder(::grpc::ClientContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void SetupSystem(::grpc::ClientContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SetupSystem(::grpc::ClientContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void SetupSource(::grpc::ClientContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SetupSource(::grpc::ClientContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
       virtual void SetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) = 0;
+      virtual void SetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) = 0;
     };
-    virtual class experimental_async_interface* experimental_async() { return nullptr; }
-  private:
+    typedef class async_interface experimental_async_interface;
+    virtual class async_interface* async() { return nullptr; }
+    class async_interface* experimental_async() { return async(); }
+   private:
     virtual ::grpc::ClientWriterInterface< ::streamer::AudioSample>* SendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response) = 0;
     virtual ::grpc::ClientAsyncWriterInterface< ::streamer::AudioSample>* AsyncSendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::CompletionQueue* cq, void* tag) = 0;
     virtual ::grpc::ClientAsyncWriterInterface< ::streamer::AudioSample>* PrepareAsyncSendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::CompletionQueue* cq) = 0;
@@ -128,7 +138,7 @@ class TrunkRecorderStreamer final {
   };
   class Stub final : public StubInterface {
    public:
-    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel);
+    Stub(const std::shared_ptr< ::grpc::ChannelInterface>& channel, const ::grpc::StubOptions& options = ::grpc::StubOptions());
     std::unique_ptr< ::grpc::ClientWriter< ::streamer::AudioSample>> SendStream(::grpc::ClientContext* context, ::google::protobuf::Empty* response) {
       return std::unique_ptr< ::grpc::ClientWriter< ::streamer::AudioSample>>(SendStreamRaw(context, response));
     }
@@ -189,26 +199,34 @@ class TrunkRecorderStreamer final {
     std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>> PrepareAsyncSetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo& request, ::grpc::CompletionQueue* cq) {
       return std::unique_ptr< ::grpc::ClientAsyncResponseReader< ::google::protobuf::Empty>>(PrepareAsyncSetupConfigRaw(context, request, cq));
     }
-    class experimental_async final :
-      public StubInterface::experimental_async_interface {
+    class async final :
+      public StubInterface::async_interface {
      public:
+      void SendStream(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::ClientWriteReactor< ::streamer::AudioSample>* reactor) override;
+      void SendSignal(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::ClientWriteReactor< ::streamer::SignalInfo>* reactor) override;
       void CallStarted(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void CallStarted(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void CallEnded(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void CallEnded(::grpc::ClientContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void SetupRecorder(::grpc::ClientContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void SetupRecorder(::grpc::ClientContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void SetupSystem(::grpc::ClientContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void SetupSystem(::grpc::ClientContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void SetupSource(::grpc::ClientContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void SetupSource(::grpc::ClientContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
       void SetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response, std::function<void(::grpc::Status)>) override;
+      void SetupConfig(::grpc::ClientContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response, ::grpc::ClientUnaryReactor* reactor) override;
      private:
       friend class Stub;
-      explicit experimental_async(Stub* stub): stub_(stub) { }
+      explicit async(Stub* stub): stub_(stub) { }
       Stub* stub() { return stub_; }
       Stub* stub_;
     };
-    class experimental_async_interface* experimental_async() override { return &async_stub_; }
+    class async* async() override { return &async_stub_; }
 
    private:
     std::shared_ptr< ::grpc::ChannelInterface> channel_;
-    class experimental_async async_stub_{this};
+    class async async_stub_{this};
     ::grpc::ClientWriter< ::streamer::AudioSample>* SendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response) override;
     ::grpc::ClientAsyncWriter< ::streamer::AudioSample>* AsyncSendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::CompletionQueue* cq, void* tag) override;
     ::grpc::ClientAsyncWriter< ::streamer::AudioSample>* PrepareAsyncSendStreamRaw(::grpc::ClientContext* context, ::google::protobuf::Empty* response, ::grpc::CompletionQueue* cq) override;
@@ -254,7 +272,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SendStream : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SendStream() {
       ::grpc::Service::MarkMethodAsync(0);
@@ -263,7 +281,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendStream(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::AudioSample>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendStream(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::AudioSample>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -274,7 +292,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SendSignal : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SendSignal() {
       ::grpc::Service::MarkMethodAsync(1);
@@ -283,7 +301,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendSignal(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::SignalInfo>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendSignal(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::SignalInfo>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -294,7 +312,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_CallStarted : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_CallStarted() {
       ::grpc::Service::MarkMethodAsync(2);
@@ -303,7 +321,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallStarted(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -314,7 +332,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_CallEnded : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_CallEnded() {
       ::grpc::Service::MarkMethodAsync(3);
@@ -323,7 +341,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallEnded(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -334,7 +352,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SetupRecorder : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SetupRecorder() {
       ::grpc::Service::MarkMethodAsync(4);
@@ -343,7 +361,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupRecorder(::grpc::ServerContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -354,7 +372,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SetupSystem : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SetupSystem() {
       ::grpc::Service::MarkMethodAsync(5);
@@ -363,7 +381,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSystem(::grpc::ServerContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -374,7 +392,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SetupSource : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SetupSource() {
       ::grpc::Service::MarkMethodAsync(6);
@@ -383,7 +401,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSource(::grpc::ServerContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -394,7 +412,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithAsyncMethod_SetupConfig : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithAsyncMethod_SetupConfig() {
       ::grpc::Service::MarkMethodAsync(7);
@@ -403,7 +421,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupConfig(::grpc::ServerContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -413,9 +431,217 @@ class TrunkRecorderStreamer final {
   };
   typedef WithAsyncMethod_SendStream<WithAsyncMethod_SendSignal<WithAsyncMethod_CallStarted<WithAsyncMethod_CallEnded<WithAsyncMethod_SetupRecorder<WithAsyncMethod_SetupSystem<WithAsyncMethod_SetupSource<WithAsyncMethod_SetupConfig<Service > > > > > > > > AsyncService;
   template <class BaseClass>
+  class WithCallbackMethod_SendStream : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SendStream() {
+      ::grpc::Service::MarkMethodCallback(0,
+          new ::grpc::internal::CallbackClientStreamingHandler< ::streamer::AudioSample, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, ::google::protobuf::Empty* response) { return this->SendStream(context, response); }));
+    }
+    ~WithCallbackMethod_SendStream() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendStream(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::AudioSample>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerReadReactor< ::streamer::AudioSample>* SendStream(
+      ::grpc::CallbackServerContext* /*context*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SendSignal : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SendSignal() {
+      ::grpc::Service::MarkMethodCallback(1,
+          new ::grpc::internal::CallbackClientStreamingHandler< ::streamer::SignalInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, ::google::protobuf::Empty* response) { return this->SendSignal(context, response); }));
+    }
+    ~WithCallbackMethod_SendSignal() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendSignal(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::SignalInfo>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerReadReactor< ::streamer::SignalInfo>* SendSignal(
+      ::grpc::CallbackServerContext* /*context*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_CallStarted : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_CallStarted() {
+      ::grpc::Service::MarkMethodCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) { return this->CallStarted(context, request, response); }));}
+    void SetMessageAllocatorFor_CallStarted(
+        ::grpc::MessageAllocator< ::streamer::CallInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(2);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_CallStarted() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CallStarted(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_CallEnded : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_CallEnded() {
+      ::grpc::Service::MarkMethodCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) { return this->CallEnded(context, request, response); }));}
+    void SetMessageAllocatorFor_CallEnded(
+        ::grpc::MessageAllocator< ::streamer::CallInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(3);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_CallEnded() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CallEnded(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SetupRecorder : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SetupRecorder() {
+      ::grpc::Service::MarkMethodCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::RecorderInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response) { return this->SetupRecorder(context, request, response); }));}
+    void SetMessageAllocatorFor_SetupRecorder(
+        ::grpc::MessageAllocator< ::streamer::RecorderInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(4);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::RecorderInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SetupRecorder() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupRecorder(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SetupSystem : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SetupSystem() {
+      ::grpc::Service::MarkMethodCallback(5,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::SystemInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response) { return this->SetupSystem(context, request, response); }));}
+    void SetMessageAllocatorFor_SetupSystem(
+        ::grpc::MessageAllocator< ::streamer::SystemInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(5);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::SystemInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SetupSystem() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupSystem(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SetupSource : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SetupSource() {
+      ::grpc::Service::MarkMethodCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::SourceInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response) { return this->SetupSource(context, request, response); }));}
+    void SetMessageAllocatorFor_SetupSource(
+        ::grpc::MessageAllocator< ::streamer::SourceInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(6);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::SourceInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SetupSource() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupSource(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithCallbackMethod_SetupConfig : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithCallbackMethod_SetupConfig() {
+      ::grpc::Service::MarkMethodCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::streamer::ConfigInfo, ::google::protobuf::Empty>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response) { return this->SetupConfig(context, request, response); }));}
+    void SetMessageAllocatorFor_SetupConfig(
+        ::grpc::MessageAllocator< ::streamer::ConfigInfo, ::google::protobuf::Empty>* allocator) {
+      ::grpc::internal::MethodHandler* const handler = ::grpc::Service::GetHandler(7);
+      static_cast<::grpc::internal::CallbackUnaryHandler< ::streamer::ConfigInfo, ::google::protobuf::Empty>*>(handler)
+              ->SetMessageAllocator(allocator);
+    }
+    ~WithCallbackMethod_SetupConfig() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupConfig(
+      ::grpc::CallbackServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/)  { return nullptr; }
+  };
+  typedef WithCallbackMethod_SendStream<WithCallbackMethod_SendSignal<WithCallbackMethod_CallStarted<WithCallbackMethod_CallEnded<WithCallbackMethod_SetupRecorder<WithCallbackMethod_SetupSystem<WithCallbackMethod_SetupSource<WithCallbackMethod_SetupConfig<Service > > > > > > > > CallbackService;
+  typedef CallbackService ExperimentalCallbackService;
+  template <class BaseClass>
   class WithGenericMethod_SendStream : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SendStream() {
       ::grpc::Service::MarkMethodGeneric(0);
@@ -424,7 +650,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendStream(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::AudioSample>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendStream(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::AudioSample>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -432,7 +658,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_SendSignal : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SendSignal() {
       ::grpc::Service::MarkMethodGeneric(1);
@@ -441,7 +667,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendSignal(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::SignalInfo>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendSignal(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::SignalInfo>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -449,7 +675,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_CallStarted : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_CallStarted() {
       ::grpc::Service::MarkMethodGeneric(2);
@@ -458,7 +684,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallStarted(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -466,7 +692,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_CallEnded : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_CallEnded() {
       ::grpc::Service::MarkMethodGeneric(3);
@@ -475,7 +701,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallEnded(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -483,7 +709,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_SetupRecorder : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SetupRecorder() {
       ::grpc::Service::MarkMethodGeneric(4);
@@ -492,7 +718,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupRecorder(::grpc::ServerContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -500,7 +726,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_SetupSystem : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SetupSystem() {
       ::grpc::Service::MarkMethodGeneric(5);
@@ -509,7 +735,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSystem(::grpc::ServerContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -517,7 +743,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_SetupSource : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SetupSource() {
       ::grpc::Service::MarkMethodGeneric(6);
@@ -526,7 +752,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSource(::grpc::ServerContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -534,7 +760,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithGenericMethod_SetupConfig : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithGenericMethod_SetupConfig() {
       ::grpc::Service::MarkMethodGeneric(7);
@@ -543,7 +769,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupConfig(::grpc::ServerContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -551,7 +777,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SendStream : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SendStream() {
       ::grpc::Service::MarkMethodRaw(0);
@@ -560,7 +786,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendStream(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::AudioSample>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendStream(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::AudioSample>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -571,7 +797,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SendSignal : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SendSignal() {
       ::grpc::Service::MarkMethodRaw(1);
@@ -580,7 +806,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SendSignal(::grpc::ServerContext* context, ::grpc::ServerReader< ::streamer::SignalInfo>* reader, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SendSignal(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::SignalInfo>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -591,7 +817,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_CallStarted : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_CallStarted() {
       ::grpc::Service::MarkMethodRaw(2);
@@ -600,7 +826,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallStarted(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -611,7 +837,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_CallEnded : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_CallEnded() {
       ::grpc::Service::MarkMethodRaw(3);
@@ -620,7 +846,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status CallEnded(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -631,7 +857,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SetupRecorder : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SetupRecorder() {
       ::grpc::Service::MarkMethodRaw(4);
@@ -640,7 +866,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupRecorder(::grpc::ServerContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -651,7 +877,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SetupSystem : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SetupSystem() {
       ::grpc::Service::MarkMethodRaw(5);
@@ -660,7 +886,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSystem(::grpc::ServerContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -671,7 +897,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SetupSource : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SetupSource() {
       ::grpc::Service::MarkMethodRaw(6);
@@ -680,7 +906,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupSource(::grpc::ServerContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -691,7 +917,7 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithRawMethod_SetupConfig : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithRawMethod_SetupConfig() {
       ::grpc::Service::MarkMethodRaw(7);
@@ -700,7 +926,7 @@ class TrunkRecorderStreamer final {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable synchronous version of this method
-    ::grpc::Status SetupConfig(::grpc::ServerContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -709,19 +935,202 @@ class TrunkRecorderStreamer final {
     }
   };
   template <class BaseClass>
+  class WithRawCallbackMethod_SendStream : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SendStream() {
+      ::grpc::Service::MarkMethodRawCallback(0,
+          new ::grpc::internal::CallbackClientStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, ::grpc::ByteBuffer* response) { return this->SendStream(context, response); }));
+    }
+    ~WithRawCallbackMethod_SendStream() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendStream(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::AudioSample>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerReadReactor< ::grpc::ByteBuffer>* SendStream(
+      ::grpc::CallbackServerContext* /*context*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SendSignal : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SendSignal() {
+      ::grpc::Service::MarkMethodRawCallback(1,
+          new ::grpc::internal::CallbackClientStreamingHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, ::grpc::ByteBuffer* response) { return this->SendSignal(context, response); }));
+    }
+    ~WithRawCallbackMethod_SendSignal() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SendSignal(::grpc::ServerContext* /*context*/, ::grpc::ServerReader< ::streamer::SignalInfo>* /*reader*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerReadReactor< ::grpc::ByteBuffer>* SendSignal(
+      ::grpc::CallbackServerContext* /*context*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_CallStarted : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_CallStarted() {
+      ::grpc::Service::MarkMethodRawCallback(2,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->CallStarted(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_CallStarted() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CallStarted(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_CallEnded : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_CallEnded() {
+      ::grpc::Service::MarkMethodRawCallback(3,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->CallEnded(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_CallEnded() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* CallEnded(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SetupRecorder : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SetupRecorder() {
+      ::grpc::Service::MarkMethodRawCallback(4,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetupRecorder(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SetupRecorder() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupRecorder(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SetupSystem : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SetupSystem() {
+      ::grpc::Service::MarkMethodRawCallback(5,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetupSystem(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SetupSystem() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupSystem(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SetupSource : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SetupSource() {
+      ::grpc::Service::MarkMethodRawCallback(6,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetupSource(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SetupSource() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupSource(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
+  class WithRawCallbackMethod_SetupConfig : public BaseClass {
+   private:
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
+   public:
+    WithRawCallbackMethod_SetupConfig() {
+      ::grpc::Service::MarkMethodRawCallback(7,
+          new ::grpc::internal::CallbackUnaryHandler< ::grpc::ByteBuffer, ::grpc::ByteBuffer>(
+            [this](
+                   ::grpc::CallbackServerContext* context, const ::grpc::ByteBuffer* request, ::grpc::ByteBuffer* response) { return this->SetupConfig(context, request, response); }));
+    }
+    ~WithRawCallbackMethod_SetupConfig() override {
+      BaseClassMustBeDerivedFromService(this);
+    }
+    // disable synchronous version of this method
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
+      abort();
+      return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
+    }
+    virtual ::grpc::ServerUnaryReactor* SetupConfig(
+      ::grpc::CallbackServerContext* /*context*/, const ::grpc::ByteBuffer* /*request*/, ::grpc::ByteBuffer* /*response*/)  { return nullptr; }
+  };
+  template <class BaseClass>
   class WithStreamedUnaryMethod_CallStarted : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_CallStarted() {
       ::grpc::Service::MarkMethodStreamed(2,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_CallStarted<BaseClass>::StreamedCallStarted, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::CallInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::CallInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedCallStarted(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_CallStarted() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status CallStarted(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallStarted(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -731,17 +1140,24 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithStreamedUnaryMethod_CallEnded : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_CallEnded() {
       ::grpc::Service::MarkMethodStreamed(3,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::CallInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_CallEnded<BaseClass>::StreamedCallEnded, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::CallInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::CallInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedCallEnded(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_CallEnded() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status CallEnded(::grpc::ServerContext* context, const ::streamer::CallInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status CallEnded(::grpc::ServerContext* /*context*/, const ::streamer::CallInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -751,17 +1167,24 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithStreamedUnaryMethod_SetupRecorder : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_SetupRecorder() {
       ::grpc::Service::MarkMethodStreamed(4,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::RecorderInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_SetupRecorder<BaseClass>::StreamedSetupRecorder, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::RecorderInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::RecorderInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedSetupRecorder(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_SetupRecorder() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status SetupRecorder(::grpc::ServerContext* context, const ::streamer::RecorderInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupRecorder(::grpc::ServerContext* /*context*/, const ::streamer::RecorderInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -771,17 +1194,24 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithStreamedUnaryMethod_SetupSystem : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_SetupSystem() {
       ::grpc::Service::MarkMethodStreamed(5,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::SystemInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_SetupSystem<BaseClass>::StreamedSetupSystem, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::SystemInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::SystemInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedSetupSystem(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_SetupSystem() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status SetupSystem(::grpc::ServerContext* context, const ::streamer::SystemInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSystem(::grpc::ServerContext* /*context*/, const ::streamer::SystemInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -791,17 +1221,24 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithStreamedUnaryMethod_SetupSource : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_SetupSource() {
       ::grpc::Service::MarkMethodStreamed(6,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::SourceInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_SetupSource<BaseClass>::StreamedSetupSource, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::SourceInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::SourceInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedSetupSource(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_SetupSource() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status SetupSource(::grpc::ServerContext* context, const ::streamer::SourceInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupSource(::grpc::ServerContext* /*context*/, const ::streamer::SourceInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }
@@ -811,17 +1248,24 @@ class TrunkRecorderStreamer final {
   template <class BaseClass>
   class WithStreamedUnaryMethod_SetupConfig : public BaseClass {
    private:
-    void BaseClassMustBeDerivedFromService(const Service *service) {}
+    void BaseClassMustBeDerivedFromService(const Service* /*service*/) {}
    public:
     WithStreamedUnaryMethod_SetupConfig() {
       ::grpc::Service::MarkMethodStreamed(7,
-        new ::grpc::internal::StreamedUnaryHandler< ::streamer::ConfigInfo, ::google::protobuf::Empty>(std::bind(&WithStreamedUnaryMethod_SetupConfig<BaseClass>::StreamedSetupConfig, this, std::placeholders::_1, std::placeholders::_2)));
+        new ::grpc::internal::StreamedUnaryHandler<
+          ::streamer::ConfigInfo, ::google::protobuf::Empty>(
+            [this](::grpc::ServerContext* context,
+                   ::grpc::ServerUnaryStreamer<
+                     ::streamer::ConfigInfo, ::google::protobuf::Empty>* streamer) {
+                       return this->StreamedSetupConfig(context,
+                         streamer);
+                  }));
     }
     ~WithStreamedUnaryMethod_SetupConfig() override {
       BaseClassMustBeDerivedFromService(this);
     }
     // disable regular version of this method
-    ::grpc::Status SetupConfig(::grpc::ServerContext* context, const ::streamer::ConfigInfo* request, ::google::protobuf::Empty* response) override {
+    ::grpc::Status SetupConfig(::grpc::ServerContext* /*context*/, const ::streamer::ConfigInfo* /*request*/, ::google::protobuf::Empty* /*response*/) override {
       abort();
       return ::grpc::Status(::grpc::StatusCode::UNIMPLEMENTED, "");
     }

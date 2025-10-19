@@ -135,7 +135,6 @@ public:
       sys_node.put("systemType", sys->get_system_type());
       sys_node.put("shortName", sys->get_short_name());
       sys_node.put("sysNum", sys->get_sys_num());
-      sys_node.put("uploadScript", sys->get_upload_script());
       sys_node.put("recordUnkown", sys->get_record_unknown());
       sys_node.put("callLog", sys->get_call_log());
       sys_node.put("talkgroupsFile", sys->get_talkgroups_file());
