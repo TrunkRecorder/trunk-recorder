@@ -32,22 +32,22 @@ boost::format format_time(float f) {
 
 std::string format_state(State state) {
   if (statusAsString) {
-    if (state == MONITORING)
-      return "monitoring";
-    else if (state == RECORDING)
-      return "recording";
-    else if (state == INACTIVE)
-      return "inactive";
-    else if (state == ACTIVE)
-      return "active";
+    if (state == MONITORING)    // Cyan
+      return "\033[0;36mMonitoring\033[0m";
+    else if (state == RECORDING)// Red
+      return "\033[0;31mRecording\033[0m";
+    else if (state == INACTIVE) // Blue
+      return "\033[0;34mInactive\033[0m";
+    else if (state == ACTIVE)   // Yellow
+      return "\033[0;33mActive\033[0m";
     else if (state == IDLE)
       return "idle";
-    else if (state == STOPPED)
-      return "stopped";
-    else if (state == AVAILABLE)
-      return "available";
+    else if (state == STOPPED)  // Purple
+      return "\033[0;35mStopped\033[0m";
+    else if (state == AVAILABLE)// Green
+      return "\033[0;32mAvailable\033[0m";
     else if (state == IGNORE)
-      return "ignore";
+      return "Ignored";
     return "Unknown";
   }
   return boost::lexical_cast<std::string>(state);
@@ -95,5 +95,5 @@ std::string log_header(std::string short_name,long call_num, std::string talkgro
   std::stringstream ss;
   ss << "[" << short_name << "]\t\033[0;34m" << call_num << "C\033[0m\tTG: " << talkgroup_display << "\tFreq: " << format_freq(freq) << "\033[0m\t";
   std::string s = ss.str();
-  return s;      
+  return s;
 }

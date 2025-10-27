@@ -185,7 +185,7 @@ void print_status(std::vector<Source *> &sources, std::vector<System *> &systems
     }
 
     if (recorder) {
-        BOOST_LOG_TRIVIAL(info) << "\t[ " << recorder->get_num() << " ] State: " << format_state(recorder->get_state());
+        BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << recorder->get_num() << " ] State: " << format_state(recorder->get_state());
     }
   }
 
@@ -497,7 +497,7 @@ void handle_call_grant(TrunkMessage message, System *sys, bool grant_message, Co
     }
     std::string loghdr = log_header( call->get_short_name(), call->get_call_num(), call->get_talkgroup_display(), call->get_freq());
     if (superseding_grant) {
-      
+
       BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[36mSuperseding Grant\u001b[0m - Stopping original call: " << original_call_data << "- Superseding call: " << grant_call_data;
       // Attempt to start a new call on the preferred NAC.
       recording_started = start_recorder(call, message, config, sys, sources);
@@ -508,7 +508,7 @@ void handle_call_grant(TrunkMessage message, System *sys, bool grant_message, Co
         original_call->set_monitoring_state(SUPERSEDED);
         original_call->conclude_call();
       } else {
-        
+
         BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[36mCould not start Superseding recorder.\u001b[0m Continuing original call: " << original_call->get_call_num() << "C";
       }
     } else if (duplicate_grant) {
