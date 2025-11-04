@@ -232,6 +232,11 @@ public:
   bool get_hideUnknown() override;
   void set_hideUnknown(bool hideUnknown) override;
 
+  int get_freq_error() override;
+  void finetune_control_freq(double f) override;
+  int get_autotune_offset() override;
+  void set_autotune_offset(int offset) override;
+
   boost::property_tree::ptree get_stats() override;
   boost::property_tree::ptree get_stats_current(float timeDiff) override;
 

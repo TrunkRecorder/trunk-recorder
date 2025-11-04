@@ -543,6 +543,40 @@ void System_impl::set_hideUnknown(bool hideUnknown) {
   d_hideUnknown = hideUnknown;
 }
 
+int System_impl::get_freq_error() {
+  if (p25_trunking) {
+    return p25_trunking->get_freq_error();
+  } else if (smartnet_trunking) {
+    // return smartnet_trunking->get_freq_error();
+  }
+  return 0;
+}
+
+void System_impl::finetune_control_freq(double f) {
+  if (p25_trunking) {
+    p25_trunking->finetune_control_freq(f);
+  } else if (smartnet_trunking) {
+    // smartnet_trunking->finetune_control_freq(f);
+  }
+}
+
+int System_impl::get_autotune_offset() {
+  if (p25_trunking) {
+    return p25_trunking->autotune_offset;
+  } else if (smartnet_trunking) {
+    // return smartnet_trunking->autotune_offset;
+  }
+  return 0;
+}
+
+void System_impl::set_autotune_offset(int offset) {
+  if (p25_trunking) {
+    p25_trunking->autotune_offset = offset;
+  } else if (smartnet_trunking) {
+    // smartnet_trunking->autotune_offset = offset;
+  }
+}
+
 boost::property_tree::ptree System_impl::get_stats() {
   boost::property_tree::ptree system_node;
   system_node.put("id", this->get_sys_num());

@@ -114,6 +114,7 @@ void p25_trunking::initialize_p25() {
   bool do_nocrypt = 1;
   bool soft_vocoder = false;
   op25_frame_assembler = gr::op25_repeater::p25_frame_assembler::make(silence_frames, soft_vocoder, wireshark_host, udp_port, verbosity, do_imbe, do_output, do_msgq, rx_queue, do_audio_output, do_tdma, do_nocrypt);
+  autotune_offset = 0;
 
   connect(slicer, 0, op25_frame_assembler, 0);
 }
@@ -159,6 +160,7 @@ double p25_trunking::get_freq() {
 }
 
 void p25_trunking::tune_freq(double f) {
+  autotune_offset = 0;
   chan_freq = f;
   int offset_amount = (center_freq - f);
   prefilter->tune_offset(offset_amount);
@@ -168,4 +170,16 @@ void p25_trunking::tune_freq(double f) {
   } else {
     //fsk4_demod->reset();
   }
+}
+
+int p25_trunking::get_freq_error() { 
+  // Get current tuningerror from FLL
+  return prefilter->get_freq_error();
+}
+
+void p25_trunking::finetune_control_freq(double f) {
+  // Minor tuning adjustment without resetting costas or phase
+  chan_freq = f;
+  int offset_amount = (center_freq - f);
+  prefilter->tune_offset(offset_amount);
 }

@@ -261,6 +261,7 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/unit_tags.cc
   trunk-recorder/plugin_manager/plugin_manager.cc
   trunk-recorder/call_concluder/call_concluder.cc
+  trunk-recorder/autotune.cc
 
   lib/lfsr/lfsr.cxx
   #lib/gr-latency/latency_probe.cc

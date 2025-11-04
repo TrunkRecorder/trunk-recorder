@@ -65,6 +65,8 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   attached_detector = false;
   attached_selector = false;
   next_selector_port = 0;
+  autotune_source = false;
+  autotune_manager = new AutotuneManager(this);
 
   recorder_selector = gr::blocks::selector::make(sizeof(gr_complex), 0, 0);
 
@@ -169,6 +171,8 @@ void Source::set_iq_source(std::string iq_file, bool repeat, double center, doub
   attached_detector = false;
   attached_selector = false;
   next_selector_port = 0;
+  autotune_source = false;
+  autotune_manager = new AutotuneManager(this);
 
   iq_file_source::sptr iq_file_src;
   iq_file_src = iq_file_source::make(iq_file, this->rate, repeat);
@@ -373,6 +377,22 @@ void Source::set_gain_mode(bool m) {
 
 int Source::get_if_gain() {
   return if_gain;
+}
+
+void Source::add_autotune_error_measurement(int error, int offset){
+  autotune_manager->add_error_measurement(error, offset);
+}
+
+int Source::get_source_error(){
+  return autotune_manager->get_average_error();
+}
+
+void Source::set_autotune_source(bool m){
+  autotune_source = m;
+}
+
+bool Source::get_autotune_source() {
+  return autotune_source;
 }
 
 /* -- Recorders -- */
@@ -671,7 +691,13 @@ Recorder *Source::get_sigmf_recorder() {
 }
 
 void Source::print_recorders() {
-  BOOST_LOG_TRIVIAL(info) << "[ Source " << src_num << ": " << format_freq(center) << " ] " << device;
+  // If autotune is enabled, show the average correction being applied for this source
+  std::string autotune_status;
+  if (autotune_source) {
+    autotune_status = autotune_manager->get_status_string();
+  }
+
+  BOOST_LOG_TRIVIAL(info) << "[ Source " << src_num << ": " << format_freq(center) << " ] " << device << autotune_status;
 
   for (std::vector<p25_recorder_sptr>::iterator it = digital_recorders.begin();
        it != digital_recorders.end(); it++) {

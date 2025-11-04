@@ -120,6 +120,7 @@ protected:
   bool d_enable_audio_streaming;
   double recording_duration;
   Recorder_Type  type;
+  int autotune_offset = 0;
 };
 
 #endif

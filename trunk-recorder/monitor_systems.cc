@@ -202,6 +202,11 @@ void print_status(std::vector<Source *> &sources, std::vector<System *> &systems
 
     if ((sys->get_system_type() != "conventional") && (sys->get_system_type() != "conventionalP25") && (sys->get_system_type() != "conventionalDMR") && (sys->get_system_type() != "conventionalSIGMF")) {
       BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\t" << format_freq(sys->get_current_control_channel()) << "\t" << sys->get_decode_rate() << " msg/sec";
+      
+      if ((sys->get_source()->get_autotune_source()) && (sys->get_system_type() == "p25")) {
+        // If control channel source has autotune enabled, perform autotune adjustments and log to console
+        autotune_control_channel(sys);
+      }
     }
   }
 
@@ -715,6 +720,12 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
   }
   if (!source_found) {
     BOOST_LOG_TRIVIAL(error) << "\t - Unable to retune System control channel, freq not covered by any source.";
+  } else {
+    if ((system->get_source()->get_autotune_source()) && (system->get_system_type() == "p25")) {
+      // If control channel source has autotune enabled, perform adjustments after retune completes
+      // Don't store measurements since the control channel recorder just started
+      autotune_control_channel(system, false);
+    }
   }
 }
 

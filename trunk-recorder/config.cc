@@ -478,6 +478,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           double rate = element.value("rate", 0.0);
           double error = element.value("error", 0.0);
           double ppm = element.value("ppm", 0.0);
+          bool autotune = element.value("autoTune", false);
           bool agc = element.value("agc", false);
           int gain = element.value("gain", 0);
           int if_gain = element.value("ifGain", 0);
@@ -497,6 +498,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           BOOST_LOG_TRIVIAL(info) << "Rate: " << FormatSamplingRate(element.value("rate", 0.0));
           BOOST_LOG_TRIVIAL(info) << "Error: " << element.value("error", 0.0);
           BOOST_LOG_TRIVIAL(info) << "PPM Error: " << element.value("ppm", 0.0);
+          BOOST_LOG_TRIVIAL(info) << "P25 Autotune: " << element.value("autoTune", false);
           BOOST_LOG_TRIVIAL(info) << "Auto gain control: " << element.value("agc", false);
           BOOST_LOG_TRIVIAL(info) << "Gain: " << element.value("gain", 0);
           BOOST_LOG_TRIVIAL(info) << "IF Gain: " << element.value("ifGain", 0);
@@ -530,6 +532,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           if (element.contains("signalDetectorThreshold")) {
             source->set_signal_detector_threshold(element["signalDetectorThreshold"]);
           }
+
+          source->set_autotune_source(autotune);
 
           if (element.contains("gainSettings")) {
             for (auto it = element["gainSettings"].begin(); it != element["gainSettings"].end(); ++it) {

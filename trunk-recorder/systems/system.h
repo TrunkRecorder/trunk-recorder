@@ -168,6 +168,11 @@ public:
   virtual bool get_hideUnknown() = 0;
   virtual void set_hideUnknown(bool hideUnknown) = 0;
 
+  virtual int get_freq_error() = 0;
+  virtual void finetune_control_freq(double f) = 0;
+  virtual int get_autotune_offset() = 0;
+  virtual void set_autotune_offset(int offset) = 0;
+
   virtual boost::property_tree::ptree get_stats() = 0;
   virtual boost::property_tree::ptree get_stats_current(float timeDiff) = 0;
 

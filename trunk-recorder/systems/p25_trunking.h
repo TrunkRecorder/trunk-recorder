@@ -105,6 +105,9 @@ public:
   void tune_freq(double f);
   double get_freq();
   void enable();
+  int get_freq_error();
+  void finetune_control_freq(double f);
+  int autotune_offset;
 
   gr::msg_queue::sptr tune_queue;
   gr::msg_queue::sptr traffic_queue;
