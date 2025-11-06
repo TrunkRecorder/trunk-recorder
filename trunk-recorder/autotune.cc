@@ -11,11 +11,14 @@
  * calculates a running average for corrective offsets.  Operation is automatic and only
  * requires the config.json enables autoTune for the source(s).
  *
- * Hz error readings are taken from the FLL filter.  Measurements are from the detected
- * signal *towards* center of the filter bandwidth. Positive value indicate that the filter
- * was centered higher than the detected signal, while negative values indicate it was lower.
- * (i.e. When the average value is positive, Autotune will adjust the source "down".  When
- * it is negative, Autotune will adjust the source "up".)
+ * While the FFL filter can already handle minor corrections during a transmission, this
+ * attempts to assist it by providing a more accurate starting point at the beginning of 
+ * each call.
+ *
+ * Hz error readings are taken from the FLL filter.  Measurements represent the difference
+ * between the detected signal and the center frequency of the filter.  (i.e. When the average
+ * value is positive, Autotune will adjust the source "down".  When it is negative, Autotune
+ * will adjust the source "up".)
  *
  * Each status display will show the current averages per source, as well as a suggested
  * "error" value for the config file to pre-correct future runs.
@@ -35,7 +38,7 @@
  * 1) On each status display, a control channel is autotuned if it uses an enabled source.
  * 2) The average error for the source is used to calculate a new offset.
  * 3) The control channel is adjusted with finetune_control_freq() to avoid disruption.
- * 4) If a system tunes a new control channel, it will be autotuned but not store measurements.
+ * 4) If a system tunes a new control channel, it will be autotuned without storing measurements.
  *
  */
 

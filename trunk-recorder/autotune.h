@@ -18,7 +18,7 @@ private:
   int average_error = 0;         // Running average correction value (in Hz)
 
   static const size_t MAX_HISTORY = 20;               // Maximum number of error measurements to keep
-  static constexpr double PPM_THRESHOLD = 2.5;        // Warning threshold in PPM
+  static constexpr double PPM_THRESHOLD = 3.5;        // Warning threshold in PPM
   static constexpr int SUGGESTED_ERROR_ROUNDING = 10; // Round suggested error to nearest X Hz
 
 public:
