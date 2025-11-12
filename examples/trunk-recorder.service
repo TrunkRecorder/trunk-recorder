@@ -1,19 +1,17 @@
 [Unit]
-Description=Trunk Recorder Script
+Description=Trunk Recorder
+
+Wants=network-online.target
+After=network-online.target
 
 [Service]
-User=luke
-Group=luke
-Environment="PATH=/home/luke/bin/:/usr/local/bin:/usr/bin"
-WorkingDirectory=/home/luke/trunk-build
-ExecStart=/home/luke/trunk-build/auto-restart.sh
 Restart=always
+User=trunk
+ExecStart=/usr/local/bin/trunk-recorder
+WorkingDirectory=/home/trunk/trunk-recorder
+StandardOutput=inherit
+StandardError=inherit
+LimitCORE=infinity
 
 [Install]
 WantedBy=multi-user.target
-
-# Make sure the Path in the Environment line points to your FFMPEG bin
-# copy to /etc/systemd/system
-# systemctl daemon-reload
-# systemctl enable trunk-recorder.service
-# systemctl start trunk-recorder.service
