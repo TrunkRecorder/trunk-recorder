@@ -36,13 +36,13 @@ std::string format_state(State state, MonitoringState monitoringState) {
     switch (state) {
       case MONITORING: ss << Color::CYN << "Monitoring" << Color::RST;
         switch (monitoringState) {
-          case UNKNOWN_TG:   ss << " : UNKNOWN TG"; break;
-          case IGNORED_TG:   ss << " : IGNORED TG"; break;
-          case NO_SOURCE:    ss << " : " << Color::YEL << "NO SOURCE COVERING FREQ" << Color::RST; break;
-          case NO_RECORDER:  ss << " : " << Color::YEL << "NO RECORDER AVAILABLE" << Color::RST; break;
-          case ENCRYPTED:    ss << " : " << Color::RED << "ENCRYPTED" << Color::RST; break;
-          case DUPLICATE:    ss << " : " << Color::CYN << "DUPLICATE" << Color::RST; break;
-          case SUPERSEDED:   ss << " : " << Color::CYN << "SUPERSEDED" << Color::RST; break;
+          case UNKNOWN_TG:   ss << ": UNKNOWN TG"; break;
+          case IGNORED_TG:   ss << ": IGNORED TG"; break;
+          case NO_SOURCE:    ss << ": " << Color::YEL << "NO SOURCE COVERING FREQ" << Color::RST; break;
+          case NO_RECORDER:  ss << ": " << Color::YEL << "NO RECORDER AVAILABLE" << Color::RST; break;
+          case ENCRYPTED:    ss << ": " << Color::RED << "ENCRYPTED" << Color::RST; break;
+          case DUPLICATE:    ss << ": " << Color::CYN << "DUPLICATE" << Color::RST; break;
+          case SUPERSEDED:   ss << ": " << Color::CYN << "SUPERSEDED" << Color::RST; break;
           default: break;  // UNSPECIFIED
         }
         break;
