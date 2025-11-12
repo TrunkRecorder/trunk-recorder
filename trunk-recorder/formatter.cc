@@ -30,70 +30,40 @@ boost::format format_time(float f) {
   return boost::format("%5.2f") % f;
 }
 
-std::string format_state(State state) {
-  if (statusAsString) {
-    if (state == MONITORING)    // Cyan
-      return "\033[0;36mMonitoring\033[0m";
-    else if (state == RECORDING)// Red
-      return "\033[0;31mRecording\033[0m";
-    else if (state == INACTIVE) // Blue
-      return "\033[0;34mInactive\033[0m";
-    else if (state == ACTIVE)   // Yellow
-      return "\033[0;33mActive\033[0m";
-    else if (state == IDLE)
-      return "idle";
-    else if (state == STOPPED)  // Purple
-      return "\033[0;35mStopped\033[0m";
-    else if (state == AVAILABLE)// Green
-      return "\033[0;32mAvailable\033[0m";
-    else if (state == IGNORE)
-      return "Ignored";
-    return "Unknown";
-  }
-  return boost::lexical_cast<std::string>(state);
-}
-
 std::string format_state(State state, MonitoringState monitoringState) {
   if (statusAsString) {
-    if (state == MONITORING) {
-      if (monitoringState == UNSPECIFIED)
-        return "monitoring";
-      else if (monitoringState == UNKNOWN_TG)
-        return "monitoring : UNKNOWN TG";
-      else if (monitoringState == IGNORED_TG)
-        return "monitoring : IGNORED TG";
-      else if (monitoringState == NO_SOURCE)
-        return "monitoring : NO SOURCE COVERING FREQ";
-      else if (monitoringState == NO_RECORDER)
-        return "monitoring : NO RECORDER AVAILABLE";
-      else if (monitoringState == ENCRYPTED)
-        return "monitoring : ENCRYPTED";
-      else if (monitoringState == DUPLICATE)
-        return "monitoring : DUPLICATE";
-      else if (monitoringState == SUPERSEDED)
-        return "monitoring : SUPERSEDED";
-      else
-        return "monitoring";
-    } else if (state == RECORDING)
-      return "recording";
-    else if (state == INACTIVE)
-      return "inactive";
-    else if (state == ACTIVE)
-      return "active";
-    else if (state == IDLE)
-      return "idle";
-    else if (state == STOPPED)
-      return "stopped";
-    else if (state == AVAILABLE)
-      return "available";
-    return "Unknown";
+    std::stringstream ss;
+    switch (state) {
+      case MONITORING: ss << Color::CYN << "Monitoring" << Color::RST;
+        switch (monitoringState) {
+          case UNKNOWN_TG:   ss << " : UNKNOWN TG"; break;
+          case IGNORED_TG:   ss << " : IGNORED TG"; break;
+          case NO_SOURCE:    ss << " : " << Color::YEL << "NO SOURCE COVERING FREQ" << Color::RST; break;
+          case NO_RECORDER:  ss << " : " << Color::YEL << "NO RECORDER AVAILABLE" << Color::RST; break;
+          case ENCRYPTED:    ss << " : " << Color::RED << "ENCRYPTED" << Color::RST; break;
+          case DUPLICATE:    ss << " : " << Color::CYN << "DUPLICATE" << Color::RST; break;
+          case SUPERSEDED:   ss << " : " << Color::CYN << "SUPERSEDED" << Color::RST; break;
+          default: break;  // UNSPECIFIED
+        }
+        break;
+
+      case RECORDING:  ss << Color::RED << "Recording"  << Color::RST; break;
+      case INACTIVE:   ss << Color::BLU << "Inactive"   << Color::RST; break;
+      case ACTIVE:     ss << Color::YEL << "Active"     << Color::RST; break;
+      case IDLE:       ss << "Idle"; break;
+      case STOPPED:    ss << Color::MAG << "Stopped"    << Color::RST; break;
+      case AVAILABLE:  ss << Color::GRN << "Available"  << Color::RST; break;
+      case IGNORE:     ss << "Ignored"; break;
+      default:         ss << "Unknown"; break;
+    }
+    return ss.str();
   }
   return boost::lexical_cast<std::string>(state);
 }
 
 std::string log_header(std::string short_name,long call_num, std::string talkgroup_display, double freq) {
   std::stringstream ss;
-  ss << "[" << short_name << "]\t\033[0;34m" << call_num << "C\033[0m\tTG: " << talkgroup_display << "\tFreq: " << format_freq(freq) << "\033[0m\t";
-  std::string s = ss.str();
-  return s;
+  ss << "[" << short_name << "]\t" << Color::BLU << call_num << "C" << Color::RST 
+     << "\tTG: " << talkgroup_display << "\tFreq: " << format_freq(freq) << "\t";
+  return ss.str();
 }
