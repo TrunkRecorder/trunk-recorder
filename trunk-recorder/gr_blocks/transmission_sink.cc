@@ -118,8 +118,8 @@ bool transmission_sink::start_recording(Call *call) {
   d_current_call_num = call->get_call_num();
   d_current_call_freq = call->get_freq();
   d_conventional = call->is_conventional();
-  if (d_conventional && ( (call->get_system_type() == "conventionalP25") || (call->get_system_type() == "conventionalDMR") )) {
-    BOOST_LOG_TRIVIAL(debug) << "transmission_sink::start_recording - Conventional flag is set for a digital system type - dynamically assigning talkgroups";
+  if (d_conventional && (call->get_system_type() == "conventionalDMR")) {
+    BOOST_LOG_TRIVIAL(debug) << "transmission_sink::start_recording - Conventional DMR - dynamically assigning talkgroups";
     d_current_call_talkgroup = 0;
     d_current_call_talkgroup_display = "N/A";
     d_current_call_talkgroup_encoded = 0;
@@ -252,7 +252,7 @@ void transmission_sink::end_transmission() {
     strcpy(transmission.filename, current_filename); // Copy the filename
     transmission.talkgroup = d_current_call_talkgroup;
 
-    BOOST_LOG_TRIVIAL(info) << "Adding transmission: " << transmission.filename << " Slot: " << transmission.slot << " Talkgroup: " << transmission.talkgroup << " Length: " << transmission.length << " Samples: " << d_sample_count;
+    BOOST_LOG_TRIVIAL(debug) << "Adding transmission: " << transmission.filename << " Slot: " << transmission.slot << " Talkgroup: " << transmission.talkgroup << " Length: " << transmission.length << " Samples: " << d_sample_count;
     this->add_transmission(transmission);
 
     // Reset the recorder to be ready to record the next Transmission
@@ -367,13 +367,16 @@ int transmission_sink::work(int noutput_items, gr_vector_const_void_star &input_
           } else {
             if (d_current_call_talkgroup != grp_id) {
               if (d_current_call_talkgroup != 0) {
-                BOOST_LOG_TRIVIAL(info) << loghdr << "Conventional Call - TALKGROUP MISMATCH - Talkgroup already set - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
+                BOOST_LOG_TRIVIAL(debug) << loghdr << "Conventional Call - TALKGROUP MISMATCH - Talkgroup already set - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
                 // this is where we would conclude the current call and start a new one.
               }
-              BOOST_LOG_TRIVIAL(info) << loghdr << "Conventional Call - TALKGROUP set via Control Channel - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
-              d_current_call_talkgroup = grp_id;
+              BOOST_LOG_TRIVIAL(debug) << loghdr << "Conventional Call - TALKGROUP set via Control Channel - Recorder TG: " << d_current_call_talkgroup << " Received TG: " << grp_id << " Recorder state: " << format_state(state) << " incoming: " << noutput_items;
+              // Retain the OTA talkgroup for conventional systems, only apply it for DMR
               d_current_call_talkgroup_encoded = grp_id;
-              d_current_call_talkgroup_display = std::to_string(grp_id);
+              if (d_current_call->get_system_type() == "conventionalDMR") {
+                d_current_call_talkgroup = grp_id;
+                d_current_call_talkgroup_display = std::to_string(grp_id);
+              }
             }
           }
         }
