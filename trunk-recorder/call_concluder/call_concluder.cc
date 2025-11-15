@@ -437,8 +437,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     call_info.talkgroup_group = "";
   }
 
-
-
+  call_info.remove_files_on_failure = config.remove_files_on_failure;
   call_info.length = total_length;
 
   return call_info;
@@ -484,6 +483,9 @@ void Call_Concluder::manage_call_data_workers() {
         std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
 
         if (call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
+          if (call_info.remove_files_on_failure) {
+            remove_call_files(call_info);
+          }
           BOOST_LOG_TRIVIAL(error) << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num << "\033[0m Failed to conclude call - TG: " << call_info.talkgroup_display << "\t" << std::put_time(std::localtime(&start_time), "%c %Z");
         } else {
           long jitter = rand() % 10;

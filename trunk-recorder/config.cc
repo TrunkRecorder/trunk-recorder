@@ -166,6 +166,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
     BOOST_LOG_TRIVIAL(info) << "Temporary Transmission Directory: " << config.temp_dir;
 
+    config.remove_files_on_failure = data.value("removeFilesOnFailure", true);
+    BOOST_LOG_TRIVIAL(info) << "Remove Files on Failure: " << config.remove_files_on_failure;
+    
     config.capture_dir = data.value("captureDir", boost::filesystem::current_path().string());
     pos = config.capture_dir.find_last_of("/");
 
