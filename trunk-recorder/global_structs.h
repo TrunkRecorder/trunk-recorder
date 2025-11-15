@@ -47,7 +47,7 @@ struct Config {
   bool enable_audio_streaming;
   bool soft_vocoder;
   bool record_uu_v_calls;
-  bool remove_files_on_failure;
+  bool archive_files_on_failure;
   int frequency_format;
 };
 
@@ -119,7 +119,7 @@ struct Call_Data_t {
   bool duplex;
   bool audio_archive;
   bool transmission_archive;
-  bool remove_files_on_failure;
+  bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
   char filename[300];
