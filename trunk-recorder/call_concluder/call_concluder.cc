@@ -142,6 +142,18 @@ bool checkIfFile(std::string filePath) {
 
 void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
 
+  if (plugin_failure) {
+    std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
+    switch (call_info.archive_files_on_failure) {
+      case true:
+        BOOST_LOG_TRIVIAL(error) << loghdr << "Upload failed after " << call_info.retry_attempt << " attempts - " <<  Color::GRN << "Archiving files" << Color::RST;
+        break;
+      case false:
+        BOOST_LOG_TRIVIAL(error) << loghdr << "Upload failed after " << call_info.retry_attempt << " attempts - " << Color::RED << "Removing files" << Color::RST;
+        break;
+    }
+  }
+
   if (call_info.audio_archive || (plugin_failure && call_info.archive_files_on_failure)) {
     if (call_info.transmission_archive) {
       // if the files are being archived, move them to the capture directory
@@ -195,7 +207,7 @@ void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
 
   }
 
-  if (!call_info.call_log) {
+  if (!call_info.call_log && !(plugin_failure && call_info.archive_files_on_failure)) {
     if (checkIfFile(call_info.status_filename)) {
       remove(call_info.status_filename);
     }
@@ -489,10 +501,10 @@ void Call_Concluder::manage_call_data_workers() {
 
         if (call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
           remove_call_files(call_info, true);
-          BOOST_LOG_TRIVIAL(error) << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num << "\033[0m Failed to conclude call - TG: " << call_info.talkgroup_display << "\t" << std::put_time(std::localtime(&start_time), "%c %Z");
+          BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to conclude call - " << std::put_time(std::localtime(&start_time), "%c %Z");
         } else {
           long jitter = rand() % 10;
-          long backoff = (2 ^ call_info.retry_attempt * 60) + jitter;
+          long backoff = ((1 << call_info.retry_attempt) * 60) + jitter;
           call_info.process_call_time = time(0) + backoff;
           retry_call_list.push_back(call_info);
           BOOST_LOG_TRIVIAL(error) << loghdr << std::put_time(std::localtime(&start_time), "%c %Z") << " retry attempt " << call_info.retry_attempt << " in " << backoff << "s\t retry queue: " << retry_call_list.size() << " calls";

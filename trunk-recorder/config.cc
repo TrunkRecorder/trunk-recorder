@@ -166,7 +166,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
     BOOST_LOG_TRIVIAL(info) << "Temporary Transmission Directory: " << config.temp_dir;
 
-    config.archive_files_on_failure = data.value("archiveFilesOnFailure", true);
+    config.archive_files_on_failure = data.value("archiveFilesOnFailure", false);
     BOOST_LOG_TRIVIAL(info) << "Archive Files on Failure: " << config.archive_files_on_failure;
 
     config.capture_dir = data.value("captureDir", boost::filesystem::current_path().string());
