@@ -82,10 +82,10 @@ class Simple_Stream : public Plugin_Api {
         // Get the source from the most recent transmission
         auto transmissions = call->get_transmissions();
         call_src = transmissions.back().source;
-        BOOST_LOG_TRIVIAL(info) << "using source " << call_src << " from most recent transmission";
+        BOOST_LOG_TRIVIAL(debug) << "using source " << call_src << " from most recent transmission";
       }
       else{
-        BOOST_LOG_TRIVIAL(info) << "no source found for call - leaving src as -1";
+        BOOST_LOG_TRIVIAL(debug) << "no source found for call - leaving src as -1";
       }
     }
 
