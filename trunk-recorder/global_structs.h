@@ -23,7 +23,6 @@ struct Transmission {
 };
 
 struct Config {
-  std::string upload_script;
   std::string upload_server;
   std::string bcfy_calls_server;
   std::string status_server;
@@ -128,7 +127,6 @@ struct Call_Data_t {
 
   int sys_num;
   std::string short_name;
-  std::string upload_script;
   std::string audio_type;
 
   int tdma_slot;
