@@ -146,7 +146,7 @@ bool setup_systems(Config &config, gr::top_block_sptr &tb, std::vector<Source *>
           system->set_source(source);
 
           if (system->get_system_type() == "smartnet") {
-            system->smartnet_trunking = make_smartnet_trunking(control_channel_freq,
+            system->smartnet_trunking = smartnet_impl::make(control_channel_freq,
                                                                source->get_center(),
                                                                source->get_rate(),
                                                                system->get_msg_queue(),

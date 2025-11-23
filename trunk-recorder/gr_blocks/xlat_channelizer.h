@@ -39,14 +39,16 @@ public:
   typedef std::shared_ptr<xlat_channelizer> sptr;
 #endif
 
-  static sptr make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch);
-  xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch);
+  static sptr make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw=default_excess_bw);
+  xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw);
 
   struct DecimSettings {
     long decim;
     long decim2;
   };
 
+  static constexpr float default_excess_bw = 0.2;
+  static constexpr float smartnet_excess_bw = 0.35;
   static const int smartnet_samples_per_symbol = 5;
   static const int phase1_samples_per_symbol = 5;
   static const int phase2_samples_per_symbol = 4;

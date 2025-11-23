@@ -8,7 +8,8 @@
 //#include "../source.h"
 #include "p25_trunking.h"
 #include "parser.h"
-#include "smartnet_trunking.h"
+//#include "smartnet_trunking.h"
+#include "smartnet_impl.h"
 #include "system.h"
 
 #ifdef __GNUC__
@@ -106,7 +107,7 @@ public:
   bool record_unknown;
   bool call_log;
 
-  smartnet_trunking_sptr smartnet_trunking;
+  smartnet_impl::sptr smartnet_trunking;
   p25_trunking_sptr p25_trunking;
 
   std::map<unsigned long, std::map<unsigned long, std::time_t>> talkgroup_patches;

@@ -10,7 +10,7 @@
 #include "systems/p25_parser.h"
 #include "systems/p25_trunking.h"
 #include "systems/smartnet_parser.h"
-#include "systems/smartnet_trunking.h"
+#include "systems/smartnet_impl.h"
 #include "systems/system.h"
 #include <gnuradio/top_block.h>
 

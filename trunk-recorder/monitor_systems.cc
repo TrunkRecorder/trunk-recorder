@@ -698,7 +698,7 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
     // For Loop
     if (system->get_system_type() == "smartnet") {
       system->smartnet_trunking->tune_freq(control_channel_freq);
-      system->smartnet_trunking->reset();
+      //system->smartnet_trunking->reset();
     } else if (system->get_system_type() == "p25") {
       system->p25_trunking->tune_freq(control_channel_freq);
     } else {
@@ -718,10 +718,10 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
-          system->smartnet_trunking = make_smartnet_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
+          system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
           tb->unlock();
-          system->smartnet_trunking->reset();
+          //system->smartnet_trunking->reset();
         } else if (system->get_system_type() == "p25") {
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
@@ -846,7 +846,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
 
   signal(SIGINT, exit_interupt);
 
-  smartnet_parser = new SmartnetParser(); // this has to eventually be generic;
+  smartnet_parser = new SmartnetParser(systems.front()); // this has to eventually be generic;
   p25_parser = new P25Parser();
 
   while (1) {
@@ -886,7 +886,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
           system->set_message_count(system->get_message_count() + 1);
 
           if (system->get_system_type() == "smartnet") {
-            trunk_messages = smartnet_parser->parse_message(msg->to_string(), system);
+            trunk_messages = smartnet_parser->parse_message(msg, system);
             handle_message(trunk_messages, system, config, sources, calls, tb);
             plugman_trunk_message(trunk_messages, system);
           }

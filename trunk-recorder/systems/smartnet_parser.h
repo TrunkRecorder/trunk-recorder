@@ -1,95 +1,146 @@
-#ifndef SMARTNET_PARSE_H
-#define SMARTNET_PARSE_H
-#include "parser.h"
+#ifndef SMARTNET_PARSER_H
+#define SMARTNET_PARSER_H
+
 #include "system.h"
-#include "system_impl.h"
-#include <iostream>
+#include "parser.h"
+#include <gnuradio/message.h>
+#include <deque>
+#include <map>
+#include <mutex>
+#include <string>
 #include <vector>
+#include <tuple>
 
-#include <boost/algorithm/string/classification.hpp>
-#include <boost/algorithm/string/split.hpp>
-#include <boost/tokenizer.hpp>
-#include <stdio.h>
+// Constants matching Python implementation and protocol definitions
+#define OSW_QUEUE_SIZE 8 
+#define OSW_QUEUE_RESET_CMD 0xFFFF
+#define M_SMARTNET_TIMEOUT -1
+#define M_SMARTNET_OSW 0
+#define M_SMARTNET_BAD_OSW 1 // Assumed value for Bad OSW
 
-#include <boost/log/trivial.hpp>
-
-// OSW commands range from $000 to $3ff
-// Within this range are 4 ranges for channel indicators
-// 		$000-$2f7 (760 channels)
-// 		$32f-$33f ( 17 channels)
-//    $3be      (  1 channel )
-//    $3c1-$3fe ( 62 channels)
-// Channels are pre-defined for 8/9 trunks. If an OBT trunk, the first range gets
-// used to to indicate both inbound and outbound channels, with radio programming
-// determining frequencies.
-//    from $000-$2f7 (760 channels)
-//         $000-$17b (380 channels) OBT inbound channels
-//         $17c-$2f7 (380 channels) OBT outbound channels
-#define OSW_MIN 0x000
-#define OSW_CHAN_BAND_1_MIN 0x000 // Bandplan Range 1, also used for OBT channelization
-#define OSW_CHAN_BAND_1_MAX 0x2f7 // Bandplan Range 1, also used for OBT channelization
-
-#define OSW_BACKGROUND_IDLE 0x2f8
-#define OSW_FIRST_CODED_PC 0x304
-#define OSW_FIRST_NORMAL 0x308
-#define OSW_FIRST_TY2AS1 0x309 // Unused - we don't support Type I trunks (or in this case, Type IIi)
-#define OSW_EXTENDED_FCN 0x30b
-#define OSW_AFFIL_FCN 0x30d
-#define OSW_TY2_AFFILIATION 0x310
-#define OSW_TY1_STATUS_MIN 0x310 // Unused - we don't support Type I trunks
-#define OSW_TY2_MESSAGE 0x311
-#define OSW_TY1_STATUS_MAX 0x317 // Unused - we don't support Type I trunks
-#define OSW_TY1_ALERT 0x318      // Unused - we don't support Type I trunks
-#define OSW_TY1_EMERGENCY 0x319  // Unused - we don't support Type I trunks
-#define OSW_TY2_CALL_ALERT 0x319
-#define OSW_SECOND_NORMAL 0x320
-#define OSW_FIRST_ASTRO 0x321
-#define OSW_SYSTEM_CLOCK 0x322
-#define OSW_SCAN_MARKER 0x32b
-#define OSW_EMERG_ANNC 0x32e
-
-#define OSW_CHAN_BAND_2_MIN 0x32f // Bandplan Range 2
-#define OSW_CHAN_BAND_2_MAX 0x33f // Bandplan Range 2
-
-// The following command range ($340-$3bd) wastes 64 commands for AMSS site #
-#define OSW_AMSS_ID_MIN 0x360
-#define OSW_AMSS_ID_MAX 0x39f
-
-#define OSW_CW_ID 0x3a0
-
-#define OSW_CHAN_BAND_3 0x3be // Bandplan "Range" 3
-
-#define OSW_SYS_NETSTAT 0x3bf
-#define OSW_SYS_STATUS 0x3c0
-
-#define OSW_CHAN_BAND_4_MIN 0x3c1 // Bandplan Range 4
-#define OSW_CHAN_BAND_4_MAX 0x3fe // Bandplan Range 4
-
-#define OSW_MAX 0x3ff
-
-struct osw_stru {
-  unsigned short cmd;
-  unsigned short id;
-  int status;
-  int full_address;
-  long address;
-  int grp;
+struct OSW {
+    int addr;
+    bool grp;
+    int cmd;
+    bool ch_rx;
+    bool ch_tx;
+    double f_rx;
+    double f_tx;
+    double ts;
 };
 
-class SmartnetParser : public TrunkParser {
-  int lastcmd;
-  long lastaddress;
+struct VoiceFrequency {
+    int frequency;
+    long tgid;
+    int flags;
+    int mode;
+    int counter;
+    double time;
+};
 
+struct TalkgroupInfo {
+    long tgid;
+    int priority;
+    std::string tag;
+    int srcaddr;
+    double time;
+    double release_time;
+    int mode;
+    int status;
+    int frequency;
+};
+
+struct AlternateCCFreq {
+    double time;
+    double cc_rx_freq;
+    double cc_tx_freq;
+};
+
+struct AdjacentSite {
+    double time;
+    double cc_rx_freq;
+    double cc_tx_freq;
+};
+
+class SmartnetParser {
 public:
-  struct osw_stru stack[5];
-  short numStacked;
-  short numConsumed;
-  SmartnetParser();
-  void print_osw(std::string s);
-  double getfreq(int cmd, System *system);
-  bool is_chan_outbound(int cmd, System *system);
-  bool is_chan_inbound_obt(int cmd, System *system);
-  bool is_first_normal(int cmd, System *system);
-  std::vector<TrunkMessage> parse_message(std::string s, System *system);
+    SmartnetParser(System *system);
+    ~SmartnetParser();
+
+    std::vector<TrunkMessage> parse_message(gr::message::sptr msg, System *system);
+    std::vector<TrunkMessage> process_osws();
+    
+    std::string to_json();
+    void set_debug(int level) { debug_level = level; }
+    void set_msgq_id(int id) { msgq_id = id; }
+
+private:
+    System *system;
+    int debug_level;
+    int sysnum;
+    int msgq_id;
+    
+    std::deque<OSW> osw_q;
+    
+    std::map<int, VoiceFrequency> voice_frequencies;
+    std::map<long, TalkgroupInfo> talkgroups;
+    std::mutex talkgroups_mutex;
+    
+    // tgid -> sub_tgid -> pair<time, mode>
+    std::map<long, std::map<long, std::pair<double, int>>> patches;
+    std::mutex patches_mutex;
+
+    std::map<int, AlternateCCFreq> alternate_cc_freqs;
+    std::map<int, AdjacentSite> adjacent_sites;
+    
+    // Stats
+    long osw_count;
+    double last_osw;
+    double last_expiry_check;
+    double rx_cc_freq;
+    long rx_sys_id;
+    int rx_site_id;
+    
+    // Helpers
+    void enqueue(int addr, int grp, int cmd, double ts);
+    
+    // State updates
+    std::vector<TrunkMessage> update_voice_frequency(double ts, double freq, long tgid = -1, int srcaddr = -1, int mode = -1);
+    std::vector<TrunkMessage> update_talkgroups(double ts, int frequency, long tgid, int srcaddr, int mode);
+    bool update_talkgroup(double ts, int frequency, long tgid, int srcaddr, int mode);
+    
+    bool expire_talkgroups(double curr_time);
+    bool expire_patches(double curr_time);
+    bool expire_adjacent_sites(double curr_time);
+    bool expire_alternate_cc_freqs(double curr_time);
+
+    void add_adjacent_site(double ts, int site, double cc_rx_freq, double cc_tx_freq);
+    void add_alternate_cc_freq(double ts, double cc_rx_freq, double cc_tx_freq);
+    void add_patch(double ts, long tgid, long sub_tgid, int mode);
+    void delete_patches(long tgid);
+    void add_default_tgid(long tgid);
+
+    // Bandplan
+    std::tuple<std::string, bool, bool, bool, bool> get_bandplan_details();
+    bool is_obt_system();
+    double get_expected_obt_tx_freq(double rx_freq);
+    bool is_chan(int chan, bool is_tx = false);
+    double get_freq(int chan, bool is_tx = false);
+    
+    // Formatting / Decoding Helpers
+    std::string get_group_str(bool is_group);
+    std::string get_band_str(int band);
+    double get_connect_tone(int index);
+    std::string get_features_str(int feat);
+    std::string get_call_options_str(int tgid, bool include_clear = true);
+    std::string get_call_options_flags_str(int tgid, int mode = -1);
+    std::string get_call_options_flags_web_str(int tgid, int mode);
+    
+    bool is_patch_group(int tgid);
+    bool is_multiselect_group(int tgid);
+    
+    TrunkMessage create_trunk_message(MessageType type, double freq, long talkgroup, int source = 0, bool encrypted = false, bool emergency = false);
 };
+
 #endif
+

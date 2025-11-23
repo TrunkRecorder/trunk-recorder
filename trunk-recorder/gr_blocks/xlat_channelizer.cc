@@ -1,8 +1,8 @@
 #include "xlat_channelizer.h"
 
-xlat_channelizer::sptr xlat_channelizer::make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch) {
+xlat_channelizer::sptr xlat_channelizer::make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw) {
 
-  return gnuradio::get_initial_sptr(new xlat_channelizer(input_rate, samples_per_symbol, symbol_rate, bandwidth, center_freq, use_squelch));
+  return gnuradio::get_initial_sptr(new xlat_channelizer(input_rate, samples_per_symbol, symbol_rate, bandwidth, center_freq, use_squelch, excess_bw));
 }
 
 const int xlat_channelizer::smartnet_samples_per_symbol;
@@ -40,7 +40,7 @@ xlat_channelizer::DecimSettings xlat_channelizer::get_decim(long speed) {
   return decim_settings;
 }
 
-xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch)
+xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw=0.2)
     : gr::hier_block2("xlat_channelizer_ccf",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(1, 1, sizeof(gr_complex))),
@@ -110,7 +110,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
     exit(1);
   }
 
-  double def_excess_bw = 0.2;
+
   // Squelch DB
   // on a trunked network where you know you will have good signal, a carrier
   // power squelch works well. real FM receviers use a noise squelch, where
@@ -120,7 +120,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
   squelch = gr::analog::pwr_squelch_cc::make(squelch_db, 0.0001, 0, true);
 
   rms_agc = gr::blocks::rms_agc::make(0.45, 0.85);
-  fll_band_edge = gr::digital::fll_band_edge_cc::make(d_samples_per_symbol, def_excess_bw, 2 * d_samples_per_symbol + 1, (2.0 * pi) / d_samples_per_symbol / 250); // OP25 has this set to 350 instead of 250
+  fll_band_edge = gr::digital::fll_band_edge_cc::make(d_samples_per_symbol, excess_bw, 2 * d_samples_per_symbol + 1, (2.0 * pi) / d_samples_per_symbol / 250); // OP25 has this set to 350 instead of 250
 
   connect(self(), 0, freq_xlat, 0);
   connect(freq_xlat, 0, channel_lpf, 0);
