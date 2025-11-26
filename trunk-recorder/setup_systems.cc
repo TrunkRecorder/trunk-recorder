@@ -1,5 +1,6 @@
 #include "./setup_systems.h"
 using namespace std;
+
 bool setup_conventional_channel(System *system, double frequency, long channel_index, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
   bool channel_added = false;
   Source *source = NULL;
@@ -34,13 +35,23 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
       }
 
       BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring " << system->get_system_type() << " channel: " << format_freq(frequency) << " Talkgroup: " << channel_index;
+      
       if (system->get_system_type() == "conventional") {
         analog_recorder_sptr rec;
-        if (tone_freq > 0.0) {
+        
+        // --- DEBUG PATCH START ---
+        // Explicitly log the tone being read from the system/CSV
+        BOOST_LOG_TRIVIAL(info) << "DEBUG: Setup Conventional - Freq: " << frequency << " Tone: " << tone_freq;
+
+        if (tone_freq > 0.1) {
+          BOOST_LOG_TRIVIAL(info) << "DEBUG: Creating Recorder WITH CTCSS Tone: " << tone_freq;
           rec = source->create_conventional_recorder(tb, tone_freq);
         } else {
+          BOOST_LOG_TRIVIAL(info) << "DEBUG: Creating Recorder WITHOUT Tone (Carrier Squelch)";
           rec = source->create_conventional_recorder(tb);
         }
+        // --- DEBUG PATCH END ---
+
         rec->start(call);
         rec->set_tau(system->get_tau()); //set the tau value for the recorder from the system config
         call->set_is_analog(true);
