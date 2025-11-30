@@ -305,6 +305,27 @@ public:
       }
     }
     std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
+
+    // Configuration errors - skip the retry queue
+    static const struct { const char* match; const char* message; bool is_error; } config_errors[] = {
+      {"API Keys do not match",    "Error: Invalid API Key", true},
+      {"ShortName does not exist", "Error: Invalid System Name", true},
+      {"Error, invalid filename",  "Error: Invalid Filename", true},
+      {"Talkgroup does not exist", "Skipped: System Ignoring Unknown Talkgroups", false}
+    };
+    
+    for (const auto& error : config_errors) {
+      if (response_buffer.find(error.match) != std::string::npos) {
+        if (error.is_error) {
+          BOOST_LOG_TRIVIAL(error) << loghdr << "OpenMHz Upload " << error.message;
+        } else {
+          BOOST_LOG_TRIVIAL(info) << loghdr << "OpenMHz Upload " << error.message;
+        }
+        return 0;
+      }
+    }
+    
+    // Default error - add to the retry queue
     BOOST_LOG_TRIVIAL(error) << loghdr << "OpenMHz Upload Error: " << response_buffer;
     return 1;
   }
