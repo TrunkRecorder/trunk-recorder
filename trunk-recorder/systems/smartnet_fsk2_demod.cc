@@ -104,7 +104,7 @@ void smartnet_fsk2_demod::initialize() {
   connect(framer, 0, null_sink1, 0);
   connect(framer, 1, null_sink2, 0);
 
-  connect(self(), 0, debug_sink_in, 0);
+  //connect(self(), 0, debug_sink_in, 0);
   //connect(sym_filter, 0, debug_sink_sym, 0);
-  connect(fsk4_demod_mm, 0, debug_sink_demod, 0);
+  //connect(fsk4_demod_mm, 0, debug_sink_demod, 0);
 }
