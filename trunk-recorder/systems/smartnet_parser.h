@@ -12,11 +12,13 @@
 #include <tuple>
 
 // Constants matching Python implementation and protocol definitions
-#define OSW_QUEUE_SIZE 8 
-#define OSW_QUEUE_RESET_CMD 0xFFFF
+#define OSW_QUEUE_SIZE 5 + 1 // Some messages can be 3 OSWs long, plus up to two IDLEs can be inserted in between
+                                // useful messages. Additionally, keep one slot for a QUEUE RESET message.
+#define OSW_QUEUE_RESET_CMD 0xFFE
 #define M_SMARTNET_TIMEOUT -1
 #define M_SMARTNET_OSW 0
-#define M_SMARTNET_BAD_OSW 1 // Assumed value for Bad OSW
+#define M_SMARTNET_BAD_OSW -2 // Assumed value for Bad OSW
+#define M_SMARTNET_END_PTT 15
 
 struct OSW {
     int addr;
@@ -68,7 +70,7 @@ public:
     ~SmartnetParser();
 
     std::vector<TrunkMessage> parse_message(gr::message::sptr msg, System *system);
-    std::vector<TrunkMessage> process_osws();
+    std::vector<TrunkMessage> process_osws(time_t curr_time);
     
     std::string to_json();
     void set_debug(int level) { debug_level = level; }
@@ -103,6 +105,7 @@ private:
     
     // Helpers
     void enqueue(int addr, int grp, int cmd, double ts);
+    void log_bandplan();
     
     // State updates
     std::vector<TrunkMessage> update_voice_frequency(double ts, double freq, long tgid = -1, int srcaddr = -1, int mode = -1);

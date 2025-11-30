@@ -5,6 +5,7 @@
 #include <gnuradio/analog/pll_freqdet_cf.h>
 #include <gnuradio/analog/quadrature_demod_cf.h>
 #include <gnuradio/block.h>
+
 #include <gnuradio/block_detail.h>
 #include <gnuradio/filter/fft_filter_fff.h>
 #include <gnuradio/filter/firdes.h>
@@ -12,6 +13,7 @@
 #include <gnuradio/io_signature.h>
 #include <gnuradio/msg_queue.h>
 #include <gnuradio/blocks/null_sink.h>
+#include <gnuradio/blocks/file_sink.h>
 #include <gnuradio/filter/fft_filter_ccf.h>
 
 #if GNURADIO_VERSION < 0x030800
@@ -27,6 +29,7 @@
 #include <op25_repeater/include/op25_repeater/frame_assembler.h>
 #include <gnuradio/digital/clock_recovery_mm_ff.h>
 #include <gnuradio/digital/binary_slicer_fb.h>
+
 
 
 
@@ -61,15 +64,19 @@ private:
   gr::filter::fir_filter_fff::sptr sym_filter;
   gr::filter::fft_filter_ccf::sptr cutoff_filter;
   gr::blocks::multiply_const_ff::sptr pll_amp;
-  gr::analog::pll_freqdet_cf::sptr pll_freq_lock;
+  gr::analog::pll_freqdet_cf::sptr pll_demod;
   gr::analog::quadrature_demod_cf::sptr fm_demod;
   gr::op25_repeater::rmsagc_ff::sptr baseband_amp;
   gr::op25_repeater::fsk4_demod_ff::sptr fsk4_demod;
+  gr::digital::clock_recovery_mm_ff::sptr fsk4_demod_mm;
   gr::digital::clock_recovery_mm_ff::sptr clock_recovery;
   gr::digital::binary_slicer_fb::sptr slicer;
   gr::op25_repeater::frame_assembler::sptr framer;
   gr::blocks::null_sink::sptr null_sink1;
   gr::blocks::null_sink::sptr null_sink2;
+  gr::blocks::file_sink::sptr debug_sink_in;
+  gr::blocks::file_sink::sptr debug_sink_sym;
+  gr::blocks::file_sink::sptr debug_sink_demod;
   void reset_block(gr::basic_block_sptr block); 
 };
 #endif
