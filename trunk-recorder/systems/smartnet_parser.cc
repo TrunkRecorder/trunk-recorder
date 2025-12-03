@@ -161,46 +161,67 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
     
     bool is_unknown_osw = false;
     bool is_queue_reset = false;
-    
+    OSW queue_reset;
+    // Identify the QUEUE RESET message if present. This means that we have received a bad OSW (lost sync or bad CRC)
+    // that caused us to dump the queue. If we see one (and sometimes there are several in a row), we should treat
+    // any unknown OSWs that follow specially for logging - identify them as potentially due to a missing first OSW
+    // in a multi-OSW sequence rather than just being unknown.
+
+
     while (osw2.cmd == OSW_QUEUE_RESET_CMD) {
         is_queue_reset = true;
         
-        OSW queue_reset = osw2; 
+        // Save the queue reset message for later - if we end up with an unknown OSW, we'll keep putting it back at
+        // the head of the queue until we successfully parse an OSW, since that is the likely cause of unknown OSWs
+        queue_reset = osw2; 
         
         if (osw_q.empty()) break;
+
+        // Get the next message until it is a good OSW
         osw2 = osw_q.front();
         osw_q.pop_front();
         
         if (is_queue_reset) {
+            // If we only had a single queue reset message, continue to process the OSWs (queue was sized accordingly)
             if (osw_q.size() == OSW_QUEUE_SIZE - 2) {
                  if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(debug) << "[" << msgq_id << "] QUEUE RESET";
             } else {
+                // If we only had more than one queue reset message, we need to put one back and wait for more OSWs
                 osw_q.push_front(queue_reset);
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PARSE MESSAGE QUEUE RESET PUSHED BACK";
                 return messages;
             }
         }
     }
-    
+    // Line 850 from Python implementation
+    // Parsing for OBT-specific messages. OBT systems sometimes (always?) use explicit messages that provide tx and
+    // rx channels separately for certain system information, and for voice grants. Check for them specifically
+    // first, but then fall back to non-OBT-specific parsing if that fails.
     if (is_obt_system() && osw2.ch_tx) {
         if (osw_q.empty()) {
             return messages;
         }
+        // Get next OSW in the queue
         OSW osw1 = osw_q.front(); 
         osw_q.pop_front();
         
+        // Three-OSW system information
         if (osw1.cmd == 0x320 && osw2.grp && osw1.grp) {
-             if (osw_q.empty()) { 
-                osw_q.push_front(osw1); 
-                osw_q.push_front(osw2); 
-                if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PARSE MESSAGE OSW QUEUE PUSHED FRONT";
-                return messages; 
-             }
-             OSW osw0 = osw_q.front(); osw_q.pop_front();
+
+            // this code is not used in the Python implementation
+            //  if (osw_q.empty()) { 
+            //     osw_q.push_front(osw1); 
+            //     osw_q.push_front(osw2); 
+            //     if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PARSE MESSAGE OSW QUEUE PUSHED FRONT";
+            //     return messages; 
+            //  }
+             OSW osw0 = osw_q.front(); osw_q.pop_front(); // Line 861 from Python implementation
              
              if (osw0.cmd == 0x30b && (osw0.addr & 0xfc00) == 0x6000) {
                  int system = osw2.addr;
                  int site = ((osw1.addr & 0xfc00) >> 10) + 1;
+                 int band = (osw1.addr & 0x380) >> 7;
+                 int feat = (osw1.addr & 0x3f);
                  int cc_rx_chan = osw0.addr & 0x3ff;
                  double cc_rx_freq = get_freq(cc_rx_chan);
                  double cc_tx_freq = osw2.f_tx;
@@ -220,11 +241,11 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
              }
         }
         else if (osw1.cmd == 0x2f8 && osw2.ch_tx) {
-            // Idle
+            // Two-OSW system idle  Line 896
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET OBT IDLE";
         }
         else if (osw2.ch_tx && osw1.ch_rx && osw1.grp && osw1.addr != 0 && osw2.addr != 0) {
-             // Group Grant
+             // Two-OSW group voice grant Line 908
              int mode = osw2.grp ? 0 : 1; 
              long src_rid = osw2.addr;
              long dst_tgid = osw1.addr;
@@ -240,19 +261,20 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
              if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET OBT GROUP GRANT src(" << std::dec << src_rid << ") tgid(" << dst_tgid << ") freq(" << vc_rx_freq << ")";
         }
         else if (osw2.ch_tx && osw1.ch_rx && !osw1.grp && osw1.addr != 0 && osw2.addr != 0) {
-             // Private Call
+             // Two-OSW private call voice grant/update (sent for duration of the call)
              if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET OBT PRIVATE CALL";
         } 
         else if (osw2.ch_tx && osw1.ch_rx && !osw2.grp && !osw1.grp &&(osw1.addr != 0) && (osw2.addr != 0)) {
-             // Interconnect Call
+             // Two-OSW interconnect call voice grant/update (sent for duration of the call) Line 933
              if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET OBT INTERCONNECT CALL";
         }
         else {
+            // Track that we got an unknown OSW and put back unused OSW1
             is_unknown_osw = true;
             osw_q.push_front(osw1);
         }
     }
-    // One-OSW voice update
+    // One-OSW voice update Line 952
     else if (osw2.ch_rx && osw2.grp) {
         long dst_tgid = osw2.addr;
         double vc_freq = osw2.f_rx;
@@ -266,43 +288,37 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
         
         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET VOICE UPDATE tgid(" << std::dec << dst_tgid << ") freq(" << vc_freq << ")";
     }
-    // Control Channel Broadcast
+    // One-OSW control channel broadcast
     else if (osw2.ch_rx && !osw2.grp && ((osw2.addr & 0xff00) == 0x1f00)) {
         this->rx_cc_freq = osw2.f_rx * 1000000.0;
         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET CC UPDATE freq(" << osw2.f_rx << ")";
     }
-    // Group Busy Queued
-    else if (osw2.cmd == 0x300 && osw2.grp) {
-        // Busy
-        if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET GROUP BUSY tgid(" << std::dec << osw2.addr << ")";
-    }
-    // Emergency Busy Queued
+    // One-OSW system idle
     else if (osw2.cmd == 0x2F8 && !osw2.grp) {
         // Idle
         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE";
     }
     else if (osw2.cmd == 0x300 && osw2.grp) {
-        // Group Busy Queued
+        // One-OSW group busy queued
         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET GROUP BUSY tgid(" << std::dec << osw2.addr << ")";
     }
     else if (osw2.cmd == 0x303 && osw2.grp) {
-        // Emergency Busy Queued
+        // One-OSW emergency busy queued
         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET EMERGENCY BUSY tgid(" << std::dec << osw2.addr << ")";
     }
-    // Two or Three OSW message
+    // Two- or three-OSW message
     else if (osw2.cmd == 0x308) {
         if (osw_q.empty()) { osw_q.push_front(osw2); return messages; }
         OSW osw1 = osw_q.front(); osw_q.pop_front();
         
-        // Control Channel 2
+        // Two-OSW system ID + control channel broadcast line 987
         if (osw1.ch_rx && !osw1.grp && ((osw1.addr & 0xff00) == 0x1f00)) {
             this->rx_sys_id = osw2.addr;
             this->rx_cc_freq = osw1.f_rx * 1000000.0;
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET CC2 sys(" << std::hex << this->rx_sys_id << ") freq(" << osw1.f_rx << ")";
         }
-        // Patch/Multiselect (Group) Grant - OBT?
-        // This is often 308 followed by channel
-        // But for now let's check generic 308 handlers
+
+        // Two-OSW analog group voice grant line 995
         else if (osw1.ch_rx && osw1.grp && osw1.addr != 0 && osw2.addr != 0) {
             long src_rid = osw2.addr;
             long dst_tgid = osw1.addr;
@@ -317,15 +333,18 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET ANALOG GRANT src(" << std::dec << src_rid << ") tgid(" << dst_tgid << ") freq(" << vc_freq << ")";
         }
-        // Analog Private Call
+        // Two-OSW analog private call voice grant/update (sent for duration of the call)
         else if (osw1.ch_rx && !osw1.grp && osw1.addr != 0 && osw2.addr != 0) {
              // Private call logic
              if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET ANALOG PRIVATE CALL src(" << std::dec << osw1.addr << ") dst(" << osw2.addr << ")";
         }
-        else if (osw1.ch_rx && !osw1.grp && !osw2.grp && (osw1.addr != 0) && (osw2.addr != 0)) {
+        // Two-OSW interconnect call voice grant/update (sent for duration of the call)
+        else if (osw1.ch_rx && !osw1.grp && (osw1.addr != 0) && (osw2.addr != 0)) {
              // Interconnect Call
              if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET INTERCONNECT CALL src(" << std::dec << osw1.addr << ") dst(" << osw2.addr << ")";
-        } else if (osw1.cmd == 0x2f8) {
+        } 
+        // One- or two-OSW system idle line 1017
+        else if (osw1.cmd == 0x2f8) {
             OSW osw0 = osw_q.front(); osw_q.pop_front();
             
             static const std::vector<int> valid_cmds = {0x30a, 0x30b, 0x30d, 0x310, 0x311, 0x317, 0x318, 0x319, 0x31a, 0x320, 0x322, 0x32e, 0x340};
@@ -340,17 +359,19 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             }
         } 
         else if (osw1.cmd == 0x300 && osw1.grp) {
-            // Group Busy Queued
+            // Two-OSW group busy queued line 1050
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET GROUP BUSY tgid(" << std::dec << osw1.addr << ")";
         }
         else if (osw1.cmd == 0x302 && !osw1.grp) {
-            // Private Call Busy Queued
+            // Two-OSW private call busy queued
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PRIVATE CALL BUSY tgid(" << std::dec << osw1.addr << ")";
         }
         else if (osw1.cmd == 0x303 && osw1.grp) {
-            // Emergency Busy Queued
+            // Two-OSW emergency busy queued
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET EMERGENCY BUSY tgid(" << std::dec << osw1.addr << ")";
         } else if (osw1.cmd == 0x308) {
+            // Possible out-of-order two-OSW system idle line 1068
+            
             // Two-OSW system idle that got separated and interleaved with a different two- or three-OSW message.
             //
             // Example:
@@ -361,8 +382,9 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             OSW osw0 = osw_q.front(); osw_q.pop_front();
 
             if (osw0.cmd == 0x2f8) {
-                osw_q.push_front(osw0);
-                if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE (Potential interleaved)";
+                // Put back unused OSW1 (that this idle was interleaved with) line 1082
+                osw_q.push_front(osw1);
+                if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE INTERLEAVED src(" << std::dec << osw2.addr << ") data(" << osw0.addr << ")";
             } else {
                 is_unknown_osw = true;
                 osw_q.push_front(osw0);
@@ -371,13 +393,24 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             }
         }
         else if ((osw1.cmd == 0x30a) && (!osw1.grp && !osw2.grp)) {
-            // two-OSW Dynamic Regroup
+            // Two-OSW Dynamic Regroup
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DYNAMIC REGROUP";
         }
-        else if (osw1.cmd == 0x30b) {  //One of many possible two- or three-OSW meanings...
+        else if (osw1.cmd == 0x30b) {  
+            //One of many possible two- or three-OSW meanings... Line 1106
             // get next OSW in the queue
             
             OSW osw0 = osw_q.front(); osw_q.pop_front();
+
+            //  One-OSW system idle that was delayed by two OSWs and is now stuck between the last two OSWs of a
+            //  of a different three-OSW message.
+            
+            //  Example:
+            //    [OSW A-1] [OSW A-2] [OSW B-1] [OSW B-2] [IDLE] [OSW B-3] [OSW C-1] [OSW C-2]
+            
+            //  Reorder it (process it after OSW A-2 and before OSW B-1) and continue processing using the following
+            //  OSW.
+
             if (osw0.cmd == 0x2f8 && !osw0.grp) {
                 osw0 = osw_q.front(); osw_q.pop_front();
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE DELAYED 2-1 data(" << osw0.addr << ")";
@@ -389,13 +422,16 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                 this->rx_cc_freq = osw0.f_rx * 1000000.0;
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET CC2 sys(" << std::hex << this->rx_sys_id << ") freq(" << osw0.f_rx << ")";
             } else {
+                // Two-OSW messages Line 1141
                 osw_q.push_front(osw0);
 
                 if ((osw1.addr & 0xFC00) == 0x2800 && osw1.grp) {
+                    // System ID + control channel broadcast
                     this->rx_sys_id = osw2.addr;
                     this->rx_cc_freq = osw0.f_rx * 1000000.0;
                     if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET CC2 sys(" << std::hex << this->rx_sys_id << ") freq(" << osw0.f_rx << ")";
                 } else if ((osw1.addr & 0xFC00) == 0x6000) {
+                    // System ID + adjacent/alternate control channel broadcast
                     int site = ((osw1.addr & 0xFC00) >> 10) + 1;
                     int cc_rx_chan = osw1.addr & 0x3ff;
                     double cc_rx_freq = get_freq(cc_rx_chan);
@@ -405,7 +441,7 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                         add_alternate_cc_freq(curr_time, cc_rx_freq, cc_tx_freq);
                     }
                     if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET ADJACENT/ALTERNATE CC sys(" << std::hex << this->rx_sys_id << ") freq(" << cc_rx_freq << ")";
-                } else if (osw1.grp) {  //extended functions on groups
+                } else if (osw1.grp) {  //extended functions on groups Line 1169
                     // Patch/multiselect cancel
                     if (osw1.addr == 0x2021 && (this->is_patch_group(osw2.addr) || this->is_multiselect_group(osw2.addr))) {
                         //std::string type_str = this->get_call_options_str(osw2.addr, false);
@@ -413,13 +449,14 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                         //rc |= this->delete_patches(tgid);
                         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PATCH/MULTISELECT CANCEL tgid(" << std::dec << tgid << ")";
                     } else {
+                        // Unknown extended function
                         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET GROUP EXTENDED FUNCTION tgid(" << std::dec << osw2.addr << ")";
                     }
 
                 } else {
                     // Extended functions on individuals
                     // Radio check
-                    if (osw1.addr == 0x261b) {
+                    if (osw1.addr == 0x261b) { //  Radio check
                         long tgt_rid = osw2.addr;
                         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET RADIO CHECK tgt(" << std::dec << tgt_rid << ")";
                     } else if (osw1.addr == 0x261c) {  // Deaffiliation
@@ -533,7 +570,7 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                         long src_rid = osw2.addr;
                         long reason = osw1.addr & 0x3ff;
                         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DENIED src(" << std::dec << src_rid << ") code(0x" << std::hex << reason << ")";
-                    } else {
+                    } else { // Unknown extended function
                         long src_rid = osw2.addr;
                         long opcode = osw1.addr;
                         if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET INDIVIDUAL EXTENDED FUNCTION src(" << std::dec << src_rid << ") opcode(0x" << std::hex << opcode << ")";
@@ -542,7 +579,7 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             }
         }
         else if (osw1.cmd == 0x30d && !osw1.grp && !osw2.grp) {
-            // Two-OSW status / emergency / dynamic regroup acknowledgement
+            // Two-OSW status / emergency / dynamic regroup acknowledgement Line 1377
             long src_rid = osw2.addr;
             long dst_tgid = osw1.addr & 0xfff0;
             long opcode = osw1.addr & 0xf;
@@ -612,11 +649,13 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                 // adjacent site
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET ADJACENT SITE";
             } else {
+                //  Track that we got an unknown OSW and put back unused OSW0
                 is_unknown_osw = true;
                 osw_q.push_front(osw0);
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] UKNOWN OSW AFTER BAD OSW";
             }
         } else if (osw1.cmd == 0x322 and osw2.grp and osw1.grp) {
+            // Two-OSW date/time Line 1493
             int year = ((osw2.addr & 0xFE00) >> 9) + 2000;
             int month = (osw2.addr & 0x1E0) >> 5;
             int day = (osw2.addr & 0x1F);
@@ -650,24 +689,30 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DATE/TIME " << year << "-" << month << "-" << day << " " << hour << ":" << minute << " (" << dayofweek_str << ")";
         }
         else if (osw1.cmd == 0x32e && osw2.grp && osw1.grp) {
+            // Two-OSW emergency PTT Line 1525
             long src_rid = osw2.addr;
             long dst_tgid = osw1.addr & 0xfff0;
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET EMEREGENCY PTT src(" << std::dec << src_rid << ") tgid(" << std::dec << dst_tgid << ")";
         }
         else if (osw1.cmd == 0x340 && osw2.grp && osw1.grp and (this->is_patch_group(osw2.addr) || this->is_multiselect_group(osw2.addr))) {
+            // Two-OSW patch/multiselect
             int tgid = (osw1.addr & 0xfff) << 4;
             int sub_tgid = osw2.addr & 0xfff0;
             int mode = osw2.addr & 0xf;
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET PATCH/MULTISELECT tgid(" << std::dec << tgid << ") sub_tgid(" << std::dec << sub_tgid << ") mode(0x" << std::hex << mode << ")";
         } else {
+            // Track that we got an unknown OSW; OSW1 did not match, so put it back in the queue
             is_unknown_osw = true;
             osw_q.push_front(osw1);
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] UKNOWN OSW AFTER BAD OSW"; 
         }
     } else if (osw2.cmd == 0x321) {
+        //Two-OSW message 
+
         // Get next OSW in the queue
         OSW osw1 = osw_q.front(); osw_q.pop_front();
         if (osw1.ch_rx && osw2.grp && osw1.grp && (osw1.addr != 0)) {
+            // Two-OSW digital group voice grant
             long src_rid = osw2.addr;
             long dst_tgid = osw1.addr;
             double vc_freq = osw1.f_rx;
@@ -677,22 +722,41 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             messages.push_back(create_trunk_message(GRANT, vc_freq * 1000000.0, dst_tgid, src_rid, encrypted, emergency));
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DIGITAL GROUP GRANT src(" << std::dec << src_rid << ") tgid(" << std::dec << dst_tgid << ") vc_freq(" << vc_freq << ")";
         } else if (osw1.ch_rx && !osw1.grp && (osw1.addr != 0) && (osw2.addr != 0)) {
+            // Two-OSW digital private call voice grant/update (sent for duration of the call)
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DIGITAL PRIVATE CALL src(" << std::dec << osw1.addr << ") dst(" << osw2.addr << ")";
         } else if (osw1.cmd == 0x2f8) {
+            // One- or two-OSW system idle Line 1565
             OSW osw0 = osw_q.front(); osw_q.pop_front();
             if (osw0.cmd != 0x317 && osw0.cmd != 0x318) {
                 osw_q.push_front(osw0);
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE DIGITAL";
             } else {
+                //  One-OSW system idle that was delayed by one OSW and is now stuck in the middle of a different two- or
+                //  three-OSW message.
+                
+                //  Example:
+                //    [OSW A-1] [OSW A-2] [OSW B-1] [OSW B-2] [IDLE] [OSW B-3] [OSW C-1] [OSW C-2]
+                
+                //  Reorder it (process it after OSW A-2 and before OSW B-1) and put back the message it was inside to try
+                //  processing the message again.
+
+                // Put back unused OSW0 and OSW2
                 osw_q.push_front(osw0);
                 osw_q.push_front(osw2);
                 if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET IDLE DELAYED 1-2 data(" << osw1.addr << ")";
             }
         } else if (osw1.cmd == 0x315 && !osw1.grp && !osw2.grp) {
+            // Two-OSW encrypted private call ring
             long dst_rid = osw2.addr;
             long src_rid = osw1.addr;
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DIGITAL ENCRYPTED PRIVATE CALL RING src(" << std::dec << src_rid << ") dst(" << std::dec << dst_rid << ")";
+        }  else if (osw1.cmd == 0x317 && !osw1.grp && !osw2.grp) {
+            // Two-OSW clear private call ring
+            long dst_rid = osw2.addr;
+            long src_rid = osw1.addr;
+            if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DIGITAL CLEAR PRIVATE CALL RING src(" << std::dec << src_rid << ") dst(" << std::dec << dst_rid << ")";
         } else {
+            // Track that we got an unknown OSW; OSW1 did not match, so put it back in the queue
             is_unknown_osw = true;
             osw_q.push_front(osw1);
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] UKNOWN OSW AFTER BAD OSW";
@@ -730,12 +794,12 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
     }
 
 
-    if (is_unknown_osw) {
+    if (is_unknown_osw && is_queue_reset) {
+        // If we got an unknown OSW after a queue reset, put back the queue reset message so that we know the next
+        // unknown OSW is likely caused by the queue reset as well
+        osw_q.push_front(queue_reset);
         if (this->debug_level >= 1) {
-             // We might have pushed back osw1/osw0 so osw2 is the "current" unknown one if we didn't process it?
-             // Actually, the logic often pushes back items.
-             // If we are here, we processed osw2 (popped it) but couldn't match it or the sequence following it.
-             // The original Python code logs "UNKNOWN OSW (0x...)" for the specific OSW that wasn't handled.
+            // Log the unknown OSW
              BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] Unknown OSW cmd=" << std::hex << osw2.cmd << " addr=" << osw2.addr << " grp=" << osw2.grp
                                      << " ch_rx=" << osw2.ch_rx << " ch_tx=" << osw2.ch_tx;
         }
