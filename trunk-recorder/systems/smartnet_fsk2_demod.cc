@@ -75,7 +75,7 @@ void smartnet_fsk2_demod::initialize() {
 
   float fm_demod_gain = channel_rate / (2 * pi * symbol_rate);
   fm_demod = gr::analog::quadrature_demod_cf::make(fm_demod_gain);
-  framer = gr::op25_repeater::frame_assembler::make("smartnet", 11, 1, rx_queue, false);
+  framer = gr::op25_repeater::frame_assembler::make("smartnet", 1, 1, rx_queue, false);
   null_sink1 = gr::blocks::null_sink::make(sizeof(uint16_t));
   null_sink2 = gr::blocks::null_sink::make(sizeof(uint16_t));
 
