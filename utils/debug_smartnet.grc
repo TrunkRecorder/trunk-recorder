@@ -380,7 +380,7 @@ blocks:
     bus_structure: null
     coordinate: [600, 250]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: src_demod
   id: blocks_file_source
   parameters:
@@ -446,7 +446,7 @@ blocks:
     bus_structure: null
     coordinate: [200, 250]
     rotation: 0
-    state: disabled
+    state: enabled
 - name: throttle_demod
   id: blocks_throttle
   parameters:
@@ -503,7 +503,7 @@ blocks:
     bus_structure: null
     coordinate: [400, 250]
     rotation: 0
-    state: disabled
+    state: enabled
 
 connections:
 - [src_demod, '0', throttle_demod, '0']

@@ -71,7 +71,8 @@ void smartnet_fsk2_demod::initialize() {
     mu,
     gain_mu,
     omega_relative_limit); //gr::digital::clock_recovery_mm_ff::make(samples_per_symbol, 0.1, 0.5, 0.05, 0.005);
-  //fsk4_demod = gr::op25_repeater::fsk4_demod_ff::make(tune_queue, channel_rate, symbol_rate);
+  fsk4_demod = gr::op25_repeater::fsk4_demod_ff::make(tune_queue, channel_rate, symbol_rate);
+
   float fm_demod_gain = channel_rate / (2 * pi * symbol_rate);
   fm_demod = gr::analog::quadrature_demod_cf::make(fm_demod_gain);
   framer = gr::op25_repeater::frame_assembler::make("smartnet", 11, 1, rx_queue, false);
@@ -82,29 +83,37 @@ void smartnet_fsk2_demod::initialize() {
   debug_sink_sym = gr::blocks::file_sink::make(sizeof(float), "smartnet_debug_sym.float");
   debug_sink_demod = gr::blocks::file_sink::make(sizeof(float), "smartnet_debug_demod.float");
   
-  // This is the original Approach
-//   connect(self(), 0, pll_freq_lock, 0);
-//   connect(pll_freq_lock, 0, pll_amp, 0);
-//   connect(pll_amp, 0, noise_filter, 0);
-//   connect(noise_filter, 0, sym_filter, 0);
-//   connect(sym_filter, 0,fsk4_demod, 0);
-//   connect(fsk4_demod, 0, self(), 0);
-
 
   // This is the current approch in OP25, but they generate some of the filters differently
   // connect(self(), 0, fm_demod,0);
   // connect(fm_demod, 0, baseband_amp,0);
   // connect(baseband_amp, 0, sym_filter, 0);
-  // connect(sym_filter, 0,fsk4_demod_mm, 0);
+  // connect(sym_filter, 0,fsk4_demod, 0);
+  // connect(fsk4_demod, 0, slicer, 0);
+  // connect(slicer, 0, framer, 0);
+
+  // connect(framer, 0, null_sink1, 0);
+  // connect(framer, 1, null_sink2, 0);
+
+    // Different debug sinks in case we want to look at the output at different stages
+    // connect(self(), 0, debug_sink_in, 0);
+    // connect(sym_filter, 0, debug_sink_sym, 0);
+    // connect(fsk4_demod, 0, debug_sink_demod, 0);
+
+
+
+  // This is the is the PLL approach and it seems to work
   connect(self(), 0, pll_demod, 0);
-  connect(pll_demod, 0, fsk4_demod_mm, 0);
-  connect(fsk4_demod_mm, 0, slicer, 0);
+  connect(pll_demod, 0, fsk4_demod, 0);
+  connect(fsk4_demod, 0, slicer, 0);
   connect(slicer, 0, framer, 0);
 
   connect(framer, 0, null_sink1, 0);
   connect(framer, 1, null_sink2, 0);
 
-  //connect(self(), 0, debug_sink_in, 0);
-  //connect(sym_filter, 0, debug_sink_sym, 0);
-  //connect(fsk4_demod_mm, 0, debug_sink_demod, 0);
+  // Different debug sinks in case we want to look at the output at different stages
+  // connect(self(), 0, debug_sink_in, 0);
+  // connect(pll_demod, 0, debug_sink_sym, 0);
+  // connect(fsk4_demod_mm, 0, debug_sink_demod, 0);
+
 }
