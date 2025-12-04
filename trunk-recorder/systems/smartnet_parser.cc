@@ -36,13 +36,7 @@ TrunkMessage SmartnetParser::create_trunk_message(MessageType type, double freq,
     TrunkMessage msg;
     msg.message_type = type;
     msg.freq = freq;
-    msg.talkgroup = talkgroup >> 4; // Shift out status bits for the main talkgroup ID? Usually TrunkRecorder expects base TGID
-    // But wait, if we pass talkgroup with flags, we should strip them for the ID, but keep them for analysis.
-    // In P25 decoder, talkgroup is usually the ID.
-    // In Smartnet, bits 0-3 are status.
-    // I'll assume the caller passes the full OSW value and I strip it here or caller strips it.
-    // For now, I will strip it here:
-    msg.talkgroup = talkgroup >> 4;
+    msg.talkgroup = talkgroup;
     
     msg.source = source;
     msg.encrypted = encrypted;
@@ -720,6 +714,7 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
             int options = (dst_tgid & 0x7);
             bool emergency = (options == 2 || options == 4 || options == 5);
             messages.push_back(create_trunk_message(GRANT, vc_freq * 1000000.0, dst_tgid, src_rid, encrypted, emergency));
+
             if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET DIGITAL GROUP GRANT src(" << std::dec << src_rid << ") tgid(" << std::dec << dst_tgid << ") vc_freq(" << vc_freq << ")";
         } else if (osw1.ch_rx && !osw1.grp && (osw1.addr != 0) && (osw2.addr != 0)) {
             // Two-OSW digital private call voice grant/update (sent for duration of the call)
