@@ -321,7 +321,7 @@ void Source::set_gain(double r) {
     double current_gain = cast_to_osmo_sptr(source_block)->get_gain();
     if (current_gain != gain) {
       BOOST_LOG_TRIVIAL(error) << "Requested Gain of " << gain << " not supported, driver using: " << current_gain;
-    } 
+    }
     BOOST_LOG_TRIVIAL(info) << "Gain set to: " << current_gain;
   }
 
@@ -621,7 +621,7 @@ Recorder *Source::get_analog_recorder(Talkgroup *talkgroup, int priority, Call *
   if (talkgroup && (priority == -1)) {
     call->set_state(MONITORING);
     call->set_monitoring_state(IGNORED_TG);
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Not recording talkgroup. Priority is -1.";
+    BOOST_LOG_TRIVIAL(info) << loghdr << "Not recording talkgroup - Priority is -1 (Disabled).";
     return NULL;
   }
 
@@ -658,7 +658,7 @@ Recorder *Source::get_digital_recorder(Talkgroup *talkgroup, int priority, Call 
   if (talkgroup && (priority == -1)) {
     call->set_state(MONITORING);
     call->set_monitoring_state(IGNORED_TG);
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Not recording talkgroup. Priority is -1.";
+    BOOST_LOG_TRIVIAL(info) << loghdr << "Not recording talkgroup - Priority is -1 (Disabled).";
     return NULL;
   }
 
