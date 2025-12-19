@@ -97,6 +97,7 @@ public:
   void set_tdma_slot(int slot);
   void set_source(long src);
   double since_last_write();
+  void process_message_queues();
   double get_current_length();
   void set_enabled(bool enabled);
   bool is_enabled();

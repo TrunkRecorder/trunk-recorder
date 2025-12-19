@@ -216,6 +216,8 @@ namespace gr {
             logts(logger),
             crypt_algs(logger, debug, msgq_id),
             ess_keyid(0),
+            curr_src_id(-1),
+            curr_grp_id(-1),
             ess_algid(0x80),
             vf_tgid(0),
 			terminate_call(std::pair<bool,long>(false,0)),
@@ -499,6 +501,52 @@ namespace gr {
                                 fprintf(stderr, ", srcaddr=%d, grpaddr=%d", srcaddr, grpaddr);
                             break;
                         }
+                        case 0x15: { // Motorola alias header
+                            if (lcw[1] == 0x90) {
+                                int messages = lcw[4] & 0xf;
+                                int id_sequence = lcw[7] >> 4;
+
+                                alias_buffer[0] = lcw;
+                                for (int i = 1; i <= messages; i++) {
+                                    alias_buffer[i] = std::vector<uint8_t>(9, 0);
+                                }
+                            }
+                            break;
+                        }
+                        case 0x17: { // Motorola alias messages
+                            if (lcw[1] == 0x90) {
+                                // get message count
+                                int messages = 0;
+                                int header_sequence = -1;
+
+                                if (alias_buffer[0].size() >= 8) {
+                                    messages = alias_buffer[0][4] & 0xf;
+                                    header_sequence = alias_buffer[0][7] >> 4;
+                                }
+
+                                int message = lcw[2] & 0xf;
+                                int msg_sequence = lcw[3] >> 4;
+
+                                // Validate message index is within bounds
+                                if ((message > 0 && message < 10) && (message <= messages) && (msg_sequence == header_sequence)) {
+                                    alias_buffer[message] = lcw;
+
+                                    // When all messages received, send raw buffer to recorder for decoding
+                                    if (message == messages && messages > 0 && messages < (int)alias_buffer.size()) {
+                                        std::string msg = "{\"type\": \"motorola_alias_p1\", \"messages\": " + std::to_string(messages) + ", \"blocks\": {";
+                                        for (int i = 0; i <= messages && i < 10; i++) {
+                                            if (!alias_buffer[i].empty()) {
+                                                if (i > 0) msg += ", ";
+                                                msg += "\"" + std::to_string(i) + "\": \"" + uint8_vector_to_hex_string(alias_buffer[i]) + "\"";
+                                            }
+                                        }
+                                        msg += "}}";
+                                        send_msg(msg, M_P25_JSON_DATA);
+                                    }
+                                }
+                            }
+                            break;
+                        }
                     }
                 } else if (sf == 1) {						// sf=1, implicit MFID
                     switch (lco) {
@@ -750,8 +798,15 @@ namespace gr {
                                 }
                             }
                         } else {
+		                    // For encrypted voice without a valid key, push silent audio frames
+                            // If monitoring for metadata, this will allow tags to pass and preserve call flow
+                            if (!op25audio.enabled()) {
+                                for (int i = 0; i < SND_FRAME; i++) {
+                                    output_queue.push_back(0);  // Silent frame
+                                }
+                            }
                             std::string encr = "{\"encrypted\": " + std::to_string(1) + ", \"algid\": " + std::to_string(ess_algid) + ", \"keyid\": " + std::to_string(ess_keyid) + "}";
-                            //send_msg(encr, M_P25_JSON_DATA);
+                            send_msg(encr, M_P25_JSON_DATA);
                         }
                     }
 

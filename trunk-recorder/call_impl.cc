@@ -296,7 +296,10 @@ MonitoringState Call_impl::get_monitoring_state() {
 }
 
 void Call_impl::set_encrypted(bool m) {
-  encrypted = m;
+  if (encrypted != m) {
+    encrypted = m;
+    update_talkgroup_display();
+  }
 }
 
 bool Call_impl::get_encrypted() {
@@ -466,12 +469,13 @@ void Call_impl::update_talkgroup_display() {
   }
 
   char formattedTalkgroup[62];
+  int color = encrypted ? 31 : 35; // Red for encrypted, magenta for normal
   if (this->sys->get_talkgroup_display_format() == talkGroupDisplayFormat_id_tag) {
-    snprintf(formattedTalkgroup, 61, "%10ld (%c[%dm%23s%c[0m)", talkgroup, 0x1B, 35, talkgroup_tag.c_str(), 0x1B);
+    snprintf(formattedTalkgroup, 61, "%10ld (%c[%dm%23s%c[0m)", talkgroup, 0x1B, color, talkgroup_tag.c_str(), 0x1B);
   } else if (this->sys->get_talkgroup_display_format() == talkGroupDisplayFormat_tag_id) {
-    snprintf(formattedTalkgroup, 61, "%c[%dm%23s%c[0m (%10ld)", 0x1B, 35, talkgroup_tag.c_str(), 0x1B, talkgroup);
+    snprintf(formattedTalkgroup, 61, "%c[%dm%23s%c[0m (%10ld)", 0x1B, color, talkgroup_tag.c_str(), 0x1B, talkgroup);
   } else {
-    snprintf(formattedTalkgroup, 61, "%c[%dm%10ld%c[0m", 0x1B, 35, talkgroup, 0x1B);
+    snprintf(formattedTalkgroup, 61, "%c[%dm%10ld%c[0m", 0x1B, color, talkgroup, 0x1B);
   }
   talkgroup_display = boost::lexical_cast<std::string>(formattedTalkgroup);
 }

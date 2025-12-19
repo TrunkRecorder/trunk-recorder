@@ -88,6 +88,7 @@ private:
 	std::pair<bool,long> terminate_call;
 	long src_id;
 	long grp_id;
+	std::array<std::vector<uint8_t>, 10> alias_buffer;
 	const op25_audio& op25audio;
     log_ts& logts;
     int d_nac;

@@ -277,6 +277,9 @@ During the status display, each source will report the running average as well a
 | multiSite              |          | false         | **true** / **false** | Enables multiSite mode for this system                                            |
 | multiSiteSystemName    |          |               | string               | The name of the system that this site belongs to. **This is required for SmartNet in Multi-Site mode.** |
 | multiSiteSystemNumber  |          | 0             | number               | An arbitrary number used to identify this system for SmartNet in Multi-Site mode. |
+| monitorEncrypted       |          | false         | **true** / **false** | Monitor encrypted transmissions and generate call metadata **without recording audio**. Trunk Recorder can assign a recorder to monitor encrypted calls to capture talkgroup activity and associated metadata. |
+| unitTagsOTA            |          |               | string               | CSV file for storing over-the-air (OTA) radio aliases; if it doesn't exist yet, the file entered will be created automatically. Trunk Recorder will capture and log OTA aliases as `unitID,alias,source,timestamp,WACN,SYS,talkgroup_discovered`. This file is loaded at startup, and searched after the `unitTagsFile` unless otherwise configured. |
+| unitTagsMode           |          | "user"        | "user", "ota", "user_only", "none" | Set the search order for radio aliases. It may be useful to control which collection is searched first, use only manual aliases, or ignore all. |
 
 When enabled, Multi-Site mode attempts to avoid recording duplicate calls by detecting simulcasted transmissions for the same talkgroup across multiple sites at the same time.
 

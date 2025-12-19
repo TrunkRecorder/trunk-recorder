@@ -360,6 +360,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Transmission Archive: " << system->get_transmission_archive();
         system->set_unit_tags_file(element.value("unitTagsFile", ""));
         BOOST_LOG_TRIVIAL(info) << "Unit Tags File: " << system->get_unit_tags_file();
+        system->set_unit_tags_ota_file(element.value("unitTagsOTA", ""));
+        BOOST_LOG_TRIVIAL(info) << "Unit Tags OTA File: " << system->get_unit_tags_ota_file();
+        system->set_unit_tags_mode(element.value("unitTagsMode", "user"));
+        BOOST_LOG_TRIVIAL(info) << "Unit Tags Mode: " << system->get_unit_tags_mode();
         system->set_record_unknown(element.value("recordUnknown", true));
         BOOST_LOG_TRIVIAL(info) << "Record Unknown Talkgroups: " << system->get_record_unknown();
         system->set_mdc_enabled(element.value("decodeMDC", false));
@@ -409,6 +413,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
         system->set_hideEncrypted(element.value("hideEncrypted", system->get_hideEncrypted()));
         BOOST_LOG_TRIVIAL(info) << "Hide Encrypted Talkgroups: " << system->get_hideEncrypted();
+        system->set_monitorEncrypted(element.value("monitorEncrypted", system->get_monitorEncrypted()));
+        BOOST_LOG_TRIVIAL(info) << "Monitor Encrypted Calls: " << system->get_monitorEncrypted();
         system->set_hideUnknown(element.value("hideUnknownTalkgroups", system->get_hideUnknown()));
         BOOST_LOG_TRIVIAL(info) << "Hide Unknown Talkgroups: " << system->get_hideUnknown();
         system->set_min_duration(element.value("minDuration", 0.0));

@@ -259,6 +259,7 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/talkgroups.cc
   trunk-recorder/unit_tag.cc
   trunk-recorder/unit_tags.cc
+  trunk-recorder/unit_tags_ota.cc
   trunk-recorder/plugin_manager/plugin_manager.cc
   trunk-recorder/call_concluder/call_concluder.cc
   trunk-recorder/autotune.cc

@@ -2,6 +2,9 @@
 #include "p25_recorder_decode.h"
 #include "../gr_blocks/plugin_wrapper_impl.h"
 #include "../plugin_manager/plugin_manager.h"
+#include "../systems/system_impl.h"
+#include "../formatter.h"
+#include "../unit_tags_ota.h"
 
 p25_recorder_decode_sptr make_p25_recorder_decode(Recorder *recorder, int silence_frames, bool d_soft_vocoder) {
   p25_recorder_decode *decoder = new p25_recorder_decode(recorder);
@@ -92,7 +95,7 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
   const char *udp_host = "127.0.0.1";
   bool do_imbe = 1;
   bool do_output = 1;
-  bool do_msgq = 0;
+  bool do_msgq = 1;
   bool do_audio_output = 1;
   bool do_tdma = 0;
   bool do_nocrypt = 1;
@@ -143,4 +146,81 @@ void p25_recorder_decode::reset() {
 
 gr::op25_repeater::p25_frame_assembler::sptr p25_recorder_decode::get_transmission_sink() {
   return op25_frame_assembler;
+}
+
+void p25_recorder_decode::handle_alias_message(const nlohmann::json& j) {
+  int messages = j["messages"];
+  std::array<std::vector<uint8_t>, 10> alias_buffer;
+  
+  // Decode hex strings back to binary
+  for (auto& [key, value] : j["blocks"].items()) {
+    int idx = std::stoi(key);
+    if (idx >= 0 && idx < 10) {
+      std::string hex_str = value.get<std::string>();
+      alias_buffer[idx].clear();
+      alias_buffer[idx].reserve(hex_str.length() / 2);
+      for (size_t i = 0; i + 1 < hex_str.length(); i += 2) {
+        uint8_t byte = static_cast<uint8_t>(std::stoul(hex_str.substr(i, 2), nullptr, 16));
+        alias_buffer[idx].push_back(byte);
+      }
+    }
+  }
+  
+  OTAAlias result;
+  if (j["type"] == "motorola_alias_p2") {
+    result = UnitTagsOTA::decode_motorola_alias_p2(alias_buffer, messages);
+  } else {
+    result = UnitTagsOTA::decode_motorola_alias(alias_buffer, messages);
+  }
+  
+  if (result.success && !result.alias.empty()) {
+    std::string loghdr = log_header(d_call->get_short_name(),d_call->get_call_num(),d_call->get_talkgroup_display(),d_call->get_freq());
+    
+    BOOST_LOG_TRIVIAL(debug) << loghdr << "Alias OTA: " << result.radio_id << " = \"" << result.alias << "\" [" << result.source << "]";
+    
+    System *sys = d_call->get_system();
+    if (sys) {
+      System_impl *sys_impl = dynamic_cast<System_impl*>(sys);
+      if (sys_impl && sys_impl->unit_tags) {
+        bool added = sys_impl->unit_tags->add_ota(result);
+        if (added) {
+          BOOST_LOG_TRIVIAL(info) << loghdr << Color::BMAG << "New " << result.source << " alias: " << Color::RST 
+                                  << result.radio_id << " (" << Color::BLU << result.alias << Color::RST << ")"; 
+        } else {
+          BOOST_LOG_TRIVIAL(debug) << loghdr << "Alias for " << result.radio_id << " already exists";
+        }
+      }
+    }
+  }
+}
+
+void p25_recorder_decode::check_message_queue() {
+  if (!rx_queue || !d_call) {
+    return;
+  }
+
+  gr::message::sptr msg;
+  while ((msg = rx_queue->delete_head_nowait())) {
+    long msg_type = msg->type();
+    
+    if (msg_type == -3) { // M_P25_JSON_DATA
+      std::string msg_str(msg->to_string());
+      
+      try {
+        auto j = nlohmann::json::parse(msg_str);
+        
+        if (j.contains("type")) {
+          std::string json_msg_type = j["type"];
+          
+          if (json_msg_type == "motorola_alias_p1" || json_msg_type == "motorola_alias_p2") {
+            handle_alias_message(j);
+          }
+          // Add some more JSON handlers as we find other things to decode!
+        }
+        
+      } catch (const std::exception& e) {
+        BOOST_LOG_TRIVIAL(debug) << "Malformed P25 JSON message: " << e.what();
+      }
+    }
+  }
 }

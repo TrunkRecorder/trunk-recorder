@@ -362,6 +362,8 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info.min_transmissions_removed = 0;
   call_info.color_code = 0;
 
+  std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
+
   if (call->get_is_analog()) {
     call_info.audio_type = "analog";
   } else if (call->get_phase2_tdma()) {
@@ -370,15 +372,17 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     call_info.audio_type = "digital";
   }
 
+  if (call_info.encrypted) {
+    BOOST_LOG_TRIVIAL(info) << loghdr << Color::RED << "Encrypted call" << Color::RST << " - No audio generated";
+  }
 
   // loop through the transmission list, pull in things to fill in totals for call_info
   // Using a for loop with iterator
   for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end();) {
     Transmission t = *it;
 
-    if (t.length < sys->get_min_tx_duration()) {
+    if (t.length < sys->get_min_tx_duration() && !call_info.encrypted) {
       if (!call_info.transmission_archive) {
-        std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
         BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission less than " << sys->get_min_tx_duration() << " seconds. Actual length: " << t.length << ".";
         call_info.min_transmissions_removed++;
 
@@ -398,7 +402,6 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     }
 
     std::stringstream transmission_info;
-    std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
     transmission_info << loghdr << "- Transmission src: " << t.source << display_tag << " pos: " << format_time(total_length) << " length: " << format_time(t.length);
 
     if (t.error_count < 1) {
@@ -469,7 +472,21 @@ void Call_Concluder::conclude_call(Call *call, System *sys, Config config) {
     remove_call_files(call_info);
     return;
   }
-  else if (call_info.transmission_list.size()== 0 && call_info.min_transmissions_removed == 0) {
+
+  // Clean up after encrypted calls without keys.
+  if (call_info.encrypted) {
+    if (call_info.transmission_list.size() > 0 || call_info.min_transmissions_removed > 0) {
+      int result = create_call_json(call_info);
+      if (result < 0) {
+        BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to create metadata JSON for encrypted call";
+      }
+    }
+    
+    remove_call_files(call_info);
+    return;
+  }
+
+  if (call_info.transmission_list.size() == 0 && call_info.min_transmissions_removed == 0) {
     BOOST_LOG_TRIVIAL(error) << loghdr << "No Transmissions were recorded!";
     return;
   }

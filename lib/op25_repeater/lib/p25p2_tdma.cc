@@ -118,7 +118,9 @@ p25p2_tdma::p25p2_tdma(const op25_audio& udp, log_ts& logger, int slotid, int de
 	next_keyid(0),
 	next_algid(0x80),
 	p2framer(),
-    crypt_algs(logger, debug, msgq_id)
+    crypt_algs(logger, debug, msgq_id),
+    src_id(-1),
+    grp_id(-1)
 {
 	assert (slotid == 0 || slotid == 1);
 	mbe_initMbeParms (&cur_mp, &prev_mp, &enh_mp);
@@ -389,6 +391,43 @@ void p25p2_tdma::decode_mac_msg(const uint8_t byte_buf[], const unsigned int len
 			fprintf(stderr, "mco=%01x/%02x(0x%02x), len=%d", b1b2, mco, op, msg_len);
 		}
 
+		// Check for Motorola Talker Alias messages (Phase 2 TDMA)
+		if (op == 145 && mfid == 0x90) {  // 0x91 = Motorola Talker Alias Header
+			// Extract message count from header byte 5 (full byte, not bits)
+			if (msg_len >= 6) {
+				int messages = byte_buf[msg_ptr + 5];
+				// Initialize alias buffer
+				alias_buffer[0].assign(byte_buf + msg_ptr, byte_buf + msg_ptr + msg_len);
+				for (int i = 1; i <= messages && i < 10; i++) {
+					alias_buffer[i] = std::vector<uint8_t>(17, 0);
+				}
+			}
+		} else if (op == 149 && mfid == 0x90) {  // 0x95 = Motorola Talker Alias Data Block
+			if (msg_len >= 4 && alias_buffer[0].size() >= 9) {
+				int messages = alias_buffer[0][5];
+				int header_sequence = alias_buffer[0][8] >> 4;
+				int block_num = byte_buf[msg_ptr + 3];
+				int msg_sequence = byte_buf[msg_ptr + 4] >> 4;
+
+				if ((block_num > 0 && block_num < 10) && (msg_sequence == header_sequence)) {
+					alias_buffer[block_num].assign(byte_buf + msg_ptr, byte_buf + msg_ptr + msg_len);
+					
+					// When all blocks received, send raw buffer to recorder for decoding
+					if (block_num == messages && messages > 0) {
+						std::string msg = "{\"type\": \"motorola_alias_p2\", \"messages\": " + std::to_string(messages) + ", \"blocks\": {";
+						for (int i = 0; i <= messages && i < 10; i++) {
+							if (!alias_buffer[i].empty()) {
+								if (i > 0) msg += ", ";
+								msg += "\"" + std::to_string(i) + "\": \"" + uint8_vector_to_hex_string(alias_buffer[i]) + "\"";
+							}
+						}
+						msg += "}}";
+						send_msg(msg, M_P25_JSON_DATA);
+					}
+				}
+			}
+		}
+
 		// Generic message processing
 		if (b1b2 == 0x1) {
 			// Derived from FDMA CAI abbreviated format; convert to TSBK
@@ -571,49 +610,56 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
 		}
 		vf.pack_cw(p_cw, u);
 		audio_valid = crypt_algs.process(p_cw, fr_type, voice_subframe);
-		if (!audio_valid)
-			return;
-        vf.unpack_cw(p_cw, u);  // unpack plaintext codewords
-        vf.unpack_b(b, u);      // for unencrypted traffic this is done inside vf.process_vcw()
+		if (audio_valid) {
+			vf.unpack_cw(p_cw, u);  // unpack plaintext codewords
+			vf.unpack_b(b, u);      // for unencrypted traffic this is done inside vf.process_vcw()
+		} else {
+		// For encrypted voice without a valid key, push silent audio frames
+        // If monitoring for metadata, this will allow tags to pass and preserve call flow
+		memset(samples_buf, 0, sizeof(samples_buf));
+		}
 	}
 
-	rc = mbe_dequantizeAmbeTone(&tone_mp, &errs_mp, u);
-	if (rc >= 0) {					// Tone Frame
-		if (rc == 0) {                  // Valid Tone
-			tone_frame = true;
-			mbe_err_cnt = 0;
-		} else {                        // Tone Erasure with Frame Repeat
-			if ((++mbe_err_cnt < 4) && tone_frame) {
+	// Only dequantize and synthesize if we have valid audio (decrypted or unencrypted)
+	if (audio_valid) {
+		rc = mbe_dequantizeAmbeTone(&tone_mp, &errs_mp, u);
+		if (rc >= 0) {					// Tone Frame
+			if (rc == 0) {                  // Valid Tone
+				tone_frame = true;
+				mbe_err_cnt = 0;
+			} else {                        // Tone Erasure with Frame Repeat
+				if ((++mbe_err_cnt < 4) && tone_frame) {
+					mbe_useLastMbeParms(&cur_mp, &prev_mp);
+					rc = 0;
+				} else {
+					tone_frame = false;     // Mute audio output after 3 successive Frame Repeats
+				}
+			}
+		} else {
+			rc = mbe_dequantizeAmbe2250Parms (&cur_mp, &prev_mp, &errs_mp, b);
+			if (rc == 0) {				// Voice Frame
+				tone_frame = false;
+				mbe_err_cnt = 0;
+			} else if ((++mbe_err_cnt < 4) && !tone_frame) {// Erasure with Frame Repeat per TIA-102.BABA.5.6
 				mbe_useLastMbeParms(&cur_mp, &prev_mp);
 				rc = 0;
 			} else {
 				tone_frame = false;     // Mute audio output after 3 successive Frame Repeats
 			}
-        }
-	} else {
-		rc = mbe_dequantizeAmbe2250Parms (&cur_mp, &prev_mp, &errs_mp, b);
-		if (rc == 0) {				// Voice Frame
-			tone_frame = false;
-			mbe_err_cnt = 0;
-		} else if ((++mbe_err_cnt < 4) && !tone_frame) {// Erasure with Frame Repeat per TIA-102.BABA.5.6
-			mbe_useLastMbeParms(&cur_mp, &prev_mp);
-			rc = 0;
-		} else {
-			tone_frame = false;         // Mute audio output after 3 successive Frame Repeats
 		}
-	}
 
-	// Synthesize tones or speech as long as dequantization was successful and overall error rate is below threshold
-	if ((rc == 0) && (errs_mp.ER <= 0.096)) {
-		if (tone_frame) {
-			software_decoder.decode_tone(samples_buf, tone_mp.ID, tone_mp.AD, &tone_mp.n);
-		} else if(d_soft_vocoder) {
-			K = 12;
-			if (cur_mp.L <= 36)
-				K = int(float(cur_mp.L + 2.0) / 3.0);
-			software_decoder.decode_tap(samples_buf, cur_mp.L, K, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
-		} else {
-			vocoder.decode_tap(samples_buf, cur_mp.L, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
+		// Synthesize tones or speech as long as dequantization was successful and overall error rate is below threshold
+		if ((rc == 0) && (errs_mp.ER <= 0.096)) {
+			if (tone_frame) {
+				software_decoder.decode_tone(samples_buf, tone_mp.ID, tone_mp.AD, &tone_mp.n);
+			} else if(d_soft_vocoder) {
+				K = 12;
+				if (cur_mp.L <= 36)
+					K = int(float(cur_mp.L + 2.0) / 3.0);
+				software_decoder.decode_tap(samples_buf, cur_mp.L, K, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
+			} else {
+				vocoder.decode_tap(samples_buf, cur_mp.L, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
+			}
 		}
 	}
 

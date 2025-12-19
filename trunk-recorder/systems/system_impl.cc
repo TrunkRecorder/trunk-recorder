@@ -93,6 +93,7 @@ System_impl::System_impl(int sys_num) {
   unit_tags = new UnitTags();
   talkgroup_patches = {};
   d_hideEncrypted = false;
+  d_monitorEncrypted = false;
   d_hideUnknown = false;
   d_mdc_enabled = false;
   d_fsync_enabled = false;
@@ -331,6 +332,32 @@ void System_impl::set_unit_tags_file(std::string unit_tags_file) {
   this->unit_tags->load_unit_tags(unit_tags_file);
 }
 
+void System_impl::set_unit_tags_ota_file(std::string unit_tags_ota_file) {
+  this->unit_tags_ota_file = unit_tags_ota_file;
+  this->unit_tags->load_unit_tags_ota(unit_tags_ota_file);
+}
+
+std::string System_impl::get_unit_tags_ota_file() {
+  return this->unit_tags_ota_file;
+}
+
+void System_impl::set_unit_tags_mode(std::string mode) {
+  this->unit_tags_mode = mode;
+  if (mode == "ota" || mode == "OTA") {
+    this->unit_tags->set_mode(TAG_OTA_FIRST);
+  } else if (mode == "user_only") {
+    this->unit_tags->set_mode(TAG_USER_ONLY);
+  } else if (mode == "none") {
+    this->unit_tags->set_mode(TAG_NONE);
+  } else {
+    this->unit_tags->set_mode(TAG_USER_FIRST);
+  }
+}
+
+std::string System_impl::get_unit_tags_mode() {
+  return this->unit_tags_mode;
+}
+
 void System_impl::set_custom_freq_table_file(std::string custom_freq_table_file) {
   this->custom_freq_table_file = custom_freq_table_file;
 }
@@ -533,6 +560,12 @@ bool System_impl::get_hideEncrypted() {
 }
 void System_impl::set_hideEncrypted(bool hideEncrypted) {
   d_hideEncrypted = hideEncrypted;
+}
+bool System_impl::get_monitorEncrypted() {
+  return d_monitorEncrypted;
+}
+void System_impl::set_monitorEncrypted(bool monitorEncrypted) {
+  d_monitorEncrypted = monitorEncrypted;
 }
 
 bool System_impl::get_hideUnknown() {

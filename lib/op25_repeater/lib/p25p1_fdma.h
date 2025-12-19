@@ -98,6 +98,8 @@ namespace gr {
                 double error_history[20];
                 long curr_src_id;
                 long curr_grp_id;
+                std::array<std::vector<uint8_t>, 10> alias_buffer;
+                
                 std::pair<bool,long> terminate_call;
                 const char *d_udp_host;
                 int  d_port;

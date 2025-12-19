@@ -73,6 +73,9 @@ public:
   double get_output_sample_rate();
   State get_state();
   gr::op25_repeater::p25_frame_assembler::sptr get_transmission_sink();
+  void check_message_queue();
 
+private:
+  void handle_alias_message(const nlohmann::json& j);
 };
 #endif
