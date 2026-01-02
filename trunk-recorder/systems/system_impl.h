@@ -215,6 +215,8 @@ public:
   std::vector<double> get_channels() override;
   std::vector<double> get_control_channels() override;
   std::vector<Talkgroup *> get_talkgroups() override;
+  std::vector<UnitTag *> get_unit_tags() override;
+  std::vector<UnitTagOTA *> get_unit_tags_ota() override;
   gr::msg_queue::sptr msg_queue;
   System_impl(int sys_id);
   void set_bandplan(std::string) override;

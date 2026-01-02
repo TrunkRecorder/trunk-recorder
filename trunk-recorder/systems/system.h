@@ -151,6 +151,8 @@ public:
   virtual std::vector<double> get_channels() = 0;
   virtual std::vector<double> get_control_channels() = 0;
   virtual std::vector<Talkgroup *> get_talkgroups() = 0;
+  virtual std::vector<UnitTag *> get_unit_tags() = 0;
+  virtual std::vector<UnitTagOTA *> get_unit_tags_ota() = 0;
   virtual void set_bandplan(std::string) = 0;
   virtual std::string get_bandplan() = 0;
   virtual void set_bandfreq(int) = 0;

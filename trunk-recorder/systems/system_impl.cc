@@ -400,6 +400,21 @@ std::vector<double> System_impl::get_channels() {
 std::vector<Talkgroup *> System_impl::get_talkgroups() {
   return talkgroups->get_talkgroups();
 }
+
+std::vector<UnitTag *> System_impl::get_unit_tags() {
+  if (unit_tags) {
+    return unit_tags->get_unit_tags();
+  }
+  return std::vector<UnitTag *>();
+}
+
+std::vector<UnitTagOTA *> System_impl::get_unit_tags_ota() {
+  if (unit_tags) {
+    return unit_tags->get_unit_tags_ota();
+  }
+  return std::vector<UnitTagOTA *>();
+}
+
 int System_impl::channel_count() {
   return channels.size();
 }
