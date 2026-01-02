@@ -28,5 +28,7 @@ public:
   bool add_ota(const OTAAlias& ota_alias);
   void set_mode(UnitTagMode mode);
   UnitTagMode get_mode();
+  std::vector<UnitTag *> get_unit_tags();
+  std::vector<UnitTagOTA *> get_unit_tags_ota();
 };
 #endif // UNIT_TAGS_H

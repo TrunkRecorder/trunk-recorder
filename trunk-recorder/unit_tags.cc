@@ -344,3 +344,11 @@ void UnitTags::set_mode(UnitTagMode mode) {
 UnitTagMode UnitTags::get_mode() {
   return this->mode;
 }
+
+std::vector<UnitTag *> UnitTags::get_unit_tags() {
+  return unit_tags;
+}
+
+std::vector<UnitTagOTA *> UnitTags::get_unit_tags_ota() {
+  return unit_tags_ota;
+}
