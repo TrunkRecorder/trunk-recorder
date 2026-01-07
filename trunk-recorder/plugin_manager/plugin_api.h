@@ -7,6 +7,7 @@
 #include "../systems/system.h"
 #include "../systems/parser.h"
 #include "../formatter.h"
+#include "../config_service.h"
 
 #include <json.hpp>
 
@@ -47,6 +48,14 @@ public:
   virtual int unit_data_grant(System *sys, long source_id) { return 0; };
   virtual int unit_answer_request(System *sys, long source_id, long talkgroup) { return 0; };
   virtual int unit_location(System *sys, long source_id, long talkgroup_num) { return 0; };
+  
+  // Called when a configuration parameter is changed via the ConfigurationService
+  // Allows plugins to react to configuration changes made by other plugins or external sources
+  virtual int on_config_change(const ConfigChangeInfo& change) { return 0; };
+  
+  // Get a pointer to the global configuration service (for making changes)
+  ConfigurationService* get_config_service() { return g_config_service; }
+  
   //void set_frequency_format(int f) { frequencyFormat = f; }
   virtual ~Plugin_Api(){};
 };

@@ -6,6 +6,7 @@
 #include "./global_structs.h"
 #include "call.h"
 #include "config.h"
+#include "config_service.h"
 #include "source.h"
 #include "systems/p25_parser.h"
 #include "systems/p25_trunking.h"

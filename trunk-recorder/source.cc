@@ -306,6 +306,12 @@ void Source::set_freq_corr(double p) {
 
 void Source::set_error(double e) {
   error = e;
+  if (driver == "osmosdr") {
+    cast_to_osmo_sptr(source_block)->set_center_freq(center + error, 0);
+  } else if (driver == "usrp") {
+    cast_to_usrp_sptr(source_block)->set_center_freq(center + error, 0);
+  }
+
 }
 
 double Source::get_error() {
@@ -369,6 +375,11 @@ int Source::get_gain_by_name(std::string name) {
 
 double Source::get_gain() {
   return gain;
+}
+
+
+bool Source::get_gain_mode() {
+  return gain_mode;
 }
 
 void Source::set_gain_mode(bool m) {

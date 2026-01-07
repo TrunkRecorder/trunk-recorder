@@ -273,6 +273,7 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/sources/iq_file_source.cc
   trunk-recorder/csv_helper.cc
   trunk-recorder/config.cc
+  trunk-recorder/config_service.cc
   trunk-recorder/setup_systems.cc
   trunk-recorder/monitor_systems.cc
   trunk-recorder/talkgroup.cc
