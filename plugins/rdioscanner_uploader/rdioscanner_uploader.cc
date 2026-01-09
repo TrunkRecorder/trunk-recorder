@@ -86,6 +86,11 @@ public:
     source_list << std::fixed << std::setprecision(2);
     source_list << "[";
 
+    std::string unit_list_string;
+    std::ostringstream unit_list;
+    unit_list << std::fixed << std::setprecision(2);
+    unit_list << "[";
+
     std::ostringstream patch_list;
     std::string patch_list_string;
     patch_list << std::fixed << std::setprecision(2);
@@ -96,16 +101,28 @@ public:
 
     if (call_info.transmission_source_list.size() != 0) {
       for (unsigned long i = 0; i < call_info.transmission_source_list.size(); i++) {
-        source_list << "{ \"pos\": " << std::setprecision(2) << call_info.transmission_source_list[i].position << ", \"src\": " << std::setprecision(0) << call_info.transmission_source_list[i].source << " }";
+        source_list << "{ \"pos\": " << std::setprecision(2) << call_info.transmission_source_list[i].position << ", \"src\": " << std::setprecision(0) << call_info.transmission_source_list[i].source;
+        unit_list << "{ \"offset\": " << std::setprecision(2) << call_info.transmission_source_list[i].position << ", \"id\": " << std::setprecision(0) << call_info.transmission_source_list[i].source;
+        // Include alias tag if available
+        if (!call_info.transmission_source_list[i].tag.empty()) {
+          source_list << ", \"tag\": \"" << call_info.transmission_source_list[i].tag << "\"";
+          unit_list << ", \"label\": \"" << call_info.transmission_source_list[i].tag << "\"";
+        }
+
+        source_list << " }";
+        unit_list << " }";
 
         if (i < (call_info.transmission_source_list.size() - 1)) {
           source_list << ", ";
+          unit_list << ", ";
         } else {
           source_list << "]";
+          unit_list << "]";
         }
       }
     } else {
       source_list << "]";
+      unit_list << "]";
     }
 
     if (call_info.patched_talkgroups.size() > 1) {
@@ -154,6 +171,7 @@ public:
     freq_list_string = freq_list.str();
     call_length_string = call_length.str();
     patch_list_string = patch_list.str();
+    unit_list_string = unit_list.str();
 
     struct curl_slist *headerlist = NULL;
 
@@ -222,6 +240,11 @@ public:
     part = curl_mime_addpart(mime);
     curl_mime_data(part, source_list_string.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "sources");
+    
+    // The "units" upload is included for future testing against the unreleased v7 rdio API
+    // part = curl_mime_addpart(mime);
+    // curl_mime_data(part, unit_list_string.c_str(), CURL_ZERO_TERMINATED);
+    // curl_mime_name(part, "units");
 
     part = curl_mime_addpart(mime);
     curl_mime_data(part, std::to_string(system_id).c_str(), CURL_ZERO_TERMINATED);
