@@ -1005,15 +1005,17 @@ double SmartnetParser::get_freq(int chan, bool is_tx) {
         if (is_tx && freq != 0.0) freq -= 39.0;
     } else if (band == "OBT") {
          double bp_base = system->get_bandplan_base();
+         double bp_high = system->get_bandplan_high();
          double bp_spacing = system->get_bandplan_spacing();
          int bp_base_offset = system->get_bandplan_offset();
-         
+         double high_cmd = bp_base_offset + (bp_high - bp_base) / bp_spacing;
+
          if (!is_tx) {
-             if (chan >= bp_base_offset) {
+             if (chan >= bp_base_offset && chan < high_cmd) {
                  freq = bp_base + (bp_spacing * (chan - bp_base_offset));
              }
          } else {
-             freq = 0.0; 
+             freq = 0.0;
          }
     }
     
@@ -1036,11 +1038,15 @@ bool SmartnetParser::is_chan(int chan, bool is_tx) {
     } else if (band == "900") {
         if (chan <= 0x1de) return true;
     } else if (band == "OBT") {
+        double bp_base = system->get_bandplan_base();
+        double bp_high = system->get_bandplan_high();
+        double bp_spacing = system->get_bandplan_spacing();
         int bp_base_offset = system->get_bandplan_offset();
+        double high_cmd = bp_base_offset + (bp_high - bp_base) / bp_spacing;
         int bp_tx_base_offset = bp_base_offset - 380; // Default assumption
-        
-        if (is_tx && chan >= bp_tx_base_offset && chan < 380) return true;
-        else if (!is_tx && chan >= bp_base_offset && chan < 760) return true;
+
+        if (is_tx && chan >= bp_tx_base_offset && chan < bp_base_offset) return true;
+        else if (!is_tx && chan >= bp_base_offset && chan < high_cmd) return true;
     }
     return false;
 }
