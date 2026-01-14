@@ -40,6 +40,7 @@ struct Config {
   double call_timeout;
   bool console_log;
   bool log_file;
+  bool syslog_friendly;
   std::string log_color;
   int control_message_warn_rate;
   int control_retune_limit;

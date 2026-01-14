@@ -14,6 +14,9 @@ namespace sinks = boost::log::sinks;
 
 using namespace std;
 
+// Global log sink for SIGHUP rotation support
+boost::shared_ptr<sinks::synchronous_sink<sinks::text_file_backend>> global_log_sink;
+
 void set_logging_level(std::string log_level) {
   boost::log::trivial::severity_level sev_level = boost::log::trivial::info;
 
@@ -67,20 +70,26 @@ void setup_console_log(std::string log_color, std::string time_fmt) {
   console_sink->imbue(loc);
 }
 
-void setup_file_log(std::string log_dir, std::string log_color, std::string time_fmt) {
-  boost::shared_ptr<sinks::synchronous_sink<sinks::text_file_backend>> log_sink = logging::add_file_log(
-      keywords::file_name = log_dir + "/%m-%d-%Y_%H%M_%2N.log",
-      keywords::rotation_size = 100 * 1024 * 1024,
-      keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0),
-      keywords::auto_flush = true);
+void setup_file_log(std::string log_dir, std::string log_color, std::string time_fmt, bool syslog_friendly) {
+  if (syslog_friendly) {
+    global_log_sink = logging::add_file_log(
+        keywords::file_name = log_dir + "/trunk-recorder.log",
+        keywords::auto_flush = true);
+  } else {
+    global_log_sink = logging::add_file_log(
+        keywords::file_name = log_dir + "/%m-%d-%Y_%H%M_%2N.log",
+        keywords::rotation_size = 100 * 1024 * 1024,
+        keywords::time_based_rotation = sinks::file::rotation_at_time_point(0, 0, 0),
+        keywords::auto_flush = true);
+  }
 
   if ((log_color == "logfile") || (log_color == "all")) {
-    log_sink->set_formatter(logging::expressions::format("[%1%] (%2%)   %3%") %
+    global_log_sink->set_formatter(logging::expressions::format("[%1%] (%2%)   %3%") %
                             logging::expressions::format_date_time<boost::posix_time::ptime>("TimeStamp", time_fmt) %
                             logging::expressions::attr<logging::trivial::severity_level>("Severity") %
                             logging::expressions::smessage);
   } else {
-    log_sink->set_formatter(logging::expressions::format("[%1%] (%2%)   %3%") %
+    global_log_sink->set_formatter(logging::expressions::format("[%1%] (%2%)   %3%") %
                             logging::expressions::format_date_time<boost::posix_time::ptime>("TimeStamp", time_fmt) %
                             logging::expressions::attr<logging::trivial::severity_level>("Severity") %
                             logging::expressions::wrap_formatter(NoColorLoggingFormatter{}));
@@ -132,8 +141,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
     config.log_file = data.value("logFile", false);
     config.log_dir = data.value("logDir", "logs");
+    config.syslog_friendly = data.value("syslogFriendly", false);
     if (config.log_file) {
-      setup_file_log(config.log_dir, config.log_color, "%Y-%m-%d %H:%M:%S.%f");
+      setup_file_log(config.log_dir, config.log_color, "%Y-%m-%d %H:%M:%S.%f", config.syslog_friendly);
     }
 
     double config_ver = data.value("ver", 0.0);
@@ -151,6 +161,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
     BOOST_LOG_TRIVIAL(info) << "Log to File: " << config.log_file;
     BOOST_LOG_TRIVIAL(info) << "Log Directory: " << config.log_dir;
+    BOOST_LOG_TRIVIAL(info) << "Syslog Friendly Mode: " << config.syslog_friendly;
 
     std::string defaultTempDir = boost::filesystem::current_path().string();
 
