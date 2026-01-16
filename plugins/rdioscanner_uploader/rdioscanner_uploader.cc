@@ -21,10 +21,10 @@ struct Rdio_Scanner_System {
   bool compress_wav;
 
   // Talkgroup filters (compiled patterns)
-  std::vector<boost::regex> tg_whitelist;
-  std::vector<boost::regex> tg_blacklist;
-  std::vector<std::string> tg_whitelist_raw; // for logging/debug
-  std::vector<std::string> tg_blacklist_raw; // for logging/debug
+  std::vector<boost::regex> tg_allow;
+  std::vector<boost::regex> tg_deny;
+  std::vector<std::string> tg_allow_raw; // for logging/debug
+  std::vector<std::string> tg_deny_raw;  // for logging/debug
 };
 
 struct Rdio_Scanner_Uploader_Data {
@@ -80,13 +80,13 @@ private:
       if (!sys) return true; // no system config => don't filter here
       const std::string tg = std::to_string(talkgroup);
 
-      // If whitelist is set, MUST match it
-      if (!sys->tg_whitelist.empty() && !match_any(tg, sys->tg_whitelist)) {
+      // If allow is set, MUST match it
+      if (!sys->tg_allow.empty() && !match_any(tg, sys->tg_allow)) {
         return false;
       }
 
-      // If blacklist is set, MUST NOT match it
-      if (!sys->tg_blacklist.empty() && match_any(tg, sys->tg_blacklist)) {
+      // If deny is set, MUST NOT match it
+      if (!sys->tg_deny.empty() && match_any(tg, sys->tg_deny)) {
         return false;
       }
 
@@ -596,20 +596,20 @@ public:
 
         // Talkgroup filters per system (Optional)
         compile_patterns_from_json(
-          element, "talkgroupWhitelist",
-          sys.tg_whitelist, sys.tg_whitelist_raw,
+          element, "talkgroupAllow",
+          sys.tg_allow, sys.tg_allow_raw,
           log_prefix, sys.short_name
         );
         compile_patterns_from_json(
-          element, "talkgroupBlacklist",
-          sys.tg_blacklist, sys.tg_blacklist_raw,
+          element, "talkgroupDeny",
+          sys.tg_deny, sys.tg_deny_raw,
           log_prefix, sys.short_name
         );
 
-        if (!sys.tg_whitelist_raw.empty() || !sys.tg_blacklist_raw.empty()) {
+        if (!sys.tg_allow_raw.empty() || !sys.tg_deny_raw.empty()) {
           BOOST_LOG_TRIVIAL(info) << log_prefix << "Talkgroup filters for " << sys.short_name
-                                  << " whitelist=" << sys.tg_whitelist_raw.size()
-                                  << " blacklist=" << sys.tg_blacklist_raw.size();
+                                  << " allow=" << sys.tg_allow_raw.size()
+                                  << " deny=" << sys.tg_deny_raw.size();
         }
 
         regex_match(sys.api_key.c_str(), what, api_regex);
