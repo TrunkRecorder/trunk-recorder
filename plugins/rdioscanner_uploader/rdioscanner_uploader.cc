@@ -10,6 +10,7 @@
 #include <boost/dll/alias.hpp> // for BOOST_DLL_ALIAS
 #include <boost/foreach.hpp>
 #include <sys/stat.h>
+#include <boost/regex.hpp>
 
 struct Rdio_Scanner_System {
   std::string api_key;
@@ -18,6 +19,12 @@ struct Rdio_Scanner_System {
   std::string talkgroupsFile;
   Talkgroups *talkgroups;
   bool compress_wav;
+
+  // Talkgroup filters (compiled patterns)
+  std::vector<boost::regex> tg_whitelist;
+  std::vector<boost::regex> tg_blacklist;
+  std::vector<std::string> tg_whitelist_raw; // for logging/debug
+  std::vector<std::string> tg_blacklist_raw; // for logging/debug
 };
 
 struct Rdio_Scanner_Uploader_Data {
@@ -33,7 +40,106 @@ class Rdio_Scanner_Uploader : public Plugin_Api {
   long curl_dns_ttl;
   std::string plugin_name;
 
+private:
+  static std::string glob_to_regex_str(const std::string& glob) {
+      // Convert glob (* and ?) to a fully-anchored regex: ^...$
+      std::string rx;
+      rx.reserve(glob.size() * 2);
+      rx += "^";
+
+      for (char c : glob) {
+        switch (c) {
+          case '*': rx += ".*"; break;
+          case '?': rx += ".";  break;
+
+          // escape regex metacharacters
+          case '.': case '+': case '(': case ')': case '^': case '$':
+          case '|': case '{': case '}': case '[': case ']': case '\\':
+            rx += "\\";
+            rx += c;
+            break;
+
+          default:
+            rx += c;
+            break;
+        }
+      }
+
+      rx += "$";
+      return rx;
+    }
+
+    static bool match_any(const std::string& value, const std::vector<boost::regex>& patterns) {
+      for (const auto& r : patterns) {
+        if (boost::regex_match(value, r)) return true;
+      }
+      return false;
+    }
+
+    static bool passes_talkgroup_filter(const Rdio_Scanner_System* sys, uint32_t talkgroup) {
+      if (!sys) return true; // no system config => don't filter here
+      const std::string tg = std::to_string(talkgroup);
+
+      // If whitelist is set, MUST match it
+      if (!sys->tg_whitelist.empty() && !match_any(tg, sys->tg_whitelist)) {
+        return false;
+      }
+
+      // If blacklist is set, MUST NOT match it
+      if (!sys->tg_blacklist.empty() && match_any(tg, sys->tg_blacklist)) {
+        return false;
+      }
+
+      return true;
+    }
+
+    static void compile_patterns_from_json(
+      const json& parent,
+      const char* key,
+      std::vector<boost::regex>& out_compiled,
+      std::vector<std::string>& out_raw,
+      const std::string& log_prefix,
+      const std::string& sys_short_name
+    ) {
+      out_compiled.clear();
+      out_raw.clear();
+
+      if (!parent.contains(key)) return;
+      const auto& j = parent.at(key);
+
+      if (!j.is_array()) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
+                                 << " " << key << " must be an array (e.g. [\"507*\", \"12345\"])";
+        return;
+      }
+
+      for (const auto& v : j) {
+        std::string pat;
+        if (v.is_string()) {
+          pat = v.get<std::string>();
+        } else if (v.is_number_unsigned() || v.is_number_integer()) {
+          pat = std::to_string(v.get<long long>());
+        } else {
+          continue;
+        }
+
+        boost::algorithm::trim(pat);
+        if (pat.empty()) continue;
+
+        try {
+          out_raw.push_back(pat);
+          out_compiled.emplace_back(glob_to_regex_str(pat));
+        } catch (const boost::regex_error& e) {
+          BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
+                                   << " invalid pattern in " << key
+                                   << " value='" << pat << "' : " << e.what();
+        }
+      }
+    }
+
 public:
+  Rdio_Scanner_Uploader() : curl_share(NULL), curl_dns_ttl(300) {}
+
   Rdio_Scanner_System *get_system(std::string short_name) {
     for (std::vector<Rdio_Scanner_System>::iterator it = data.systems.begin(); it != data.systems.end(); ++it) {
       if (it->short_name == short_name) {
@@ -50,7 +156,7 @@ public:
 
   int upload(Call_Data_t call_info) {
     std::string api_key;
-    uint32_t system_id;
+    uint32_t system_id = 0;
     std::string talkgroup_group = call_info.talkgroup_group;
     std::string talkgroup_tag = call_info.talkgroup_tag;
     std::string talkgroup_alpha_tag = call_info.talkgroup_alpha_tag;
@@ -59,6 +165,16 @@ public:
     Rdio_Scanner_System *sys = get_system(call_info.short_name);
 
     if (call_info.encrypted) {
+      return 0;
+    }
+
+    // Talkgroup allow/deny filtering
+    if (sys && !passes_talkgroup_filter(sys, call_info.talkgroup)) {
+      // keep this debug/info depending on your preference
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                      call_info.talkgroup_display, call_info.freq);
+      BOOST_LOG_TRIVIAL(info) << loghdr << "Skipped upload due to talkgroup filter (tg="
+                              << call_info.talkgroup << ")";
       return 0;
     }
 
@@ -140,7 +256,7 @@ public:
     char formattedTalkgroup[62];
     snprintf(formattedTalkgroup, 61, "%c[%dm%10ld%c[0m", 0x1B, 35, call_info.talkgroup, 0x1B);
     std::string talkgroup_display = boost::lexical_cast<std::string>(formattedTalkgroup);
-    
+
     std::ostringstream freq_list;
     std::string freq_list_string;
     freq_list << std::fixed << std::setprecision(2);
@@ -162,8 +278,8 @@ public:
 
     // BOOST_LOG_TRIVIAL(error) << "Got source list: " << source_list.str();
 
-    CURLMcode res;
-    CURLM *multi_handle;
+    CURLMcode res = CURLM_OK;
+    CURLM *multi_handle = NULL;
     int still_running = 0;
     std::string response_buffer;
     freq_string = freq.str();
@@ -174,14 +290,39 @@ public:
     patch_list_string = patch_list.str();
     unit_list_string = unit_list.str();
 
-    struct curl_slist *headerlist = NULL;
+    curl_slist *headerlist = NULL;
 
     /* Fill in the file upload field. This makes libcurl load data from
      the given file name when curl_easy_perform() is called. */
 
     CURL *curl = curl_easy_init();
-    curl_mime *mime;
-    curl_mimepart *part;
+    curl_mime *mime = NULL;
+    curl_mimepart *part = NULL;
+
+    // Keep any mime-string inputs alive until after the request completes.
+    const std::string audioTypeStr   = (compress_wav ? "audio/mp4" : "audio/wav");
+    const std::string dateTimeStr    = boost::lexical_cast<std::string>(call_info.start_time);
+    const std::string systemIdStr    = std::to_string(system_id);
+    const std::string talkgroupStr   = std::to_string(call_info.talkgroup);
+
+    // These are already std::string, but keeping explicit vars makes lifetime obvious.
+    const std::string tgGroupStr     = talkgroup_group;
+    const std::string tgLabelStr     = talkgroup_alpha_tag;
+    const std::string tgTagStr       = talkgroup_tag;
+    const std::string tgNameStr      = talkgroup_description;
+
+    // Also keep server URL alive (not strictly required, but consistent).
+    std::string url = data.server + "/api/call-upload";
+
+    // curl errorbuffer for better logs
+    char curl_errbuf[CURL_ERROR_SIZE];
+    curl_errbuf[0] = '\0';
+
+    if (!curl) {
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+      BOOST_LOG_TRIVIAL(error) << loghdr << "Rdio Scanner Upload Error: curl_easy_init failed";
+      return 1;
+    }
 
     mime = curl_mime_init(curl);
     part = curl_mime_addpart(mime);
@@ -195,11 +336,11 @@ public:
     curl_mime_name(part, "audioName");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, compress_wav ? "audio/mp4" : "audio/wav", CURL_ZERO_TERMINATED);
+    curl_mime_data(part, audioTypeStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "audioType");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.start_time).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, dateTimeStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "dateTime");
 
     part = curl_mime_addpart(mime);
@@ -219,23 +360,23 @@ public:
     curl_mime_name(part, "patches");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.talkgroup).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, talkgroupStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "talkgroup");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.talkgroup_group).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, tgGroupStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "talkgroupGroup");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.talkgroup_alpha_tag).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, tgLabelStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "talkgroupLabel");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.talkgroup_tag).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, tgTagStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "talkgroupTag");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, boost::lexical_cast<std::string>(call_info.talkgroup_description).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, tgNameStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "talkgroupName");
 
     part = curl_mime_addpart(mime);
@@ -248,7 +389,7 @@ public:
     // curl_mime_name(part, "units");
 
     part = curl_mime_addpart(mime);
-    curl_mime_data(part, std::to_string(system_id).c_str(), CURL_ZERO_TERMINATED);
+    curl_mime_data(part, systemIdStr.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "system");
 
     part = curl_mime_addpart(mime);
@@ -259,9 +400,17 @@ public:
 
     /* initialize custom header list (stating that Expect: 100-continue is not wanted */
     headerlist = curl_slist_append(headerlist, "Expect:");
-    if (curl && multi_handle) {
-      std::string url = data.server + "/api/call-upload";
 
+    // Basic, safe curl options for robustness in threaded apps
+    curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, curl_errbuf);
+    curl_easy_setopt(curl, CURLOPT_NOSIGNAL, 1L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 15000L);
+    curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 120000L);
+
+    long response_code = 0;
+    CURLcode easy_result = CURLE_OK;
+
+    if (curl && multi_handle) {
       /* what URL that receives this POST */
       curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
 
@@ -272,15 +421,17 @@ public:
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
 
-      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share); 
-      curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, curl_dns_ttl);
+      if (curl_share) {
+        curl_easy_setopt(curl, CURLOPT_SHARE, curl_share);
+        curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, curl_dns_ttl);
+      }
 
       curl_multi_add_handle(multi_handle, curl);
 
       curl_multi_perform(multi_handle, &still_running);
 
       while (still_running) {
-        struct timeval timeout;
+        timeval timeout{};
         int rc;       /* select() return code */
         CURLMcode mc; /* curl_multi_fdset() return code */
 
@@ -344,6 +495,20 @@ public:
         }
       }
 
+      // Extract the transfer result (CURLcode) from the multi handle
+      {
+        int msgs_left = 0;
+        CURLMsg* msg = NULL;
+        while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
+          if (msg->msg == CURLMSG_DONE) {
+            easy_result = msg->data.result;
+          }
+        }
+      }
+
+      // Grab HTTP status BEFORE cleaning up easy handle (important!)
+      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
       res = curl_multi_cleanup(multi_handle);
 
       /* always cleanup */
@@ -355,20 +520,31 @@ public:
       /* free slist */
       curl_slist_free_all(headerlist);
 
-      long response_code;
-      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-      if (res == CURLM_OK && response_code == 200) {
-        struct stat file_info;
+      // NOTE: Your API may legitimately return 202 for stub-cache accepts.
+      if (res == CURLM_OK && easy_result == CURLE_OK && is_success_http_status(response_code)) {
+        struct stat file_info{};
         stat(compress_wav ? call_info.converted : call_info.filename, &file_info);
         std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
-        BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
+
+        if (response_code == 202) {
+          BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Accepted (202) - stub cached; file size: " << file_info.st_size;
+        } else {
+          BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
+        }
         ;
         return 0;
       }
     }
+
     std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
-    BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error: " << response_buffer;
+
+    if (curl_errbuf[0] != '\0') {
+      BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error (HTTP " << response_code << "): "
+                               << response_buffer << " curl_err=" << curl_errbuf;
+    } else {
+      BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error (HTTP " << response_code << "): " << response_buffer;
+    }
+
     return 1;
   }
 
@@ -417,9 +593,31 @@ public:
         sys.api_key = element.value("apiKey", "");
         sys.system_id = element.value("systemId", 0);
         sys.short_name = element.value("shortName", "");
+
+        // Talkgroup filters per system (Optional)
+        compile_patterns_from_json(
+          element, "talkgroupWhitelist",
+          sys.tg_whitelist, sys.tg_whitelist_raw,
+          log_prefix, sys.short_name
+        );
+        compile_patterns_from_json(
+          element, "talkgroupBlacklist",
+          sys.tg_blacklist, sys.tg_blacklist_raw,
+          log_prefix, sys.short_name
+        );
+
+        if (!sys.tg_whitelist_raw.empty() || !sys.tg_blacklist_raw.empty()) {
+          BOOST_LOG_TRIVIAL(info) << log_prefix << "Talkgroup filters for " << sys.short_name
+                                  << " whitelist=" << sys.tg_whitelist_raw.size()
+                                  << " blacklist=" << sys.tg_blacklist_raw.size();
+        }
+
         regex_match(sys.api_key.c_str(), what, api_regex);
         std::string redacted_api(what[2].first, what[2].second);
-        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << sys.short_name  << "\t Rdio System: " << sys.system_id << "\t API Key: ******" << redacted_api;
+        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << sys.short_name
+                                << "\t Rdio System: " << sys.system_id
+                                << "\t API Key: ******" << redacted_api;
+
         this->data.systems.push_back(sys);
       }
     }
