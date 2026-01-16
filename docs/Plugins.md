@@ -45,30 +45,34 @@ This plugin makes it easy to connect Trunk Recorder with [Rdio Scanner](https://
 
 *Rdio Scanner System Object:*
 
-| Key              | Required | Default Value | Type   | Description                                                                                                                                                                                                 |
-| ---------------- | :------: | ------------- | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| systemId         |    ✓     |               | number | System ID for Rdio Scanner.                                                                                                                                                                                 |
-| apiKey           |    ✓     |               | string | System-specific API key for uploading calls to Rdio Scanner. See the ApiKey section in the Rdio Scanner administrative dashboard for the value it should be.                                                |
-| shortName        |    ✓     |               | string | This should match the shortName of a system that is defined in the main section of the config file.                                                                                                         |
-| talkgroupWhitelist |        | []            | array  | Optional allow-list of talkgroups to upload for this system. If set (non-empty), the talkgroup **must** match at least one pattern to be uploaded. Patterns are glob-style (supports `*` and `?`).        |
-| talkgroupBlacklist |        | []            | array  | Optional deny-list of talkgroups to block upload for this system. If set (non-empty), any matching talkgroup will be skipped. Patterns are glob-style (supports `*` and `?`).                             |
+| Key             | Required | Default Value | Type  | Description                                                                                                                                                                                                 |
+| --------------- | :------: | ------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| systemId        |    ✓     |               | number | System ID for Rdio Scanner.                                                                                                                                                                                |
+| apiKey          |    ✓     |               | string | System-specific API key for uploading calls to Rdio Scanner. See the ApiKey section in the Rdio Scanner administrative dashboard for the value it should be.                                                |
+| shortName       |    ✓     |               | string | This should match the shortName of a system that is defined in the main section of the config file.                                                                                                         |
+| talkgroupAllow  |          | []            | array  | Optional allow-list of talkgroups to upload for this system. If set (non-empty), the talkgroup **must** match at least one pattern to be uploaded. Patterns are glob-style (supports `*` and `?`).        |
+| talkgroupDeny   |          | []            | array  | Optional deny-list of talkgroups to block upload for this system. If set (non-empty), any matching talkgroup will be skipped. Patterns are glob-style (supports `*` and `?`).                              |
 
 **Talkgroup filter rules (per-system):**
 - Talkgroup comparisons are done against the numeric talkgroup ID as a string (e.g. `50712`).
 - Patterns are glob-style:
-    - `*` matches any number of characters
-    - `?` matches a single character
-- If `talkgroupWhitelist` is provided and non-empty, the talkgroup must match at least one whitelist pattern (otherwise it is skipped).
-- If `talkgroupBlacklist` is provided and non-empty, the talkgroup must **not** match any blacklist pattern (otherwise it is skipped).
-- If both are provided, the whitelist check is applied first, then the blacklist check.
+  - `*` matches any number of characters
+  - `?` matches a single character
+- If `talkgroupAllow` is provided and non-empty, the talkgroup must match at least one allow pattern (otherwise it is skipped).
+- If `talkgroupDeny` is provided and non-empty, the talkgroup must **not** match any deny pattern (otherwise it is skipped).
+- If both are provided, the allow check is applied first, then the deny check.
 
 **Examples:**
 - Allow only talkgroups starting with `507`:
-    - `talkgroupWhitelist: ["507*"]`
+  - `talkgroupAllow: ["507*"]`
+- Allow only 5-digit talkgroups starting with `12` (uses `?`):
+  - `talkgroupAllow: ["12???"]`
 - Block a specific talkgroup:
-    - `talkgroupBlacklist: ["12345"]`
-- Block a range/prefix while allowing others:
-    - `talkgroupBlacklist: ["99*"]`
+  - `talkgroupDeny: ["12345"]`
+- Block a prefix/range while allowing others:
+  - `talkgroupDeny: ["99*"]`
+- Block a specific “slot” pattern using `?`:
+  - `talkgroupDeny: ["507?9"]`
 
 ##### Example Plugin Object:
 
@@ -81,10 +85,9 @@ This plugin makes it easy to connect Trunk Recorder with [Rdio Scanner](https://
     {
       "shortName": "test", 
       "apiKey": "fakekey", 
-      "systemId": 411,
-
-      "talkgroupWhitelist": ["507*"],
-      "talkgroupBlacklist": ["507999", "12345"]
+      "systemId": 411, 
+      "talkgroupAllow": ["507*", "12???"], 
+      "talkgroupDeny": ["507?9", "12345"]
     }
   ]
 }
