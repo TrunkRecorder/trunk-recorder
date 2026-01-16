@@ -17,10 +17,12 @@ struct Broadcastify_System_Key {
   std::string short_name;
 
   // Talkgroup filters (compiled patterns)
-  std::vector<boost::regex> tg_whitelist;
-  std::vector<boost::regex> tg_blacklist;
-  std::vector<std::string> tg_whitelist_raw; // for logging/debug
-  std::vector<std::string> tg_blacklist_raw; // for logging/debug
+  // allow: if set, talkgroup MUST match at least one pattern
+  // deny:  if set, talkgroup MUST NOT match any pattern
+  std::vector<boost::regex> tg_allow;
+  std::vector<boost::regex> tg_deny;
+  std::vector<std::string> tg_allow_raw; // for logging/debug
+  std::vector<std::string> tg_deny_raw;  // for logging/debug
 };
 
 struct Broadcastify_Uploader_Data {
@@ -78,13 +80,13 @@ private:
     if (!sys) return true; // no system config => don't filter here
     const std::string tg = std::to_string(talkgroup);
 
-    // If whitelist is set, MUST match it
-    if (!sys->tg_whitelist.empty() && !match_any(tg, sys->tg_whitelist)) {
+    // If allow list is set, MUST match it
+    if (!sys->tg_allow.empty() && !match_any(tg, sys->tg_allow)) {
       return false;
     }
 
-    // If blacklist is set, MUST NOT match it
-    if (!sys->tg_blacklist.empty() && match_any(tg, sys->tg_blacklist)) {
+    // If deny list is set, MUST NOT match it
+    if (!sys->tg_deny.empty() && match_any(tg, sys->tg_deny)) {
       return false;
     }
 
@@ -135,7 +137,29 @@ private:
     }
   }
 
+  static bool compile_patterns_try_keys(
+    const json& parent,
+    const std::vector<const char*>& keys,
+    std::vector<boost::regex>& out_compiled,
+    std::vector<std::string>& out_raw,
+    const std::string& log_prefix,
+    const std::string& sys_short_name
+  ) {
+    for (const char* k : keys) {
+      if (parent.contains(k)) {
+        compile_patterns_from_json(parent, k, out_compiled, out_raw, log_prefix, sys_short_name);
+        return true; // stop on first key present (even if empty array)
+      }
+    }
+    // No key present -> leave as empty
+    out_compiled.clear();
+    out_raw.clear();
+    return false;
+  }
+
 public:
+  Broadcastify_Uploader() : curl_share(NULL), curl_dns_ttl(300) {}
+
   Broadcastify_System_Key *get_system(std::string short_name) {
     for (std::vector<Broadcastify_System_Key>::iterator it = data.keys.begin(); it != data.keys.end(); ++it) {
       if (it->short_name == short_name) {
@@ -489,26 +513,37 @@ public:
         key.short_name = element.value("shortName", "");
 
         // Talkgroup filters per system (Optional)
-        compile_patterns_from_json(
-          element, "talkgroupWhitelist",
-          key.tg_whitelist, key.tg_whitelist_raw,
+        // New (preferred):
+        //   broadcastifyAllow: ["507*", "12?45"]
+        //   broadcastifyDeny:  ["99*",  "12345"]
+        //
+        // Also accepts legacy keys for compatibility:
+        //   broadcastifyWhitelist / broadcastifyBlacklist
+        //   talkgroupWhitelist / talkgroupBlacklist
+        compile_patterns_try_keys(
+          element,
+          {"broadcastifyAllow", "broadcastifyWhitelist", "talkgroupWhitelist"},
+          key.tg_allow, key.tg_allow_raw,
           log_prefix, key.short_name
         );
-        compile_patterns_from_json(
-          element, "talkgroupBlacklist",
-          key.tg_blacklist, key.tg_blacklist_raw,
+        compile_patterns_try_keys(
+          element,
+          {"broadcastifyDeny", "broadcastifyBlacklist", "talkgroupBlacklist"},
+          key.tg_deny, key.tg_deny_raw,
           log_prefix, key.short_name
         );
 
-        if (!key.tg_whitelist_raw.empty() || !key.tg_blacklist_raw.empty()) {
+        if (!key.tg_allow_raw.empty() || !key.tg_deny_raw.empty()) {
           BOOST_LOG_TRIVIAL(info) << log_prefix << "Talkgroup filters for " << key.short_name
-                                  << " whitelist=" << key.tg_whitelist_raw.size()
-                                  << " blacklist=" << key.tg_blacklist_raw.size();
+                                  << " allow=" << key.tg_allow_raw.size()
+                                  << " deny=" << key.tg_deny_raw.size();
         }
 
         regex_match(key.api_key.c_str(), what, api_regex);
         std::string redacted_api(what[2].first, what[2].second);
-        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << key.short_name << "\t Broadcastify System: " << key.system_id << "\t API Key: ******" << redacted_api;
+        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << key.short_name
+                                << "\t Broadcastify System: " << key.system_id
+                                << "\t API Key: ******" << redacted_api;
         this->data.keys.push_back(key);
       }
     }
@@ -533,7 +568,7 @@ public:
     curl_share_mutex.lock();
   }
 
-  static void curl_unlock_cb(CURL *handle, curl_lock_data data, curl_lock_lock_access access, void *userptr) {
+  static void curl_unlock_cb(CURL *handle, curl_lock_data data, curl_lock_access access, void *userptr) {
     curl_share_mutex.unlock();
   }
 
