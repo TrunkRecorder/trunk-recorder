@@ -2,6 +2,7 @@
 #include "../plugin_manager/plugin_manager.h"
 #include <boost/filesystem.hpp>
 #include <filesystem>
+#include <cmath>
 namespace fs = std::filesystem;
 
 const int Call_Concluder::MAX_RETRY = 2;
@@ -96,7 +97,7 @@ int create_call_json(Call_Data_t& call_info) {
     json_data["freqList"] += {
         {"freq", int(call_info.freq)},
         {"time", call_info.transmission_error_list[i].time},
-        {"pos", call_info.transmission_error_list[i].position},
+        {"pos", round(call_info.transmission_error_list[i].position * 100.0) / 100.0},  // round to 2 decimal places
         {"len", call_info.transmission_error_list[i].total_len},
         {"error_count", int(call_info.transmission_error_list[i].error_count)},
         {"spike_count", int(call_info.transmission_error_list[i].spike_count)}};
@@ -106,7 +107,7 @@ int create_call_json(Call_Data_t& call_info) {
     json_data["srcList"] += {
         {"src", int(call_info.transmission_source_list[i].source)},
         {"time", call_info.transmission_source_list[i].time},
-        {"pos", call_info.transmission_source_list[i].position},
+        {"pos", round(call_info.transmission_error_list[i].position * 100.0) / 100.0},  // round to 2 decimal places
         {"emergency", int(call_info.transmission_source_list[i].emergency)},
         {"signal_system", call_info.transmission_source_list[i].signal_system},
         {"tag", call_info.transmission_source_list[i].tag}};
