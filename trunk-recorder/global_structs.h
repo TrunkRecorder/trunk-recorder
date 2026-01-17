@@ -23,6 +23,7 @@ struct Transmission {
 };
 
 struct Config {
+  std::string config_file;
   std::string upload_script;
   std::string upload_server;
   std::string bcfy_calls_server;

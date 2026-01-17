@@ -95,6 +95,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
   int sys_count = 0;
   int source_count = 0;
 
+  config.config_file = config_file;
+
   try {
     std::ifstream f(config_file);
     data = json::parse(f);
