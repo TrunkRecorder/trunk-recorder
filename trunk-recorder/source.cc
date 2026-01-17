@@ -46,6 +46,7 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   rate = r;
   center = c;
   error = e;
+  bufLength = 0;
   set_min_max();
   driver = drv;
   device = dev;
@@ -67,6 +68,7 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   next_selector_port = 0;
   autotune_source = false;
   autotune_manager = new AutotuneManager(this);
+
 
   recorder_selector = gr::blocks::selector::make(sizeof(gr_complex), 0, 0);
 
@@ -146,6 +148,51 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
 
     source_block = usrp_src;
   }
+
+#ifdef GnuradioIIO_FOUND
+  if (driver == "iio") {
+    std::vector<bool> enable_channels{1,1,0,0};
+    BOOST_LOG_TRIVIAL(info) << "SOURCE TYPE IIO";
+
+    // check to see if device string has bufferLength, and if so, split them
+    std::string dev = device;
+    bufLength = 32768;
+
+    if (device.find(",")) {
+      dev = device.substr(0,device.find(","));
+      bufLength = std::stoul(device.substr(device.find(",") + 1, device.length()));
+    }
+
+    BOOST_LOG_TRIVIAL(info) << "Device: " << dev;
+    BOOST_LOG_TRIVIAL(info) << "Buffer Length: " << bufLength;
+
+    gr::iio::fmcomms2_source<gr_complex>::sptr iio_src;
+    iio_src = gr::iio::fmcomms2_source<gr_complex>::make(dev, enable_channels, bufLength);
+    iio_src->set_len_tag_key("");
+    iio_src->set_gain_mode(0, "manual");
+    iio_src->set_gain(0, gain);
+
+    BOOST_LOG_TRIVIAL(info) << "Tuning to " << format_freq(center + error);
+    iio_src->set_frequency(center + error);
+
+    
+    BOOST_LOG_TRIVIAL(info) << "Setting sample rate to: " << FormatSamplingRate(rate);
+    iio_src->set_samplerate(rate);
+    actual_rate = rate;
+    
+    iio_src->set_quadrature(true);
+    iio_src->set_rfdc(true);
+    iio_src->set_bbdc(true);
+    iio_src->set_filter_params("Auto", "", 0.0, 0.0);
+
+    
+
+    source_block = iio_src;
+  }
+#else // GnuradioIIO_FOUND
+  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
+  exit(1);
+#endif //GnuradioIIO_FOUND
 }
 
 void Source::set_iq_source(std::string iq_file, bool repeat, double center, double rate) {
@@ -329,6 +376,17 @@ void Source::set_gain(double r) {
     gain = r;
     cast_to_usrp_sptr(source_block)->set_gain(gain);
   }
+
+#ifdef GnuradioIIO_FOUND
+  if (driver == "iio") {
+    gain = r;
+    cast_to_iio_sptr(source_block)->set_gain(0, gain);
+    BOOST_LOG_TRIVIAL(info) << "Gain set to: " << gain;
+  }
+#else // GnuradioIIO_FOUND
+  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
+  exit(1);
+#endif //GnuradioIIO_FOUND
 }
 
 void Source::add_gain_stage(std::string stage_name, double value) {
@@ -380,7 +438,21 @@ void Source::set_gain_mode(bool m) {
     } else {
       BOOST_LOG_TRIVIAL(info) << "Auto gain control is OFF";
     }
+
   }
+#ifdef GnuradioIIO_FOUND
+ else if (driver == "iio") {
+    gain_mode = m;
+    if (gain_mode) {
+      cast_to_iio_sptr(source_block)->set_gain_mode(0, "fast_attack");
+    } else {
+      cast_to_iio_sptr(source_block)->set_gain_mode(0, "manual");
+    }
+  }
+#else // GnuradioIIO_FOUND
+  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
+  exit(1);
+#endif
 }
 
 double Source::get_if_gain() {
