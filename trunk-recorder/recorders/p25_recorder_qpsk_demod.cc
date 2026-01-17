@@ -67,8 +67,6 @@ void p25_recorder_qpsk_demod::switch_tdma(bool phase2) {
 void p25_recorder_qpsk_demod::initialize() {
   const double pi = M_PI;
 
-  agc = gr::analog::feedforward_agc_cc::make(16, 1.0);
-
   // Gardner Costas Clock
   double gain_mu = 0.025; // 0.025
   double costas_alpha = 0.008;
