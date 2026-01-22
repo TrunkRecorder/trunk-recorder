@@ -29,6 +29,7 @@ class Broadcastify_Uploader : public Plugin_Api {
   Broadcastify_Uploader_Data data;
   CURLSH *curl_share;
   long curl_dns_ttl;
+  std::string plugin_name;
 
 public:
   std::string get_api_key(std::string short_name) {
@@ -271,7 +272,7 @@ public:
       std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
 
       if (res != CURLM_OK || response_code != 200) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Metadata Upload Error: " << response_buffer;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Metadata Upload Error: " << response_buffer;
         return 1;
       }
 
@@ -285,31 +286,31 @@ public:
       std::string message = response_buffer.substr(spacepos + 1);
 
       if (code == "1" && (message.rfind("SKIPPED", 0) == 0)) {
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Broadcastify Upload Skipped: " << message;
+        BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Skipped: " << message;
         return 0;
       }
       
       if (code == "1" && (message.rfind("REJECTED", 0) == 0)) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Upload REJECTED: " << message;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload REJECTED: " << message;
         return 0;
       }
 
       if (code != "0") {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Metadata Upload Error: " << message;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Metadata Upload Error: " << message;
         return 1;
       }
 
       CURLcode audio_error = this->upload_audio_file(call_info.converted, message);
 
       if (audio_error) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Audio Upload Error: " << curl_easy_strerror(audio_error);
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Audio Upload Error: " << curl_easy_strerror(audio_error);
         return 1;
       }
 
       struct stat file_info;
       stat(call_info.converted, &file_info);
 
-      BOOST_LOG_TRIVIAL(info) << loghdr << "Broadcastify Upload Success - file size: " << file_info.st_size;
+      BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
       return 0;
     } else {
       return 1;
@@ -321,6 +322,9 @@ public:
   }
 
   int parse_config(json config_data) {
+    // Extract plugin name from config, with fallback for default internal plugin name
+    std::string config_name = config_data.value("name", "broadcastify_uploader");
+    this->plugin_name = (config_name == "broadcastify_uploader") ? "Broadcastify" : config_name;
     std::string log_prefix = "\t[Broadcastify]\t";
 
     // Tests to see if the uploadServer value exists in the config file

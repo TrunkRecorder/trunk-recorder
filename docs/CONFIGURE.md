@@ -314,20 +314,20 @@ By default, Trunk Recorder will record the call from the first site to receive t
 
 | Key     | Required | Default Value | Type                 | Description                                                  |
 | ------- | :------: | ------------- | -------------------- | ------------------------------------------------------------ |
-| library |    ✓     |               | string               | the name of the library that contains the plugin.            |
-| name    |    ✓     |               | string               | the name of the plugin. This name is used to find the `<name>_plugin_new` method that creates a new instance of the plugin. |
-| enabled |          | true          | **true** / **false** | control whether a configured plugin is enabled or disabled   |
+| library |    ✓     |               | string               | The filename of the plugin library to load. |
+| name    |          |plugin_library | string               | Display name of the plugin used for identification and logging. |
+| enabled |          | true          | **true** / **false** | Control whether a configured plugin is enabled or disabled.   |
 |         |          |               |                      | *Additional elements can be added, they will be passed into the `parse_config` method of the plugin.* |
 
 ##### Rdio Scanner Plugin
 
-**Name:** rdioscanner_uploader
 **Library:** librdioscanner_uploader.so
 
 This plugin makes it easy to connect Trunk Recorder with [Rdio Scanner](https://github.com/chuot/rdio-scanner). It uploads recordings and the information about them. The following additional settings are required:
 
 | Key     | Required | Default Value | Type   | Description                                                  |
 | ------- | :------: | ------------- | ------ | ------------------------------------------------------------ |
+| name    |          | Rdio Scanner  | string | Friendly name for this Rdio uploader.  Can be used to better differentiate plugins if multiple are used to feed different servers. |
 | server  |    ✓     |               | string | The URL for uploading to Rdio Scanner. The default is an empty string. It should be the same URL as the one you are using to access Rdio Scanner. |
 | systems |    ✓     |               | array  | This is an array of objects, where each is a system that should be passed to Rdio Scanner. More information about what should be in each object is in the following table. |
 
@@ -345,7 +345,7 @@ This plugin makes it easy to connect Trunk Recorder with [Rdio Scanner](https://
 
 ```yaml
         {
-          "name": "rdioscanner_uploader",
+          "name": "My Rdio Server",
           "library": "librdioscanner_uploader.so",
           "server": "http://127.0.0.1",
           "systems": [{

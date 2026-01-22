@@ -31,6 +31,7 @@ class Rdio_Scanner_Uploader : public Plugin_Api {
   Rdio_Scanner_Uploader_Data data;
   CURLSH *curl_share;
   long curl_dns_ttl;
+  std::string plugin_name;
 
 public:
   Rdio_Scanner_System *get_system(std::string short_name) {
@@ -361,13 +362,13 @@ public:
         struct stat file_info;
         stat(compress_wav ? call_info.converted : call_info.filename, &file_info);
         std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Rdio Scanner Upload Success - file size: " << file_info.st_size;
+        BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
         ;
         return 0;
       }
     }
     std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
-    BOOST_LOG_TRIVIAL(error) << loghdr << "Rdio Scanner Upload Error: " << response_buffer;
+    BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error: " << response_buffer;
     return 1;
   }
 
@@ -376,6 +377,9 @@ public:
   }
 
   int parse_config(json config_data) {
+    // Extract plugin name from config, with fallback for default internal plugin name
+    std::string config_name = config_data.value("name", "rdioscanner_uploader");
+    this->plugin_name = (config_name == "rdioscanner_uploader") ? "Rdio Scanner" : config_name;
     std::string log_prefix = "\t[Rdio Scanner]\t";
     /*
           system->set_rdioscanner_api_key(node.second.get<std::string>("rdioscannerApiKey", ""));
