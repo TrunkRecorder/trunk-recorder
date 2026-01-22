@@ -36,7 +36,11 @@ RUN apt-get update && \
     wget \
     python3-six \
     openssh-client \
-    ffmpeg
+    ffmpeg \
+    libiio-dev \
+    libiio-utils \
+    libad9361-dev \
+    libgnuradio-iio3.10.9t64
 
 WORKDIR /src
 
@@ -50,7 +54,8 @@ RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
 FROM ubuntu:24.04
 RUN apt-get update && apt-get -y upgrade && apt-get install --no-install-recommends -y ca-certificates gr-funcube gr-iqbal curl wget libboost-log1.83.0 \
     libboost-chrono1.83.0t64 libgnuradio-digital3.10.9t64 libgnuradio-analog3.10.9t64 libgnuradio-filter3.10.9t64 libgnuradio-network3.10.9t64  \
-    libgnuradio-uhd3.10.9t64 libgnuradio-osmosdr0.2.0t64 libsoapysdr0.8 soapysdr0.8-module-all libairspyhf1 libfreesrp0 librtlsdr2 libxtrx0 sox fdkaac docker.io && \
+    libgnuradio-uhd3.10.9t64 libgnuradio-osmosdr0.2.0t64 libiio-dev libiio-utils libad9361-dev libgnuradio-iio3.10.9t64 libsoapysdr0.8 \
+    soapysdr0.8-module-all libairspyhf1 libfreesrp0 librtlsdr2 libxtrx0 sox fdkaac docker.io && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /usr/share/{doc,man,info} && rm -rf /usr/local/share/{doc,man,info}
 
