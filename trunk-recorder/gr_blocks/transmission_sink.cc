@@ -217,16 +217,21 @@ void transmission_sink::set_source(long src) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "Unit ID set via Control Channel, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
 
     curr_src_id = src;
-  }
-  else if (d_conventional && (src != curr_src_id)) {
-    if ((state == RECORDING) && (d_sample_count > 0)) {
-        gr::thread::scoped_lock guard(d_mutex);
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
-        end_transmission();
-        state = IDLE;
-        curr_src_id = src;
-    }
+  } else  if (src != curr_src_id) {
+    if (d_conventional) {
+      if ((state == RECORDING) && (d_sample_count > 0)) {
+          gr::thread::scoped_lock guard(d_mutex);
+          BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
+          end_transmission();
+          state = IDLE;
+          curr_src_id = src;
+      }
 
+  } else {
+    // this is a trunked system, where the existing source ID does not match the ID that just came in as a GRANT message
+    BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set from GRANT: " << src << "\t doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
+          
+  }
   }
 }
 
