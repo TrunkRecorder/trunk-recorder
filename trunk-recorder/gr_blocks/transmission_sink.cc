@@ -241,7 +241,7 @@ void transmission_sink::end_transmission() {
     if (d_fp) {
       close_wav(false);
     } else {
-      BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
+      BOOST_LOG_TRIVIAL(error) << loghdr <<  "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
     // if an Transmission has ended, send it to Call.
     Transmission transmission;
@@ -249,7 +249,7 @@ void transmission_sink::end_transmission() {
     // if we don't have a curr_src_id and we cached one in the previous transmission, use it
     if ((curr_src_id == -1) && (cached_src_id != -1 )) {
       transmission.source = cached_src_id;
-      BOOST_LOG_TRIVIAL(error) << "Using cached ID for Transmission: " << cached_src_id;
+      BOOST_LOG_TRIVIAL(error) << loghdr << "Using cached ID for Transmission: " << cached_src_id;
       cached_src_id = -1;
       
     } else {
