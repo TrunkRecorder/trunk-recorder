@@ -230,7 +230,7 @@ void transmission_sink::set_source(long src) {
 
     } else {
       // this is a trunked system, where the existing source ID does not match the ID that just came in as a GRANT message
-      BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set from GRANT: " << src << "\t doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
+      BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set from GRANT: " << src << "\t caching, doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
       cached_src_id = src;      
     }
   }
