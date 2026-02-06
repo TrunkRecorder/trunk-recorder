@@ -144,6 +144,7 @@ bool transmission_sink::start_recording(Call *call) {
 
 
   curr_src_id = d_current_call->get_current_source_id();
+  cached_src_id = -1;
   d_sample_count = 0;
 
   // when a wav_sink first gets associated with a call, set its lifecycle to idle;
@@ -227,11 +228,11 @@ void transmission_sink::set_source(long src) {
           curr_src_id = src;
       }
 
-  } else {
-    // this is a trunked system, where the existing source ID does not match the ID that just came in as a GRANT message
-    BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set from GRANT: " << src << "\t doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
-          
-  }
+    } else {
+      // this is a trunked system, where the existing source ID does not match the ID that just came in as a GRANT message
+      BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set from GRANT: " << src << "\t doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
+      cached_src_id = src;      
+    }
   }
 }
 
@@ -244,7 +245,20 @@ void transmission_sink::end_transmission() {
     }
     // if an Transmission has ended, send it to Call.
     Transmission transmission;
-    transmission.source = curr_src_id;      // Source ID for the Call
+
+    // if we don't have a curr_src_id and we cached one in the previous transmission, use it
+    if ((curr_src_id == -1) && (cached_src_id != -1 )) {
+      transmission.source = cached_src_id;
+      BOOST_LOG_TRIVIAL(error) << "Using cached ID for Transmission: " << cached_src_id;
+      cached_src_id = -1;
+      
+    } else {
+      transmission.source = curr_src_id;      // Source ID for the Call
+    }
+    // if the Src ID was cached in the previous transmission, but we got it on the Voice channel, the reset the cache.
+    if ((cached_src_id != -1) && (curr_src_id == cached_src_id)) {
+      cached_src_id = -1;
+    }
     transmission.start_time = d_start_time; // Start time of the Call
     transmission.stop_time = d_stop_time;   // when the Call eneded
     transmission.sample_count = d_sample_count;
