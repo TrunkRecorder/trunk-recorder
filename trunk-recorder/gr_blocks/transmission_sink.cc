@@ -237,6 +237,8 @@ void transmission_sink::set_source(long src) {
 }
 
 void transmission_sink::end_transmission() {
+  std::string loghdr = log_header(d_current_call_short_name,d_current_call_num,d_current_call_talkgroup_display,d_current_call_freq);
+  
   if (d_sample_count > 0) {
     if (d_fp) {
       close_wav(false);
