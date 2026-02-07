@@ -88,6 +88,9 @@ private:
 	std::pair<bool,long> terminate_call;
 	long src_id;
 	long grp_id;
+	long cached_src_id;
+	long cached_grp_id;
+	uint64_t cached_id_timestamp;
 	std::array<std::vector<uint8_t>, 10> alias_buffer;
 	const op25_audio& op25audio;
     log_ts& logts;

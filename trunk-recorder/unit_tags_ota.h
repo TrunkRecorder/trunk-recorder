@@ -28,6 +28,10 @@ public:
   static OTAAlias decode_motorola_alias(const std::array<std::vector<uint8_t>, 10>& alias_buffer, int messages);
   static OTAAlias decode_motorola_alias_p2(const std::array<std::vector<uint8_t>, 10>& alias_buffer, int messages);
 
+  // Harris OTA (Over-The-Air) alias decoding
+  static OTAAlias decode_harris_alias(const std::array<std::vector<uint8_t>, 10>& alias_buffer, long radio_id, long talkgroup_id, const std::string& wacn, const std::string& sys_id);
+  static OTAAlias decode_harris_alias_p2(const std::array<std::vector<uint8_t>, 10>& alias_buffer, long radio_id, long talkgroup_id, const std::string& wacn, const std::string& sys_id);
+
 private:
   // Helper functions for Motorola alias decoding
   static std::string assemble_payload(const std::array<std::vector<uint8_t>, 10>& alias_buffer, int messages);
