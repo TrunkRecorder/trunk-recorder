@@ -50,6 +50,7 @@ struct Config {
   bool record_uu_v_calls;
   bool archive_files_on_failure;
   int frequency_format;
+  std::string filename_format;
 };
 
 struct Call_Source {

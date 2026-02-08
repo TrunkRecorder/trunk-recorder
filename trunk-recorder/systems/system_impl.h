@@ -69,6 +69,7 @@ public:
   std::string default_mode;
   std::string system_type;
   std::string upload_script;
+  std::string filename_format;
   int bcfy_system_id;
   int message_count;
   int decode_rate;
@@ -264,6 +265,9 @@ public:
 
   unsigned long get_multiSiteSystemNumber() override;
   void set_multiSiteSystemNumber(unsigned long multiSiteSystemNumber) override;
+
+  std::string get_filename_format() override;
+  void set_filename_format(std::string format) override;
 
 private:
   TalkgroupDisplayFormat talkgroup_display_format;

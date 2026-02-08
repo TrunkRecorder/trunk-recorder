@@ -151,6 +151,7 @@ There is a list of available Plugins [here](./Plugins.md).
 | newCallFromUpdate            |          | true                                             | **true** / **false**                                         | Allow for UPDATE trunking messages to start a new Call, in addition to GRANT messages. This may result in more Calls with no transmisions, and use more Recorders. The flipside is that it may catch parts of a Call that would have otherwise been missed. Turn this off if you are running out of Recorders. |
 | softVocoder                  |          | false                                            | **true** / **false**                                         | Use the Software Decode vocoder from OP25 for P25 and DMR. Give it a try if you are hearing weird tones in your audio. Whether it makes your audio sound better or worse is a matter of preference. |
 | recordUUVCalls               |          | true                                             | **true** / **false**                                         | *P25 only* Record Unit to Unit Voice calls.        |
+| filenameFormat               |          |                                                  | string                                                       | A format string that controls the directory structure and filename for recorded calls. When set at the instance level it applies to all systems. See the [Filename Format](#filename-format) section below for full details. |
 
 
 ## Source Object
@@ -269,6 +270,7 @@ During the status display, each source will report the running average as well a
 | decodeTPS              |          | false                      | **true** / **false**                                                         | *Conventional systems only* enable the Motorola Tactical Public Safety (aka FDNY Fireground) signaling decoder. |
 | deemphasisTau              |          | 0.000750                      | number                                                        | *Conventional systems only* configure the de-emphasis time constant. 750µs for NFM (default), 75µs for WFM North America, 50µs for WFM most other regions.   |
 | enabled                |          | true                       | **true** / **false**                                                         | control whether a configured system is enabled or disabled                 |
+| filenameFormat         |          |                            | string                                                                       | A format string that controls the directory structure and filename for recorded calls. When set at the system level it overrides the instance-level `filenameFormat`. See the [Filename Format](#filename-format) section below for full details. |
 
 ***
 
@@ -311,6 +313,136 @@ By default, Trunk Recorder will record the call from the first site to receive t
     ...
 }
 ```
+
+## Filename Format
+
+The `filenameFormat` setting lets you customise the directory layout and base filename used when saving recorded calls. It can be set at the **instance level** (top-level `config.json`) to apply to every system, or at the **system level** (inside a system object) to override the instance-level value for that specific system.
+
+When `filenameFormat` is **not set**, the default behaviour is preserved:
+
+```
+<captureDir>/<shortName>/YYYY/M/D/<talkgroup>-<epoch>_<freq>-call_<callNum>.wav
+```
+
+When a format string **is set**, it defines the path relative to `captureDir`. Any `/` characters in the format create subdirectories which are automatically created. The suffixes `-call_<callNum>.wav`, `-call_<callNum>.json`, and `-call_<callNum>.m4a` are always appended automatically.
+
+### Tokens
+
+Tokens are written as `{token_name}` and are replaced with the corresponding value at recording time. String-valued tokens are sanitised so that filesystem-unsafe characters (``\ / : * ? " < > |``) are replaced with underscores.
+
+#### Call Data Tokens
+
+| Token | Description | Example Value |
+|-------|-------------|---------------|
+| `{talkgroup}` | Talkgroup number | `12345` |
+| `{talkgroup_tag}` | Talkgroup group tag (e.g. "Fire Dispatch") | `Fire_Dispatch` |
+| `{talkgroup_alpha_tag}` | Talkgroup alpha tag (e.g. "FD Disp") | `FD_Disp` |
+| `{talkgroup_description}` | Talkgroup description | `Fire_Department_Dispatch` |
+| `{talkgroup_group}` | Talkgroup group name | `Fire` |
+| `{talkgroup_display}` | Formatted talkgroup display string | `12345` |
+| `{short_name}` | System short name | `dcsys` |
+| `{freq}` | Frequency in Hz (integer) | `851012500` |
+| `{freq_mhz}` | Frequency in MHz (4 decimal places) | `851.0125` |
+| `{call_num}` | Call number | `42` |
+| `{tdma_slot}` | TDMA slot number (empty string when not applicable) | `1` |
+| `{sys_num}` | System number | `0` |
+| `{epoch}` | Unix epoch timestamp in seconds | `1705337652` |
+| `{source_num}` | Source number | `0` |
+| `{recorder_num}` | Recorder number | `2` |
+| `{audio_type}` | Audio type | `digital` |
+| `{emergency}` | Emergency flag | `0` or `1` |
+| `{encrypted}` | Encrypted flag | `0` or `1` |
+| `{priority}` | Priority value | `3` |
+| `{signal}` | Signal level (integer) | `-45` |
+| `{noise}` | Noise level (integer) | `-80` |
+| `{color_code}` | Color code | `0` |
+
+#### Date / Time Tokens
+
+Time tokens use [strftime](https://man7.org/linux/man-pages/man3/strftime.3.html) formatting. Two variants are available:
+
+- **`{time:FORMAT}`** — formats using **local time**
+- **`{ztime:FORMAT}`** — formats using **UTC (Zulu) time**
+
+`FORMAT` is any valid strftime format string. Additionally, the custom specifier **`%f`** is supported for **milliseconds** (zero-padded to 3 digits).
+
+Common strftime specifiers:
+
+| Specifier | Meaning | Example |
+|-----------|---------|---------|
+| `%Y` | 4-digit year | `2025` |
+| `%m` | Month (01–12) | `11` |
+| `%d` | Day (01–31) | `21` |
+| `%H` | Hour (00–23) | `21` |
+| `%M` | Minute (00–59) | `19` |
+| `%S` | Second (00–59) | `39` |
+| `%f` | Milliseconds (000–999) | `250` |
+
+#### ISO 8601 Presets
+
+For convenience, shorthand presets are available that produce standard ISO 8601 formatted timestamps:
+
+| Token | Output Format | Example |
+|-------|---------------|---------|
+| `{time:iso}` | Local time | `2025-11-21T21:19:39` |
+| `{time:iso_ms}` | Local time with milliseconds | `2025-11-21T21:19:39.250` |
+| `{ztime:iso}` | UTC (Zulu) time | `2025-11-21T21:19:39Z` |
+| `{ztime:iso_ms}` | UTC (Zulu) time with milliseconds | `2025-11-21T21:19:39.000Z` |
+
+> **Note:** The ISO presets include colons in the time portion (e.g. `21:19:39`). Colons are not valid in filenames on macOS and Windows. If the timestamp will appear in the filename (not just the directory path), use a custom strftime format without colons instead, for example: `{ztime:%Y-%m-%dT%H%M%SZ}` which produces `2025-11-21T211939Z`.
+
+### Examples
+
+#### Instance-level format (applies to all systems)
+
+```json
+{
+  "filenameFormat": "{short_name}/{time:%Y}/{time:%m}/{time:%d}/{talkgroup}-{talkgroup_alpha_tag}-{epoch}_{freq}",
+  "systems": [{ "..." : "..." }]
+}
+```
+
+This would produce a path like:
+
+```
+<captureDir>/dcsys/2025/11/21/12345-FD_Disp-1732223979_851012500-call_42.wav
+```
+
+#### System-level override
+
+```json
+{
+  "filenameFormat": "{short_name}/{time:%Y}/{time:%m}/{time:%d}/{talkgroup}-{epoch}_{freq}",
+  "systems": [{
+    "shortName": "dcsys",
+    "filenameFormat": "{short_name}/{ztime:%Y-%m-%d}/{talkgroup_group}/{talkgroup}-{ztime:iso}_{freq_mhz}"
+  }]
+}
+```
+
+For system `dcsys`, the system-level format is used instead of the instance-level one:
+
+```
+<captureDir>/dcsys/2025-11-21/Fire/12345-2025-11-21T21:19:39Z_851.0125-call_42.wav
+```
+
+All other systems would still use the instance-level format.
+
+#### Using ISO Zulu time with milliseconds (filename-safe)
+
+```json
+{
+  "filenameFormat": "{short_name}/{ztime:%Y-%m-%d}/{talkgroup}-{ztime:%Y-%m-%dT%H%M%S.%fZ}_{freq}"
+}
+```
+
+Produces:
+
+```
+<captureDir>/dcsys/2025-11-21/12345-2025-11-21T211939.000Z_851012500-call_42.wav
+```
+
+***
 
 ## Plugin Object
 

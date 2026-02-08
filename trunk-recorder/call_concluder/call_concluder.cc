@@ -3,7 +3,207 @@
 #include <boost/filesystem.hpp>
 #include <filesystem>
 #include <cmath>
+#include <cstring>
 namespace fs = std::filesystem;
+
+// ---------------------------------------------------------------------------
+// Helpers for configurable filename format expansion
+// ---------------------------------------------------------------------------
+
+// Replace filesystem-unsafe characters in a token value with underscores.
+// The '/' character is NOT replaced — only the format string itself should
+// introduce path separators; token values that accidentally contain '/' will
+// be sanitised.
+static std::string sanitize_token(const std::string &str) {
+  std::string result;
+  result.reserve(str.size());
+  for (char c : str) {
+    switch (c) {
+    case '/':
+    case '\\':
+    case ':':
+    case '*':
+    case '?':
+    case '"':
+    case '<':
+    case '>':
+    case '|':
+      result += '_';
+      break;
+    default:
+      result += c;
+    }
+  }
+  return result;
+}
+
+// Format a time using strftime, with a custom %f specifier for milliseconds.
+// Since start_time is currently integer-seconds precision, milliseconds will
+// be "000".  When higher-precision timestamps are available the `ms`
+// parameter can be sourced from the fractional part.
+static std::string format_time_custom(const std::string &fmt, struct tm *tm_val, int ms = 0) {
+  // Pre-process: replace %f with zero-padded milliseconds before strftime
+  std::string processed;
+  processed.reserve(fmt.size() + 8);
+  for (size_t i = 0; i < fmt.size(); i++) {
+    if (fmt[i] == '%' && i + 1 < fmt.size() && fmt[i + 1] == 'f') {
+      char ms_buf[4];
+      snprintf(ms_buf, sizeof(ms_buf), "%03d", ms);
+      processed += ms_buf;
+      i++; // skip 'f'
+    } else {
+      processed += fmt[i];
+    }
+  }
+
+  char buf[512];
+  strftime(buf, sizeof(buf), processed.c_str(), tm_val);
+  return std::string(buf);
+}
+
+// Expand a user-supplied filename format string by replacing {token} patterns
+// with the corresponding values from call_info / start_time.
+//
+// Supported tokens:
+//   {talkgroup}             – numeric talkgroup ID
+//   {talkgroup_tag}         – talkgroup group tag (e.g. "Law Enforcement")
+//   {talkgroup_alpha_tag}   – talkgroup alpha tag (e.g. "PD Dispatch")
+//   {talkgroup_description} – talkgroup description
+//   {talkgroup_group}       – talkgroup group name
+//   {talkgroup_display}     – formatted talkgroup display string
+//   {short_name}            – system short name
+//   {freq}                  – frequency in Hz, integer (e.g. "851012500")
+//   {freq_mhz}              – frequency in MHz, decimal (e.g. "851.0125")
+//   {call_num}              – call number
+//   {tdma_slot}             – TDMA slot (empty string when slot is -1)
+//   {sys_num}               – system number
+//   {epoch}                 – Unix epoch in seconds
+//   {source_num}            – source number
+//   {recorder_num}          – recorder number
+//   {audio_type}            – "analog", "digital", or "digital tdma"
+//   {emergency}             – 0 or 1
+//   {encrypted}             – 0 or 1
+//   {priority}              – priority value
+//   {signal}                – signal level (integer)
+//   {noise}                 – noise level (integer)
+//   {color_code}            – color code
+//   {time:FORMAT}           – strftime format in local time
+//                             FORMAT may use %f for milliseconds
+//   {ztime:FORMAT}          – strftime format in UTC (Zulu) time
+//   {time:iso}              – ISO 8601 local  (20240115T143052)
+//   {time:iso_ms}           – ISO 8601 local  (20240115T143052.000)
+//   {ztime:iso}             – ISO 8601 UTC    (20240115T143052Z)
+//   {ztime:iso_ms}          – ISO 8601 UTC    (20240115T143052.000Z)
+//
+static std::string expand_filename_format(const std::string &format,
+                                          const Call_Data_t &call_info,
+                                          time_t start_time) {
+  std::string result;
+  result.reserve(format.size() * 2);
+
+  size_t i = 0;
+  while (i < format.size()) {
+    if (format[i] == '{') {
+      size_t end = format.find('}', i);
+      if (end == std::string::npos) {
+        // Unclosed brace – copy literally
+        result += format[i];
+        i++;
+        continue;
+      }
+      std::string token = format.substr(i + 1, end - i - 1);
+
+      // ---- Call_Data_t field tokens ----
+      if (token == "talkgroup") {
+        result += std::to_string(call_info.talkgroup);
+      } else if (token == "talkgroup_tag") {
+        result += sanitize_token(call_info.talkgroup_tag);
+      } else if (token == "talkgroup_alpha_tag") {
+        result += sanitize_token(call_info.talkgroup_alpha_tag);
+      } else if (token == "talkgroup_description") {
+        result += sanitize_token(call_info.talkgroup_description);
+      } else if (token == "talkgroup_group") {
+        result += sanitize_token(call_info.talkgroup_group);
+      } else if (token == "talkgroup_display") {
+        result += sanitize_token(call_info.talkgroup_display);
+      } else if (token == "short_name") {
+        result += sanitize_token(call_info.short_name);
+      } else if (token == "freq") {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.0f", call_info.freq);
+        result += buf;
+      } else if (token == "freq_mhz") {
+        char buf[32];
+        snprintf(buf, sizeof(buf), "%.4f", call_info.freq / 1000000.0);
+        result += buf;
+      } else if (token == "call_num") {
+        result += std::to_string(call_info.call_num);
+      } else if (token == "tdma_slot") {
+        if (call_info.tdma_slot != -1) {
+          result += std::to_string(call_info.tdma_slot);
+        }
+      } else if (token == "sys_num") {
+        result += std::to_string(call_info.sys_num);
+      } else if (token == "epoch") {
+        result += std::to_string(static_cast<long>(start_time));
+      } else if (token == "source_num") {
+        result += std::to_string(call_info.source_num);
+      } else if (token == "recorder_num") {
+        result += std::to_string(call_info.recorder_num);
+      } else if (token == "audio_type") {
+        result += sanitize_token(call_info.audio_type);
+      } else if (token == "emergency") {
+        result += std::to_string(call_info.emergency ? 1 : 0);
+      } else if (token == "encrypted") {
+        result += std::to_string(call_info.encrypted ? 1 : 0);
+      } else if (token == "priority") {
+        result += std::to_string(call_info.priority);
+      } else if (token == "signal") {
+        result += std::to_string(static_cast<int>(call_info.signal));
+      } else if (token == "noise") {
+        result += std::to_string(static_cast<int>(call_info.noise));
+      } else if (token == "color_code") {
+        result += std::to_string(call_info.color_code);
+      }
+      // ---- Local time formatting ----
+      else if (token.size() > 5 && token.substr(0, 5) == "time:") {
+        std::string fmt = token.substr(5);
+        struct tm *ltm = localtime(&start_time);
+        if (fmt == "iso") {
+          result += format_time_custom("%Y-%m-%dT%H:%M:%S", ltm);
+        } else if (fmt == "iso_ms") {
+          result += format_time_custom("%Y-%m-%dT%H:%M:%S.%f", ltm);
+        } else {
+          result += format_time_custom(fmt, ltm);
+        }
+      }
+      // ---- UTC / Zulu time formatting ----
+      else if (token.size() > 6 && token.substr(0, 6) == "ztime:") {
+        std::string fmt = token.substr(6);
+        struct tm *gtm = gmtime(&start_time);
+        if (fmt == "iso") {
+          result += format_time_custom("%Y-%m-%dT%H:%M:%SZ", gtm);
+        } else if (fmt == "iso_ms") {
+          result += format_time_custom("%Y-%m-%dT%H:%M:%S.%fZ", gtm);
+        } else {
+          result += format_time_custom(fmt, gtm);
+        }
+      }
+      // ---- Unknown token – preserve literally and warn ----
+      else {
+        result += "{" + token + "}";
+        BOOST_LOG_TRIVIAL(warning) << "Unknown filename format token: {" << token << "}";
+      }
+
+      i = end + 1;
+    } else {
+      result += format[i];
+      i++;
+    }
+  }
+
+  return result;
+}
 
 const int Call_Concluder::MAX_RETRY = 2;
 std::list<std::future<Call_Data_t>> Call_Concluder::call_data_workers = {};
@@ -296,30 +496,58 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
 
 // static int rec_counter=0;
-Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_info) {
-  char base_filename[255];
+Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_info, System *sys, Config config) {
   time_t work_start_time = call->get_start_time();
-  std::stringstream base_path_stream;
-  tm *ltm = localtime(&work_start_time);
-  // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
-  base_path_stream << call->get_capture_dir() << "/" << call->get_short_name() << "/" << 1900 + ltm->tm_year << "/" << 1 + ltm->tm_mon << "/" << ltm->tm_mday;
-  std::string base_path_string = base_path_stream.str();
-  boost::filesystem::create_directories(base_path_string);
+  std::string capture_dir = call->get_capture_dir();
+  std::string base_filename;
 
-  int nchars;
-
-  if (call->get_tdma_slot() == -1) {
-    nchars = snprintf(base_filename, 255, "%s/%ld-%ld_%.0f", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq());
+  // Determine which format to use:  system-level overrides instance-level.
+  std::string filename_format;
+  if (!sys->get_filename_format().empty()) {
+    filename_format = sys->get_filename_format();
   } else {
-    // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(base_filename, 255, "%s/%ld-%ld_%.0f.%d", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq(), call->get_tdma_slot());
+    filename_format = config.filename_format;
   }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
+
+  if (filename_format.empty()) {
+    // ---- Legacy default behaviour (unchanged) ----
+    char buf[255];
+    std::stringstream base_path_stream;
+    tm *ltm = localtime(&work_start_time);
+    // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
+    base_path_stream << capture_dir << "/" << call->get_short_name() << "/" << 1900 + ltm->tm_year << "/" << 1 + ltm->tm_mon << "/" << ltm->tm_mday;
+    std::string base_path_string = base_path_stream.str();
+    boost::filesystem::create_directories(base_path_string);
+
+    int nchars;
+
+    if (call->get_tdma_slot() == -1) {
+      nchars = snprintf(buf, 255, "%s/%ld-%ld_%.0f", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq());
+    } else {
+      // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
+      nchars = snprintf(buf, 255, "%s/%ld-%ld_%.0f.%d", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq(), call->get_tdma_slot());
+    }
+    if (nchars >= 255) {
+      BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 characters";
+    }
+    base_filename = buf;
+  } else {
+    // ---- Custom user-configured format ----
+    std::string expanded = expand_filename_format(filename_format, call_info, work_start_time);
+    base_filename = capture_dir + "/" + expanded;
+
+    // Ensure the directory portion of the expanded path exists
+    boost::filesystem::path filepath(base_filename);
+    boost::filesystem::create_directories(filepath.parent_path());
+
+    if (base_filename.size() >= 255) {
+      BOOST_LOG_TRIVIAL(error) << "Call: Custom filename path longer than 255 characters";
+    }
   }
-  snprintf(call_info.filename, 300, "%s-call_%lu.wav", base_filename, call->get_call_num());
-  snprintf(call_info.status_filename, 300, "%s-call_%lu.json", base_filename, call->get_call_num());
-  snprintf(call_info.converted, 300, "%s-call_%lu.m4a", base_filename, call->get_call_num());
+
+  snprintf(call_info.filename, 300, "%s-call_%lu.wav", base_filename.c_str(), call->get_call_num());
+  snprintf(call_info.status_filename, 300, "%s-call_%lu.json", base_filename.c_str(), call->get_call_num());
+  snprintf(call_info.converted, 300, "%s-call_%lu.m4a", base_filename.c_str(), call->get_call_num());
 
   return call_info;
 }
@@ -328,8 +556,6 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config config) {
   Call_Data_t call_info;
   double total_length = 0;
-
-  call_info = create_base_filename(call, call_info);
 
   call_info.status = INITIAL;
   call_info.process_call_time = time(0);
@@ -458,6 +684,10 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
     call_info.talkgroup_description = "";
     call_info.talkgroup_group = "";
   }
+
+  // Generate filenames after all call_info fields (including talkgroup tags)
+  // are populated, so that custom format strings can reference any field.
+  call_info = create_base_filename(call, call_info, sys, config);
 
   call_info.archive_files_on_failure = config.archive_files_on_failure;
   call_info.length = total_length;

@@ -199,5 +199,8 @@ public:
   virtual unsigned long get_multiSiteSystemNumber() = 0;
   virtual void set_multiSiteSystemNumber(unsigned long multiSiteSystemName) = 0;
 
+  virtual std::string get_filename_format() = 0;
+  virtual void set_filename_format(std::string format) = 0;
+
 };
 #endif

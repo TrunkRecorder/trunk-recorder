@@ -29,7 +29,7 @@ public:
   static void manage_call_data_workers();
 
 private:
-  static Call_Data_t create_base_filename(Call *call, Call_Data_t call_info);
+  static Call_Data_t create_base_filename(Call *call, Call_Data_t call_info, System *sys, Config config);
 };
 
 #endif

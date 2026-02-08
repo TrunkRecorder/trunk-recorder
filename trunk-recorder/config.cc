@@ -218,6 +218,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     }
     config.frequency_format = frequency_format;
     BOOST_LOG_TRIVIAL(info) << "Frequency format: " << get_frequency_format();
+    config.filename_format = data.value("filenameFormat", "");
+    BOOST_LOG_TRIVIAL(info) << "Filename Format: " << (config.filename_format.empty() ? "(default)" : config.filename_format);
 
     statusAsString = data.value("statusAsString", statusAsString);
     BOOST_LOG_TRIVIAL(info) << "Status as String: " << statusAsString;
@@ -431,6 +433,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Multiple Site System Name: " << system->get_multiSiteSystemName();
         system->set_multiSiteSystemNumber(element.value("multiSiteSystemNumber", 0));
         BOOST_LOG_TRIVIAL(info) << "Multiple Site System Number: " << system->get_multiSiteSystemNumber();
+        system->set_filename_format(element.value("filenameFormat", ""));
+        if (!system->get_filename_format().empty()) {
+          BOOST_LOG_TRIVIAL(info) << "Filename Format: " << system->get_filename_format();
+        }
 
         if (!system->get_compress_wav()) {
           if ((system->get_api_key().length() > 0) || (system->get_bcfy_api_key().length() > 0)) {

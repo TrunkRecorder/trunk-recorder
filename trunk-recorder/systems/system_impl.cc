@@ -783,3 +783,11 @@ unsigned long System_impl::get_multiSiteSystemNumber() {
 void System_impl::set_multiSiteSystemNumber(unsigned long multiSiteSystemNumber) {
   d_multiSiteSystemNumber = multiSiteSystemNumber;
 }
+
+std::string System_impl::get_filename_format() {
+  return this->filename_format;
+}
+
+void System_impl::set_filename_format(std::string format) {
+  this->filename_format = format;
+}
