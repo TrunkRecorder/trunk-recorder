@@ -716,6 +716,9 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
         if (system->get_system_type() == "smartnet") {
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
+          // ( We have gone back and forth on whether this should be lock/unlock or stop/wait/start.
+          //   If there are unexplained issues around control channel tuning, we should look at alternet
+          //   approaches. See PR #1090 )
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
           system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
