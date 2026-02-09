@@ -151,6 +151,7 @@ There is a list of available Plugins [here](./Plugins.md).
 | newCallFromUpdate            |          | true                                             | **true** / **false**                                         | Allow for UPDATE trunking messages to start a new Call, in addition to GRANT messages. This may result in more Calls with no transmisions, and use more Recorders. The flipside is that it may catch parts of a Call that would have otherwise been missed. Turn this off if you are running out of Recorders. |
 | softVocoder                  |          | false                                            | **true** / **false**                                         | Use the Software Decode vocoder from OP25 for P25 and DMR. Give it a try if you are hearing weird tones in your audio. Whether it makes your audio sound better or worse is a matter of preference. |
 | recordUUVCalls               |          | true                                             | **true** / **false**                                         | *P25 only* Record Unit to Unit Voice calls.        |
+| syslogFriendly               |          | false                                              | **true** / **false**                                         | Uses static filename `trunk-recorder.log` for use with syslog when `true`. |
 
 
 ## Source Object
