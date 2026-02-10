@@ -464,8 +464,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         bool gain_set = false;
         std::string driver = element.value("driver", "");
 
-        if ((driver != "osmosdr") && (driver != "usrp") && (driver != "sigmf") && (driver != "iqfile")) {
-          BOOST_LOG_TRIVIAL(error) << "Driver specified in config.json not recognized, needs to be osmosdr, sigmf, iqfile or usrp";
+        if ((driver != "osmosdr") && (driver != "usrp") && (driver != "sigmf") && (driver != "iqfile") && (driver != "iio")) {
+          BOOST_LOG_TRIVIAL(error) << "Driver specified in config.json not recognized, needs to be osmosdr, sigmf, iqfile, usrp, or iio";
           return false;
         }
 
