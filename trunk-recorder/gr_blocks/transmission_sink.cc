@@ -251,7 +251,7 @@ void transmission_sink::end_transmission() {
     // if we don't have a curr_src_id and we cached one in the previous transmission, use it
     if ((curr_src_id == -1) && (cached_src_id != -1 )) {
       transmission.source = cached_src_id;
-      BOOST_LOG_TRIVIAL(trace) << loghdr << "Using cached ID for Transmission: " << cached_src_id;
+      BOOST_LOG_TRIVIAL(info) << loghdr << "Using cached ID: " << cached_src_id << " for Transmission: " << sizeof(transmission_list);
       cached_src_id = -1;
       
     } else {
