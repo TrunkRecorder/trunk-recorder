@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+package turbine;
+import "google/protobuf/timestamp.proto";
+
+message TaggedOpusFrame {
+    uint32 system_id = 1;
+    uint32 tgid = 2;
+    uint32 src_id = 3;
+    uint32 sample_length_microseconds = 4;
+    google.protobuf.Timestamp ts = 5;
+    uint64 frame_number = 6;
+    bytes data = 7;
+}

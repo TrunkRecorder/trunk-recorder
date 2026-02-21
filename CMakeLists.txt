@@ -355,6 +355,7 @@ add_subdirectory(plugins/broadcastify_uploader)
 add_subdirectory(plugins/unit_script)
 add_subdirectory(plugins/rdioscanner_uploader)
 #add_subdirectory(plugins/simplestream)
+add_subdirectory(plugins/turbine_stream)
 
 # Add user plugins located in /user_plugins
 # Matching: /user_plugins/${plugin_dir}/CMakeLists.txt

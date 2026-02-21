@@ -32,6 +32,9 @@ RUN apt-get update && \
     libusb-dev \
     libusb-1.0-0-dev \
     libxtrx-dev \
+    libprotobuf-dev \
+    protobuf-compiler \
+    libopus-dev \
     pkg-config \
     wget \
     python3-six \
