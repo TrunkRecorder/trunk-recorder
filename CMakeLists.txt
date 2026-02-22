@@ -229,6 +229,26 @@ SET(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wno-narrowing -fvisibility=hidden -fPIC")
 
+# Eigen (used by lfsr) requires IEEE NaN/Inf semantics.
+# Strip fast/finite-math flags from toolchain/env and force safe math flags.
+foreach(_var
+    CMAKE_C_FLAGS CMAKE_CXX_FLAGS
+    CMAKE_C_FLAGS_DEBUG CMAKE_CXX_FLAGS_DEBUG
+    CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE
+    CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    CMAKE_C_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_MINSIZEREL)
+  if(DEFINED ${_var})
+    string(REGEX REPLACE "(^| )[/-]ffast-math( |$)" " " ${_var} "${${_var}}")
+    string(REGEX REPLACE "(^| )[/-]ffinite-math-only( |$)" " " ${_var} "${${_var}}")
+    string(REGEX REPLACE "(^| )[/-]Ofast( |$)" " " ${_var} "${${_var}}")
+    set(${_var} "${${_var}}" CACHE STRING "" FORCE)
+  endif()
+endforeach()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-finite-math-only -fno-fast-math")
+endif()
+
 
 list(APPEND trunk_recorder_sources
   trunk-recorder/recorders/recorder.cc
@@ -308,14 +328,6 @@ STATIC
   ${trunk_recorder_sources}
 )
 
-# Eigen expects IEEE NaN/Inf semantics; disable finite/fast-math assumptions
-# for targets that include lfsr headers.
-target_compile_options(
-    trunk_recorder_library PRIVATE
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>:-fno-finite-math-only>
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>:-fno-fast-math>
-)
-
 include(GNUInstallDirs)
 
 add_subdirectory(lib/op25_repeater)
@@ -379,12 +391,6 @@ foreach(plugin_dir ${plugin_dirs})
 endforeach()
 
 add_executable(trunk-recorder trunk-recorder/main.cc) # ${trunk_recorder_sources})
-
-target_compile_options(
-    trunk-recorder PRIVATE
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>:-fno-finite-math-only>
-    $<$<COMPILE_LANG_AND_ID:CXX,Clang,GNU>:-fno-fast-math>
-)
 
 target_link_libraries(trunk-recorder git trunk_recorder_library gnuradio-op25_repeater   ${CMAKE_DL_LIBS} ssl crypto ${CURL_LIBRARIES} ${Boost_LIBRARIES} ${GNURADIO_PMT_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_FILTER_LIBRARIES} ${GNURADIO_DIGITAL_LIBRARIES} ${GNURADIO_ANALOG_LIBRARIES} ${GNURADIO_AUDIO_LIBRARIES} ${GNURADIO_UHD_LIBRARIES} ${UHD_LIBRARIES} ${GNURADIO_BLOCKS_LIBRARIES} ${GNURADIO_OSMOSDR_LIBRARIES} ) # gRPC::grpc++_reflection protobuf::libprotobuf)
 
