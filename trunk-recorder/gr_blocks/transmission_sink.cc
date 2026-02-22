@@ -31,6 +31,7 @@
 #include <fcntl.h>
 #include <gnuradio/io_signature.h>
 #include <gnuradio/thread/thread.h>
+#include <sstream>
 #include <stdexcept>
 #include <stdio.h>
 
@@ -79,27 +80,27 @@ transmission_sink::transmission_sink(int n_channels, unsigned int sample_rate, i
 
 void transmission_sink::create_filename() {
   time_t work_start_time = d_start_time;
-  std::stringstream temp_path_stream;
+  std::ostringstream temp_path_stream;
   // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
 
   temp_path_stream << d_current_call_temp_dir << "/" << d_current_call_short_name;
   std::string temp_path_string = temp_path_stream.str();
   boost::filesystem::create_directories(temp_path_string);
 
-  int nchars;
-
   if (d_slot == -1) {
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq);
+    current_filename = temp_path_string + "/" + std::to_string(d_current_call_talkgroup) + "-" +
+                       std::to_string(work_start_time) + "_" +
+                       std::to_string(static_cast<long>(std::llround(d_current_call_freq))) + ".wav";
   } else {
     // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.%d.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq, d_slot);
-  }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
+    current_filename = temp_path_string + "/" + std::to_string(d_current_call_talkgroup) + "-" +
+                       std::to_string(work_start_time) + "_" +
+                       std::to_string(static_cast<long>(std::llround(d_current_call_freq))) + "." +
+                       std::to_string(d_slot) + ".wav";
   }
 }
 
-char *transmission_sink::get_filename() {
+const std::string &transmission_sink::get_filename() {
   return current_filename;
 }
 
@@ -175,10 +176,6 @@ bool transmission_sink::open_internal(const char *filename) {
     // d_fp = NULL;
   }
 
-  if (strlen(filename) >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "transmission_sink: Error! filename longer than 255";
-  }
-
   if ((d_fp = fdopen(fd, "rb+")) == NULL) {
     perror(filename);
     ::close(fd); // don't leak file descriptor if fdopen fails.
@@ -249,7 +246,7 @@ void transmission_sink::end_transmission() {
     transmission.color_code = d_current_color_code;
     transmission.length = length_in_seconds(); // length in seconds
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
-    strcpy(transmission.filename, current_filename); // Copy the filename
+    transmission.filename = current_filename;
     transmission.talkgroup = d_current_call_talkgroup;
 
     BOOST_LOG_TRIVIAL(debug) << "Adding transmission: " << transmission.filename << " Slot: " << transmission.slot << " Talkgroup: " << transmission.talkgroup << " Length: " << transmission.length << " Samples: " << d_sample_count;
@@ -549,7 +546,7 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
 
     // create a new filename, based on the current time and source.
     create_filename();
-    if (!open_internal(current_filename)) {
+    if (!open_internal(current_filename.c_str())) {
       BOOST_LOG_TRIVIAL(error) << "can't open file";
       return noutput_items;
     }

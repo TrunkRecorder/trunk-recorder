@@ -19,7 +19,7 @@ struct Transmission {
   long error_count;
   double freq;
   double length;
-  char filename[255];
+  std::string filename;
 };
 
 struct Config {
@@ -124,9 +124,9 @@ struct Call_Data_t {
   bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
-  char filename[300];
-  char status_filename[300];
-  char converted[300];
+  std::string filename;
+  std::string status_filename;
+  std::string converted;
   int min_transmissions_removed;
 
   int sys_num;

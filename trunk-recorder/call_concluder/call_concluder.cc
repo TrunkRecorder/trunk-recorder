@@ -2,7 +2,9 @@
 #include "../plugin_manager/plugin_manager.h"
 #include <boost/filesystem.hpp>
 #include <filesystem>
+#include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstring>
 namespace fs = std::filesystem;
 
@@ -41,14 +43,18 @@ static std::string sanitize_token(const std::string &str) {
 // Since start_time is currently integer-seconds precision, milliseconds will
 // be "000".  When higher-precision timestamps are available the `ms`
 // parameter can be sourced from the fractional part.
-static std::string format_time_custom(const std::string &fmt, struct tm *tm_val, int ms = 0) {
+static std::string format_time_custom(const std::string &fmt, const struct tm *tm_val, int ms = 0) {
+  if (tm_val == nullptr || fmt.empty()) {
+    return "";
+  }
+
   // Pre-process: replace %f with zero-padded milliseconds before strftime
   std::string processed;
   processed.reserve(fmt.size() + 8);
   for (size_t i = 0; i < fmt.size(); i++) {
     if (fmt[i] == '%' && i + 1 < fmt.size() && fmt[i + 1] == 'f') {
       char ms_buf[4];
-      snprintf(ms_buf, sizeof(ms_buf), "%03d", ms);
+      snprintf(ms_buf, sizeof(ms_buf), "%03d", std::clamp(ms, 0, 999));
       processed += ms_buf;
       i++; // skip 'f'
     } else {
@@ -56,9 +62,20 @@ static std::string format_time_custom(const std::string &fmt, struct tm *tm_val,
     }
   }
 
-  char buf[512];
-  strftime(buf, sizeof(buf), processed.c_str(), tm_val);
-  return std::string(buf);
+  // Avoid fixed-size buffers: grow until strftime fits, with a hard safety cap.
+  size_t buffer_size = std::max<size_t>(64, processed.size() * 2);
+  while (buffer_size <= 65536) {
+    std::string output(buffer_size, '\0');
+    const size_t written = strftime(output.data(), output.size(), processed.c_str(), tm_val);
+    if (written > 0) {
+      output.resize(written);
+      return output;
+    }
+    buffer_size *= 2;
+  }
+
+  BOOST_LOG_TRIVIAL(warning) << "Filename time format output exceeded 64KiB or could not be formatted.";
+  return "";
 }
 
 // Expand a user-supplied filename format string by replacing {token} patterns
@@ -209,39 +226,30 @@ const int Call_Concluder::MAX_RETRY = 2;
 std::list<std::future<Call_Data_t>> Call_Concluder::call_data_workers = {};
 std::list<Call_Data_t> Call_Concluder::retry_call_list = {};
 
-int combine_wav(std::string files, char *target_filename) {
-  char shell_command[4000];
-
-  int nchars = snprintf(shell_command, 4000, "sox %s '%s' ", files.c_str(), target_filename);
-
-  if (nchars >= 4000) {
-    BOOST_LOG_TRIVIAL(error) << "Call uploader: SOX Combine WAV Command longer than 4000 characters";
-    return -1;
-  }
-  int rc = system(shell_command);
+int combine_wav(const std::string &files, const std::string &target_filename) {
+  const std::string shell_command = "sox " + files + " '" + target_filename + "' ";
+  int rc = system(shell_command.c_str());
 
   if (rc > 0) {
-    BOOST_LOG_TRIVIAL(info) << "Combining: " << files.c_str() << " into: " << target_filename;
+    BOOST_LOG_TRIVIAL(info) << "Combining: " << files << " into: " << target_filename;
     BOOST_LOG_TRIVIAL(info) << shell_command;
     BOOST_LOG_TRIVIAL(error) << "Failed to combine recordings, see above error. Make sure you have sox and fdkaac installed.";
     return -1;
   }
 
-  return nchars;
+  return static_cast<int>(shell_command.size());
 }
-int convert_media(char *filename, char *converted, char *date, const char *short_name, const char *talkgroup) {
-  char shell_command[400];
+int convert_media(const std::string &filename, const std::string &converted, const std::string &date, const std::string &short_name, const std::string &talkgroup) {
+  std::stringstream shell_command;
+  shell_command << "sox '" << filename << "' --norm=-.01 -t wav - | fdkaac --silent  -p 2 --date '"
+                << date << "' --artist '" << short_name << "' --title '" << talkgroup
+                << "' --moov-before-mdat --ignorelength -b 8000 -o '" << converted << "' -";
+  const std::string shell_command_string = shell_command.str();
 
-  int nchars = snprintf(shell_command, 400, "sox '%s' --norm=-.01 -t wav - | fdkaac --silent  -p 2 --date '%s' --artist '%s' --title '%s' --moov-before-mdat --ignorelength -b 8000 -o '%s' -", filename, date, short_name, talkgroup, converted);
-
-  if (nchars >= 400) {
-    BOOST_LOG_TRIVIAL(error) << "Call uploader: Command longer than 400 characters";
-    return -1;
-  }
   BOOST_LOG_TRIVIAL(trace) << "Converting: " << converted;
-  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command;
+  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command_string;
 
-  int rc = system(shell_command);
+  int rc = system(shell_command_string.c_str());
 
   if (rc > 0) {
     BOOST_LOG_TRIVIAL(error) << "Failed to convert call recording, see above error. Make sure you have sox and fdkaac installed.";
@@ -249,7 +257,7 @@ int convert_media(char *filename, char *converted, char *date, const char *short
   } else {
     BOOST_LOG_TRIVIAL(trace) << "Finished converting call";
   }
-  return nchars;
+  return static_cast<int>(shell_command_string.size());
 }
 
 int create_call_json(Call_Data_t& call_info) {
@@ -328,7 +336,7 @@ int create_call_json(Call_Data_t& call_info) {
   }
 }
 
-bool checkIfFile(std::string filePath) {
+bool checkIfFile(const std::string &filePath) {
   try {
     // Create a Path object from given path string
     boost::filesystem::path pathObj(filePath);
@@ -385,7 +393,7 @@ void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
     for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end(); ++it) {
       Transmission t = *it;
       if (checkIfFile(t.filename)) {
-        remove(t.filename);
+        std::remove(t.filename.c_str());
       }
     }
 
@@ -394,15 +402,15 @@ void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
   } else {
 
     if (checkIfFile(call_info.filename)) {
-      remove(call_info.filename);
+      std::remove(call_info.filename.c_str());
     }
     if (checkIfFile(call_info.converted)) {
-      remove(call_info.converted);
+      std::remove(call_info.converted.c_str());
     }
     for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end(); ++it) {
       Transmission t = *it;
       if (checkIfFile(t.filename)) {
-        remove(t.filename);
+        std::remove(t.filename.c_str());
       }
     }
 
@@ -410,7 +418,7 @@ void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
 
   if (!call_info.call_log && !(plugin_failure && call_info.archive_files_on_failure)) {
     if (checkIfFile(call_info.status_filename)) {
-      remove(call_info.status_filename);
+      std::remove(call_info.status_filename.c_str());
     }
   }
 }
@@ -429,7 +437,7 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end(); ++it) {
       Transmission t = *it;
 
-      if (stat(t.filename, &statbuf) == 0)
+      if (stat(t.filename.c_str(), &statbuf) == 0)
       {
           files.append("'");
           files.append(t.filename);
@@ -453,15 +461,12 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     if (call_info.compress_wav) {
       // TR records files as .wav files. They need to be compressed before being upload to online services.
 
-      char *talkgroup_title;
-      if (call_info.talkgroup_alpha_tag.length() > 0) {
-        talkgroup_title = (char *)call_info.talkgroup_alpha_tag.c_str();
-      } else {
-        talkgroup_title = (char *)std::to_string(call_info.talkgroup).c_str();
-      }
+      std::string talkgroup_title = call_info.talkgroup_alpha_tag.length() > 0
+                                        ? call_info.talkgroup_alpha_tag
+                                        : std::to_string(call_info.talkgroup);
 
       time_t start_time = static_cast<time_t>(call_info.start_time);
-      result = convert_media(call_info.filename, call_info.converted, std::ctime(&start_time), call_info.short_name.c_str(), talkgroup_title);
+      result = convert_media(call_info.filename, call_info.converted, std::ctime(&start_time), call_info.short_name, talkgroup_title);
 
       if (result < 0) {
         call_info.status = FAILED;
@@ -511,7 +516,6 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 
   if (filename_format.empty()) {
     // ---- Legacy default behaviour (unchanged) ----
-    char buf[255];
     std::stringstream base_path_stream;
     tm *ltm = localtime(&work_start_time);
     // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
@@ -519,18 +523,17 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
     std::string base_path_string = base_path_stream.str();
     boost::filesystem::create_directories(base_path_string);
 
-    int nchars;
-
     if (call->get_tdma_slot() == -1) {
-      nchars = snprintf(buf, 255, "%s/%ld-%ld_%.0f", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq());
+      base_filename = base_path_string + "/" + std::to_string(call->get_talkgroup()) + "-" +
+                      std::to_string(work_start_time) + "_" +
+                      std::to_string(static_cast<long>(std::llround(call->get_freq())));
     } else {
       // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-      nchars = snprintf(buf, 255, "%s/%ld-%ld_%.0f.%d", base_path_string.c_str(), call->get_talkgroup(), work_start_time, call->get_freq(), call->get_tdma_slot());
+      base_filename = base_path_string + "/" + std::to_string(call->get_talkgroup()) + "-" +
+                      std::to_string(work_start_time) + "_" +
+                      std::to_string(static_cast<long>(std::llround(call->get_freq()))) + "." +
+                      std::to_string(call->get_tdma_slot());
     }
-    if (nchars >= 255) {
-      BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 characters";
-    }
-    base_filename = buf;
   } else {
     // ---- Custom user-configured format ----
     std::string expanded = expand_filename_format(filename_format, call_info, work_start_time);
@@ -540,14 +543,11 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
     boost::filesystem::path filepath(base_filename);
     boost::filesystem::create_directories(filepath.parent_path());
 
-    if (base_filename.size() >= 255) {
-      BOOST_LOG_TRIVIAL(error) << "Call: Custom filename path longer than 255 characters";
-    }
   }
 
-  snprintf(call_info.filename, 300, "%s-call_%lu.wav", base_filename.c_str(), call->get_call_num());
-  snprintf(call_info.status_filename, 300, "%s-call_%lu.json", base_filename.c_str(), call->get_call_num());
-  snprintf(call_info.converted, 300, "%s-call_%lu.m4a", base_filename.c_str(), call->get_call_num());
+  call_info.filename = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".wav";
+  call_info.status_filename = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".json";
+  call_info.converted = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".m4a";
 
   return call_info;
 }
@@ -615,7 +615,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
         call_info.min_transmissions_removed++;
 
         if (checkIfFile(t.filename)) {
-          remove(t.filename);
+          std::remove(t.filename.c_str());
         }
       }
 

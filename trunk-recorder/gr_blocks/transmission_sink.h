@@ -57,7 +57,7 @@ private:
   long d_error_count;
   long curr_src_id;
   unsigned int d_current_color_code;
-  char current_filename[255];
+  std::string current_filename;
   Call *d_current_call;
   long d_current_call_num;
   std::string d_current_call_short_name;
@@ -119,7 +119,7 @@ public:
                     int bits_per_sample);
   virtual ~transmission_sink();
   void create_filename();
-  char *get_filename();
+  const std::string &get_filename();
   bool start_recording(Call *call);
   bool start_recording(Call *call, int slot);
   void stop_recording();

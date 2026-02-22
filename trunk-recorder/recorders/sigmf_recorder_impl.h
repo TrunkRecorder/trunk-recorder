@@ -110,7 +110,7 @@ private:
   Config *config;
   Source *source;
   Call *call;
-  char filename[255];
+  std::string filename;
   // int num;
   State state;
 

@@ -465,7 +465,7 @@ public:
       }
 
       struct stat file_info;
-      stat(call_info.converted, &file_info);
+      stat(call_info.converted.c_str(), &file_info);
 
       BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
       return 0;

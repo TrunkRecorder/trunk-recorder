@@ -145,7 +145,7 @@ public:
     mime = curl_mime_init(curl);
     part = curl_mime_addpart(mime);
 
-    curl_mime_filedata(part, call_info.converted);
+    curl_mime_filedata(part, call_info.converted.c_str());
     curl_mime_type(part, "application/octet-stream"); /* content-type for this part */
     curl_mime_name(part, "call");
 
@@ -298,7 +298,7 @@ public:
 
       if (res == CURLM_OK && response_code == 200) {
         struct stat file_info;
-        stat(call_info.converted, &file_info);
+        stat(call_info.converted.c_str(), &file_info);
         std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
         BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
         ;
