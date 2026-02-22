@@ -27,6 +27,7 @@ public:
   static Call_Data_t create_call_data(Call *call, System *sys, Config config);
   static void conclude_call(Call *call, System *sys, Config config);
   static void manage_call_data_workers();
+  static bool shutdown_call_data_workers(std::chrono::seconds timeout);
 
 private:
   static Call_Data_t create_base_filename(Call *call, Call_Data_t call_info, System *sys, Config config);

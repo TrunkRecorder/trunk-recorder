@@ -860,18 +860,14 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
       for (vector<Call *>::iterator it = calls.begin(); it != calls.end();) {
         Call *call = *it;
 
-        if (call->get_state() != MONITORING) {
-          call->conclude_call();
-        }
+        call->conclude_call();
 
         it = calls.erase(it);
         delete call;
       }
 
       BOOST_LOG_TRIVIAL(info) << "Cleaning up & Exiting...";
-
-      // Sleep for 5 seconds to allow for all of the Call Concluder threads to finish.
-      boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+      Call_Concluder::shutdown_call_data_workers(std::chrono::seconds(10));
       return exit_code;
     }
 
@@ -933,7 +929,9 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
         Source *source = *src_it;
         if (!source->got_samples()) {
           BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " has stopped receiving samples - Terminating trunk recorder";
-          exit(1);
+          exit_code = EXIT_FAILURE;
+          exit_flag = 1;
+          break;
         }
       }
       last_decode_rate_check = current_time;

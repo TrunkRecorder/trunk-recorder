@@ -832,3 +832,61 @@ void Call_Concluder::manage_call_data_workers() {
     }
   }
 }
+
+bool Call_Concluder::shutdown_call_data_workers(std::chrono::seconds timeout) {
+  const auto deadline = std::chrono::steady_clock::now() + timeout;
+
+  while (std::chrono::steady_clock::now() < deadline) {
+    for (std::list<std::future<Call_Data_t>>::iterator it = call_data_workers.begin(); it != call_data_workers.end();) {
+      if (it->wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
+        ++it;
+        continue;
+      }
+
+      Call_Data_t call_info = it->get();
+      it = call_data_workers.erase(it);
+
+      if (call_info.status == RETRY) {
+        call_info.retry_attempt++;
+        if (call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
+          remove_call_files(call_info, true);
+        } else {
+          // During shutdown, retry immediately instead of waiting for backoff.
+          call_data_workers.push_back(std::async(std::launch::async, upload_call_worker, call_info));
+        }
+      }
+    }
+
+    // Run any queued retries immediately while draining for shutdown.
+    for (std::list<Call_Data_t>::iterator it = retry_call_list.begin(); it != retry_call_list.end();) {
+      Call_Data_t call_info = *it;
+      call_data_workers.push_back(std::async(std::launch::async, upload_call_worker, call_info));
+      it = retry_call_list.erase(it);
+    }
+
+    if (call_data_workers.empty() && retry_call_list.empty()) {
+      return true;
+    }
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(50));
+  }
+
+  // Timeout hit: clean pending retries and force shutdown path to continue.
+  for (std::list<Call_Data_t>::iterator it = retry_call_list.begin(); it != retry_call_list.end(); ++it) {
+    remove_call_files(*it, true);
+  }
+  retry_call_list.clear();
+
+  if (!call_data_workers.empty()) {
+    BOOST_LOG_TRIVIAL(error) << "Call concluder shutdown timed out after "
+                             << timeout.count() << " seconds; force exiting with "
+                             << call_data_workers.size() << " worker(s) still running.";
+
+    // Keep outstanding futures alive until process exit, so we don't block on
+    // future destruction while forcing shutdown.
+    std::list<std::future<Call_Data_t>> *abandoned_workers = new std::list<std::future<Call_Data_t>>();
+    abandoned_workers->splice(abandoned_workers->end(), call_data_workers);
+  }
+
+  return false;
+}

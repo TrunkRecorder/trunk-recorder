@@ -10,7 +10,6 @@
 #ifndef LFSR_H_
 #define LFSR_H_
 
-
 #include "Eigen/Dense"
 
 class p25p2_lfsr {
