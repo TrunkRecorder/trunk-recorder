@@ -572,7 +572,6 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   Call_Data_t call_info;
 
   // ---------- Static metadata ----------
-  call_info = create_base_filename(call, call_info);
 
   call_info.status              = INITIAL;
   call_info.process_call_time   = time(0);
