@@ -120,17 +120,7 @@ void transmission_sink::create_filename() {
     candidate = dir / make_stem(i);
   }
 
-  const std::string cand_str = candidate.string();
-  const size_t cap = sizeof(current_filename);
-  if (cand_str.size() >= cap) {
-    BOOST_LOG_TRIVIAL(error)
-        << "Call: Path longer than buffer (" << cap
-        << ") — truncating filename: " << cand_str;
-    std::snprintf(current_filename, cap, "%.*s",
-                  static_cast<int>(cap - 1), cand_str.c_str());
-  } else {
-    std::snprintf(current_filename, cap, "%s", cand_str.c_str());
-  }
+  current_filename = candidate.string();
 }
 
 const std::string &transmission_sink::get_filename() {
