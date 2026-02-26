@@ -23,6 +23,8 @@ RUN apt-get update && \
     libhackrf-dev \
     libmirisdr-dev \
     liborc-0.4-dev \
+    libpaho-mqtt-dev \
+    libpaho-mqttpp-dev \
     libpthread-stubs0-dev \
     librtlsdr-dev \
     libsndfile1-dev \
@@ -42,6 +44,9 @@ WORKDIR /src
 
 COPY . .
 
+RUN git -C /src/user_plugins \
+       clone --depth 1 https://github.com/TrunkRecorder/tr-plugin-mqtt.git
+
 WORKDIR /src/build
 
 RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
@@ -50,7 +55,8 @@ RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
 FROM ubuntu:24.04
 RUN apt-get update && apt-get -y upgrade && apt-get install --no-install-recommends -y ca-certificates gr-funcube gr-iqbal curl wget libboost-log1.83.0 \
     libboost-chrono1.83.0t64 libgnuradio-digital3.10.9t64 libgnuradio-analog3.10.9t64 libgnuradio-filter3.10.9t64 libgnuradio-network3.10.9t64  \
-    libgnuradio-uhd3.10.9t64 libgnuradio-osmosdr0.2.0t64 libsoapysdr0.8 soapysdr0.8-module-all libairspyhf1 libfreesrp0 librtlsdr2 libxtrx0 sox fdkaac docker.io && \
+    libgnuradio-uhd3.10.9t64 libgnuradio-osmosdr0.2.0t64 libsoapysdr0.8 soapysdr0.8-module-all libairspyhf1 libfreesrp0 librtlsdr2 libxtrx0 sox fdkaac docker.io \
+    libpaho-mqtt-dev libpaho-mqttpp-dev && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /usr/share/{doc,man,info} && rm -rf /usr/local/share/{doc,man,info}
 
