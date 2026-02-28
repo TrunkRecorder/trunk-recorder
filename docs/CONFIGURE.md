@@ -152,6 +152,7 @@ There is a list of available Plugins [here](./Plugins.md).
 | softVocoder                  |          | false                                            | **true** / **false**                                         | Use the Software Decode vocoder from OP25 for P25 and DMR. Give it a try if you are hearing weird tones in your audio. Whether it makes your audio sound better or worse is a matter of preference. |
 | recordUUVCalls               |          | true                                             | **true** / **false**                                         | *P25 only* Record Unit to Unit Voice calls.        |
 | filenameFormat               |          |                                                  | string                                                       | A format string that controls the directory structure and filename for recorded calls. When set at the instance level it applies to all systems. See the [Filename Format](#filename-format) section below for full details. |
+| syslogFriendly               |          | false                                            | **true** / **false**                                         | Uses static filename `trunk-recorder.log` for use with syslog when `true`. |
 
 
 ## Source Object
