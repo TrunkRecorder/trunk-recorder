@@ -873,7 +873,7 @@ namespace gr {
 					}
 					double error_history_avg = error_history_total / error_history_len;
 
-					double error_history_sqrt;
+					double error_history_sqrt = 0.0;
 					for (int j=0; j<error_history_len; j++){
 						error_history_sqrt += pow((error_history[j] - error_history_avg), 2);
 					}
@@ -906,7 +906,7 @@ namespace gr {
                                 int16_t frame_vector[8];
 
                                 for (int i=0; i < 8; i++) { // Ugh. For compatibility convert imbe params from uint32_t to int16_t
-                                    frame_vector[i] = u[i];
+                                    frame_vector[i] = u[i] & 0xFFFF;
                                 }
                                 frame_vector[7] >>= 1;
                                 vocoder.imbe_decode(frame_vector, snd);

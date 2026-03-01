@@ -394,7 +394,7 @@ void p25p2_tdma::decode_mac_msg(const uint8_t byte_buf[], const unsigned int len
 {
 	std::string s;
 	std::string pdu;
-	uint8_t b1b2, mco, op, mfid, msg_ptr, msg_len, len_remaining;
+	uint8_t b1b2, mco, op, mfid, msg_ptr, msg_len = 0, len_remaining;
     uint16_t colorcd;
 
 	colorcd = nac;
@@ -696,6 +696,7 @@ int p25p2_tdma::handle_acch_frame(const uint8_t dibits[], bool fast, bool is_lcc
 void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_subframe)
 {
 	int16_t samples_buf[IMBE_SAMPLES_PER_FRAME];
+	memset(samples_buf, 0, sizeof(samples_buf));
 	packed_codeword p_cw;
     bool audio_valid = !encrypted();
 	int u[4];
@@ -704,7 +705,7 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
 	int16_t snd;
 	int K;
 	int rc = -1;
-	frame_type fr_type;
+	frame_type fr_type = FT_4V_0;
 
 	// Deinterleave and figure out frame type:
 	errs = vf.process_vcw(&errs_mp, dibits, b, u);
