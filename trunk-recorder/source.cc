@@ -536,6 +536,7 @@ void Source::create_sigmf_recorders(gr::top_block_sptr tb, int r) {
     sigmf_recorders.push_back(log);
     log->set_selector_port(next_selector_port);
     tb->connect(recorder_selector, next_selector_port, log, 0);
+    next_selector_port++;
   }
 }
 
