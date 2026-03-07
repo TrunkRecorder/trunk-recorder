@@ -269,6 +269,9 @@ public:
   std::string get_filename_format() override;
   void set_filename_format(std::string format) override;
 
+  int get_config_index() override;
+  void set_config_index(int index) override;
+
 private:
   TalkgroupDisplayFormat talkgroup_display_format;
   bool d_hideEncrypted;
@@ -282,5 +285,6 @@ private:
   bool d_fsync_enabled;
   bool d_star_enabled;
   bool d_tps_enabled;
+  int d_config_index;
 };
 #endif

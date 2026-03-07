@@ -53,6 +53,7 @@ class Source {
   int debug_recorder_port;
   int next_selector_port;
   int silence_frames;
+  int config_index;
   Config *config;
   bool autotune_source;
 
@@ -76,6 +77,8 @@ class Source {
 
 public:
   int get_num();
+  int get_config_index();
+  void set_config_index(int index);
   Config *get_config();
   Source(double c, double r, double e, std::string driver, std::string device, Config *cfg);
   Source(std::string sigmf_meta, std::string sigmf_data, bool repeat, Config *cfg);

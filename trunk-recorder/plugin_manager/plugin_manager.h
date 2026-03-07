@@ -2,6 +2,7 @@
 #define PLUGIN_MANAGER_H
 
 #include "../call_concluder/call_concluder.h"
+#include "../config_service.h"
 #include "../recorders/recorder.h"
 #include "../source.h"
 #include "../systems/system.h"
@@ -50,4 +51,9 @@ void plugman_unit_group_affiliation(System *system, long source_id, long talkgro
 void plugman_unit_data_grant(System *system, long source_id);
 void plugman_unit_answer_request(System *system, long source_id, long talkgroup);
 void plugman_unit_location(System *system, long source_id, long talkgroup_num);
+void plugman_config_change(const ConfigChangeInfo& change);
+
+// Register the plugin manager as a listener for configuration changes
+void plugman_register_config_listener();
+
 #endif // PLUGIN_MANAGER_H
