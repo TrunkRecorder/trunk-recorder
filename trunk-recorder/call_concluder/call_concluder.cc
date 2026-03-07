@@ -240,7 +240,7 @@ int combine_wav(const std::vector<std::string> &files, const std::string &target
      shell_command += "' -p ";
      shell_command += "highpass 120 ";
      shell_command += "compand 0.02,0.20 6:-80,-70,-35,-15,-3 -6 -90 0.1 ";
-     shell_command += "gain -n -1 ";
+     shell_command += "gain -n -.01 ";
   }
   
   
