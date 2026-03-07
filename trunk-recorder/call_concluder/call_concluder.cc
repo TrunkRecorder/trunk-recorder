@@ -241,7 +241,11 @@ int combine_wav(const std::string &files, const std::string &target_filename) {
 }
 int convert_media(const std::string &filename, const std::string &converted, const std::string &date, const std::string &short_name, const std::string &talkgroup) {
   std::stringstream shell_command;
-  shell_command << "sox '" << filename << "' --norm=-.01 -t wav - | fdkaac --silent  -p 2 --date '"
+  shell_command << "sox '" << filename << "' -t wav - "
+                << "highpass 120 "
+                << "compand 0.02,0.20 6:-80,-70,-35,-15,-3 -6 -90 0.1 "
+                << "gain -n -1 "
+                << "| fdkaac --silent -p 2 --date '"
                 << date << "' --artist '" << short_name << "' --title '" << talkgroup
                 << "' --moov-before-mdat --ignorelength -b 8000 -o '" << converted << "' -";
   const std::string shell_command_string = shell_command.str();
