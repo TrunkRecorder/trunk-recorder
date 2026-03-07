@@ -26,6 +26,7 @@ struct Transmission {
 };
 
 struct Config {
+  nlohmann::json loaded_json; // Raw JSON from config file - tracks which keys were explicitly set
   std::string config_file;
   std::string upload_script;
   std::string upload_server;

@@ -1,8 +1,10 @@
 #include "config_service.h"
+#include "config.h"
 #include "formatter.h"
 #include "source.h"
 #include "systems/system.h"
 
+#include <map>
 #include <sstream>
 
 // Global configuration service instance
@@ -267,6 +269,14 @@ bool ConfigurationService::set_call_timeout(double timeout, const std::string& r
   return submit_command(cmd);
 }
 
+bool ConfigurationService::save_config() {
+  if (!m_config) {
+    BOOST_LOG_TRIVIAL(error) << "ConfigurationService: Cannot save config - not initialized";
+    return false;
+  }
+  return ::save_config(*m_config);
+}
+
 // ============================================================
 // Getters
 // ============================================================
@@ -510,6 +520,29 @@ ConfigResult ConfigurationService::validate_command(const ConfigCommand& cmd) {
 }
 
 // ============================================================
+// loaded_json update helpers
+// ============================================================
+
+void ConfigurationService::update_source_json(Source* src, const std::string& json_key, const ConfigValue& value) {
+  if (!m_config || src->get_config_index() < 0) return;
+  auto& sources_json = m_config->loaded_json["sources"];
+  if (src->get_config_index() >= static_cast<int>(sources_json.size())) return;
+  std::visit([&](const auto& v) { sources_json[src->get_config_index()][json_key] = v; }, value);
+}
+
+void ConfigurationService::update_system_json(System* sys, const std::string& json_key, const ConfigValue& value) {
+  if (!m_config || sys->get_config_index() < 0) return;
+  auto& systems_json = m_config->loaded_json["systems"];
+  if (sys->get_config_index() >= static_cast<int>(systems_json.size())) return;
+  std::visit([&](const auto& v) { systems_json[sys->get_config_index()][json_key] = v; }, value);
+}
+
+void ConfigurationService::update_config_json(const std::string& json_key, const ConfigValue& value) {
+  if (!m_config) return;
+  std::visit([&](const auto& v) { m_config->loaded_json[json_key] = v; }, value);
+}
+
+// ============================================================
 // Command execution
 // ============================================================
 
@@ -521,6 +554,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = src->get_gain();
       src->set_gain(std::get<double>(cmd.value));
+      update_source_json(src, "gain", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SOURCE_GAIN_BY_NAME: {
@@ -528,6 +562,16 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = static_cast<double>(src->get_gain_by_name(cmd.param_name));
       src->set_gain_by_name(cmd.param_name, std::get<double>(cmd.value));
+      // Map gain name to JSON key (e.g., "IF" -> "ifGain", "BB" -> "bbGain")
+      static const std::map<std::string, std::string> gain_name_to_json = {
+        {"IF", "ifGain"}, {"BB", "bbGain"}, {"MIX", "mixGain"}, {"LNA", "lnaGain"},
+        {"TIA", "tiaGain"}, {"PGA", "pgaGain"}, {"AMP", "ampGain"}, {"VGA", "vgaGain"},
+        {"VGA1", "vga1Gain"}, {"VGA2", "vga2Gain"}
+      };
+      auto it = gain_name_to_json.find(cmd.param_name);
+      if (it != gain_name_to_json.end()) {
+        update_source_json(src, it->second, cmd.value);
+      }
       break;
     }
     case ConfigCommandType::SET_SOURCE_ERROR: {
@@ -535,6 +579,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = src->get_error();
       src->set_error(std::get<double>(cmd.value));
+      update_source_json(src, "error", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SOURCE_PPM: {
@@ -542,6 +587,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = 0.0;  // No getter for PPM
       src->set_freq_corr(std::get<double>(cmd.value));
+      update_source_json(src, "ppm", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SOURCE_GAIN_MODE: {
@@ -549,6 +595,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = src->get_gain_mode();
       src->set_gain_mode(std::get<bool>(cmd.value));
+      update_source_json(src, "agc", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SOURCE_ANTENNA: {
@@ -556,6 +603,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = src->get_antenna();
       src->set_antenna(std::get<std::string>(cmd.value));
+      update_source_json(src, "antenna", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SOURCE_SIGNAL_DETECTOR_THRESHOLD: {
@@ -563,6 +611,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!src) return ConfigResult::INVALID_TARGET;
       old_value = 0.0;  // No getter currently
       src->set_signal_detector_threshold(static_cast<float>(std::get<double>(cmd.value)));
+      update_source_json(src, "signalDetectorThreshold", cmd.value);
       break;
     }
 
@@ -572,6 +621,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_squelch_db();
       sys->set_squelch_db(std::get<double>(cmd.value));
+      update_system_json(sys, "squelch", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_ANALOG_LEVELS: {
@@ -579,6 +629,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_analog_levels();
       sys->set_analog_levels(std::get<double>(cmd.value));
+      update_system_json(sys, "analogLevels", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_DIGITAL_LEVELS: {
@@ -586,6 +637,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_digital_levels();
       sys->set_digital_levels(std::get<double>(cmd.value));
+      update_system_json(sys, "digitalLevels", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_MIN_DURATION: {
@@ -593,6 +645,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_min_duration();
       sys->set_min_duration(std::get<double>(cmd.value));
+      update_system_json(sys, "minDuration", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_MAX_DURATION: {
@@ -600,6 +653,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_max_duration();
       sys->set_max_duration(std::get<double>(cmd.value));
+      update_system_json(sys, "maxDuration", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_MIN_TX_DURATION: {
@@ -607,6 +661,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_min_tx_duration();
       sys->set_min_tx_duration(std::get<double>(cmd.value));
+      update_system_json(sys, "minTransmissionDuration", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_RECORD_UNKNOWN: {
@@ -614,6 +669,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_record_unknown();
       sys->set_record_unknown(std::get<bool>(cmd.value));
+      update_system_json(sys, "recordUnknown", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_HIDE_ENCRYPTED: {
@@ -621,6 +677,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_hideEncrypted();
       sys->set_hideEncrypted(std::get<bool>(cmd.value));
+      update_system_json(sys, "hideEncrypted", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_HIDE_UNKNOWN: {
@@ -628,6 +685,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_hideUnknown();
       sys->set_hideUnknown(std::get<bool>(cmd.value));
+      update_system_json(sys, "hideUnknownTalkgroups", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_CONVERSATION_MODE: {
@@ -635,6 +693,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_conversation_mode();
       sys->set_conversation_mode(std::get<bool>(cmd.value));
+      update_system_json(sys, "conversationMode", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_TAU: {
@@ -642,6 +701,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = static_cast<double>(sys->get_tau());
       sys->set_tau(static_cast<float>(std::get<double>(cmd.value)));
+      update_system_json(sys, "deemphasisTau", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_MAX_DEV: {
@@ -649,6 +709,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_max_dev();
       sys->set_max_dev(std::get<int>(cmd.value));
+      update_system_json(sys, "maxDev", cmd.value);
       break;
     }
     case ConfigCommandType::SET_SYSTEM_FILTER_WIDTH: {
@@ -656,6 +717,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!sys) return ConfigResult::INVALID_TARGET;
       old_value = sys->get_filter_width();
       sys->set_filter_width(std::get<double>(cmd.value));
+      update_system_json(sys, "filterWidth", cmd.value);
       break;
     }
 
@@ -664,6 +726,7 @@ ConfigResult ConfigurationService::execute_command(const ConfigCommand& cmd, Con
       if (!m_config) return ConfigResult::INTERNAL_ERROR;
       old_value = m_config->call_timeout;
       m_config->call_timeout = std::get<double>(cmd.value);
+      update_config_json("callTimeout", cmd.value);
       break;
     }
   }

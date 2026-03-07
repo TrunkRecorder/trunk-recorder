@@ -102,6 +102,7 @@ System_impl::System_impl(int sys_num) {
   retune_attempts = 0;
   message_count = 0;
   decode_rate = 0;
+  d_config_index = -1;
   msg_queue = gr::msg_queue::make(100);
 }
 
@@ -790,4 +791,12 @@ std::string System_impl::get_filename_format() {
 
 void System_impl::set_filename_format(std::string format) {
   this->filename_format = format;
+}
+
+int System_impl::get_config_index() {
+  return d_config_index;
+}
+
+void System_impl::set_config_index(int index) {
+  d_config_index = index;
 }

@@ -129,6 +129,10 @@ public:
 
   bool set_call_timeout(double timeout, const std::string& requester, ConfigCallback callback = nullptr);
 
+  // Save the current configuration to disk (only writes keys that were
+  // in the original config file or explicitly modified at runtime)
+  bool save_config();
+
   // ============================================================
   // Getters (thread-safe snapshots)
   // ============================================================
@@ -195,6 +199,11 @@ private:
 
   // Get string representation of result
   static std::string result_to_string(ConfigResult result);
+
+  // Update loaded_json for source/system/global config changes
+  void update_source_json(Source* src, const std::string& json_key, const ConfigValue& value);
+  void update_system_json(System* sys, const std::string& json_key, const ConfigValue& value);
+  void update_config_json(const std::string& json_key, const ConfigValue& value);
 
   // Members
   Config* m_config;
