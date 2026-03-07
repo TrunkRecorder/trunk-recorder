@@ -933,7 +933,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
     }
     current_time = time(NULL);
     current_time_ms = time_since_epoch_millisec();
-    if ((current_time_ms - last_conventional_channel_detection_check) >= 0.1) {
+    if ((current_time_ms - last_conventional_channel_detection_check) >= 100) {
       check_conventional_channel_detection(sources);
       last_conventional_channel_detection_check = current_time_ms;
     }
