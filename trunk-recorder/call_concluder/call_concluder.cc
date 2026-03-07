@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstring>
+#include <sstream>
 namespace fs = std::filesystem;
 
 // ---------------------------------------------------------------------------
@@ -226,12 +227,31 @@ const int Call_Concluder::MAX_RETRY = 2;
 std::list<std::future<Call_Data_t>> Call_Concluder::call_data_workers = {};
 std::list<Call_Data_t> Call_Concluder::retry_call_list = {};
 
-int combine_wav(const std::string &files, const std::string &target_filename) {
-  const std::string shell_command = "sox " + files + " '" + target_filename + "' ";
+int combine_wav(const std::vector<std::string> &files, const std::string &target_filename) {
+  std::string shell_command = "";
+  for (const auto &file : files) {
+    // normalize the files individually first using sox
+     if (!shell_command.empty()) {
+        shell_command += " | sox -V1 - '";
+     } else {
+        shell_command += "sox -V1 '";
+     }
+     shell_command += file;
+     shell_command += "' -p ";
+     shell_command += "highpass 120 ";
+     shell_command += "compand 0.02,0.20 6:-80,-70,-35,-15,-3 -6 -90 0.1 ";
+     shell_command += "gain -n -1 ";
+  }
+  
+  
+  shell_command += "| sox -V1 - '" + target_filename + "' ";
   int rc = system(shell_command.c_str());
 
   if (rc > 0) {
-    BOOST_LOG_TRIVIAL(info) << "Combining: " << files << " into: " << target_filename;
+    
+    std::ostringstream file_list;
+    for (const auto &f : files) { file_list << "'" << f << "' "; }
+    BOOST_LOG_TRIVIAL(info) << "Combining: " << file_list.str() << "into: " << target_filename;
     BOOST_LOG_TRIVIAL(info) << shell_command;
     BOOST_LOG_TRIVIAL(error) << "Failed to combine recordings, see above error. Make sure you have sox and fdkaac installed.";
     return -1;
@@ -434,7 +454,7 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
   if (call_info.status == INITIAL) {
     std::stringstream shell_command;
     std::string shell_command_string;
-    std::string files;
+    std::vector<std::string> files;
 
     struct stat statbuf;
     // loop through the transmission list, pull in things to fill in totals for call_info
@@ -444,9 +464,7 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
       if (stat(t.filename.c_str(), &statbuf) == 0)
       {
-          files.append("'");
-          files.append(t.filename);
-          files.append("' ");
+          files.push_back(t.filename);
       }
       else
       {
