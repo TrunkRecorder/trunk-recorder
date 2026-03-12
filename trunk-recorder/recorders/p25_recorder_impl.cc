@@ -44,6 +44,11 @@ void p25_recorder_impl::initialize(Source *src) {
   timestamp = time(NULL);
   starttime = time(NULL);
 
+  BOOST_LOG_TRIVIAL(info) << "p25_recorder.cc: Initializing P25 Recorder Num [" << rec_num << "]\tType: " << (conventional ? "Conventional" : "Trunked") << "\tQPSK: " << qpsk_mod;
+  BOOST_LOG_TRIVIAL(info) << "p25_recorder.cc: Center Freq:\t" << format_freq(center_freq) << "\tInput Rate: " << input_rate;
+  BOOST_LOG_TRIVIAL(info) << "p25_recorder.cc: Silence Frames: " << silence_frames << "\tSoft Vocoder: " << d_soft_vocoder;
+  BOOST_LOG_TRIVIAL(info) << "p25_recorder.cc: Squelch DB: " << squelch_db;
+
   if (config == NULL) {
     this->set_enable_audio_streaming(false);
   } else {
