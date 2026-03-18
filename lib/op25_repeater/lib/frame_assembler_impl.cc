@@ -80,6 +80,11 @@ namespace gr {
             }
         }
 
+        void frame_assembler_impl::set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {
+            if (d_sync)
+                d_sync->set_voice_codec_callback(cb, user_data);
+        }
+
         void frame_assembler_impl::set_debug(int debug) {
             if (d_sync)
                 d_sync->set_debug(debug);

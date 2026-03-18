@@ -42,6 +42,8 @@ namespace gr{
                 virtual int get_dst_id(int slot) { return -1;};
                 virtual int get_cc(int slot) { return -1;};
 	            virtual std::pair<bool,long> get_terminated(int slot) { return std::pair<bool,long>(false,0);};
+                typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
+                virtual void set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {};
                 rx_base(const char * options, log_ts& logger, int debug, int msgq_id, gr::msg_queue::sptr queue) { };
                 rx_base() {}; // default constructor called by derived classes
                 virtual ~rx_base() {};

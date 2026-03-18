@@ -241,7 +241,9 @@ rx_sync::rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, g
 	d_stereo(true),
 	d_debug(debug),
 	d_audio(options, debug),
-	logts(logger)
+	logts(logger),
+	voice_codec_cb_(NULL),
+	voice_codec_cb_data_(NULL)
 {
 	if (msgq_id >= 0)
 		d_stereo = false; // single channel audio for trunking
@@ -259,6 +261,13 @@ rx_sync::rx_sync(const char * options, log_ts& logger, int debug, int msgq_id, g
 
 rx_sync::~rx_sync()	// destructor
 {
+}
+
+void rx_sync::set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {
+	voice_codec_cb_ = cb;
+	voice_codec_cb_data_ = user_data;
+	p25fdma.set_voice_codec_callback(cb, user_data);
+	p25tdma.set_voice_codec_callback(cb, user_data);
 }
 
 void rx_sync::sync_timeout(rx_types proto)
@@ -388,6 +397,12 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 			do_tone = false;
 			do_silence = true;
 		}
+		if (voice_codec_cb_) {
+			uint32_t params[4] = {(uint32_t)U[0], (uint32_t)U[1], (uint32_t)U[2], (uint32_t)U[3]};
+			voice_codec_cb_(2 /*CODEC_DMR_AMBE*/, 0,
+			                (src_id[slot_id] > 0) ? (uint32_t)src_id[slot_id] : 0,
+			                params, 4, (int)errs, voice_codec_cb_data_);
+		}
 		break;
 	case CODEWORD_DSTAR:
 		interleaver.decode_dstar(cw, b, false);
@@ -395,6 +410,11 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 			mbe_dequantizeAmbe2400Parms(&cur_mp[slot_id], &prev_mp[slot_id], &errs_mp[slot_id], b);
 		else
 			do_silence = true;
+		if (voice_codec_cb_) {
+			uint32_t params[9];
+			for (int i = 0; i < 9; i++) params[i] = (uint32_t)b[i];
+			voice_codec_cb_(3 /*CODEC_DSTAR_AMBE*/, 0, 0, params, 9, 0, voice_codec_cb_data_);
+		}
 		break;
 	case CODEWORD_YSF_HALFRATE:	// 104 bits
 		for (int i=0; i<x; i++) {
@@ -411,6 +431,11 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 			mbe_dequantizeAmbe2250Parms(&cur_mp[slot_id], &prev_mp[slot_id], &errs_mp[slot_id], b);
 		else
 			do_silence = true;
+		if (voice_codec_cb_) {
+			uint32_t params[9];
+			for (int i = 0; i < 9; i++) params[i] = (uint32_t)b[i];
+			voice_codec_cb_(5 /*CODEC_YSF_HALFRATE*/, 0, 0, params, 9, 0, voice_codec_cb_data_);
+		}
 		break;
 	case CODEWORD_P25P2:
 		break; // Not used; handled by p25p2_tdma
@@ -420,6 +445,9 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 		for (int i=0; i<144; i++)
 			fullrate_cw[i] = cw[ysf_permutation[i]];
 		imbe_header_decode(fullrate_cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
+		if (voice_codec_cb_) {
+			voice_codec_cb_(4 /*CODEC_YSF_FULLRATE*/, 0, 0, u, 8, 0, voice_codec_cb_data_);
+		}
 		do_fullrate = true;
 		break;
 	}

@@ -178,6 +178,13 @@ private:
 	log_ts& logts;
 	std::array<std::deque<int16_t>, 2> &output_queue;
 	int src_id[2];
+
+	typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
+	voice_codec_cb_t voice_codec_cb_;
+	void *voice_codec_cb_data_;
+
+public:
+	void set_voice_codec_callback(voice_codec_cb_t cb, void *user_data);
 };
 
     } // end namespace op25_repeater

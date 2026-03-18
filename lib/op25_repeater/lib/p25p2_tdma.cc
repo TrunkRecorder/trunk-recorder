@@ -130,7 +130,9 @@ p25p2_tdma::p25p2_tdma(const op25_audio& udp, log_ts& logger, int slotid, int de
     grp_id(-1),
     cached_src_id(-1),
     cached_grp_id(-1),
-    cached_id_timestamp(0)
+    cached_id_timestamp(0),
+    voice_codec_cb_(NULL),
+    voice_codec_cb_data_(NULL)
 {
 	assert (slotid == 0 || slotid == 1);
 	mbe_initMbeParms (&cur_mp, &prev_mp, &enh_mp);
@@ -749,6 +751,13 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
         // If monitoring for metadata, this will allow tags to pass and preserve call flow
 		memset(samples_buf, 0, sizeof(samples_buf));
 		}
+	}
+
+	if (voice_codec_cb_) {
+		uint32_t params[4] = {(uint32_t)u[0], (uint32_t)u[1], (uint32_t)u[2], (uint32_t)u[3]};
+		voice_codec_cb_(1 /*CODEC_P25_AMBE*/, grp_id,
+		                (cached_src_id > 0) ? (uint32_t)cached_src_id : 0,
+		                params, 4, (int)errs, voice_codec_cb_data_);
 	}
 
 	// Only dequantize and synthesize if we have valid audio (decrypted or unencrypted)

@@ -50,4 +50,5 @@ void plugman_unit_group_affiliation(System *system, long source_id, long talkgro
 void plugman_unit_data_grant(System *system, long source_id);
 void plugman_unit_answer_request(System *system, long source_id, long talkgroup);
 void plugman_unit_location(System *system, long source_id, long talkgroup_num);
+void plugman_voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs);
 #endif // PLUGIN_MANAGER_H

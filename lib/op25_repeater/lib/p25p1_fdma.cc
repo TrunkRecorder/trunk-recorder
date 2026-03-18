@@ -232,7 +232,9 @@ namespace gr {
             ess_algid(0x80),
             vf_tgid(0),
 			terminate_call(std::pair<bool,long>(false,0)),
-            p1voice_decode((debug > 0), udp, output_queue)
+            p1voice_decode((debug > 0), udp, output_queue),
+            voice_codec_cb_(NULL),
+            voice_codec_cb_data_(NULL)
         {
 			rx_status.error_count = 0;
 			rx_status.total_len = 0;
@@ -891,6 +893,12 @@ namespace gr {
 					// output one 32-byte msg per 0.020 sec.
 					// also, 32*9 = 288 byte pkts (for use via UDP)
 					sprintf(s, "%03x %03x %03x %03x %03x %03x %03x %03x\n", u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
+
+                    if (voice_codec_cb_) {
+                        voice_codec_cb_(0 /*CODEC_P25_IMBE*/, (long)vf_tgid,
+                                        (cached_src_id > 0) ? (uint32_t)cached_src_id : 0,
+                                        u, 8, (int)errs, voice_codec_cb_data_);
+                    }
 
                     if (d_do_audio_output) {
                         if ( !encrypted()) {
