@@ -17,14 +17,6 @@
 
 Call_Data_t upload_call_worker(Call_Data_t call_info);
 
-int process_audio(const Call_Data_t &call_info,
-                  const std::string &input_filename,
-                  const std::string &output_filename,
-                  const std::string &date,
-                  const std::string &short_name,
-                  const std::string &talkgroup,
-                  bool output_compressed);
-
 class Call_Concluder {
 
 public:
