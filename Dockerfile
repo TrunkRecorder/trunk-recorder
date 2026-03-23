@@ -2,7 +2,7 @@ FROM ubuntu:24.04 AS builder
 
 # Install docker for passing the socket to allow for intercontainer exec
 RUN apt-get update && \
-  apt-get -y upgrade &&\
+  apt-get -y upgrade && \
   export DEBIAN_FRONTEND=noninteractive && \
   apt-get install --no-install-recommends -y \
     build-essential \
@@ -36,7 +36,8 @@ RUN apt-get update && \
     wget \
     python3-six \
     openssh-client \
-    ffmpeg
+    ffmpeg && \
+  rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 
@@ -46,18 +47,44 @@ WORKDIR /src/build
 
 RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
 
-#Stage 2 build
+# Stage 2 build
 FROM ubuntu:24.04
-RUN apt-get update && apt-get -y upgrade && apt-get install --no-install-recommends -y ca-certificates gr-funcube gr-iqbal curl wget libboost-log1.83.0 \
-    libboost-chrono1.83.0t64 libgnuradio-digital3.10.9t64 libgnuradio-analog3.10.9t64 libgnuradio-filter3.10.9t64 libgnuradio-network3.10.9t64  \
-    libgnuradio-uhd3.10.9t64 libgnuradio-osmosdr0.2.0t64 libsoapysdr0.8 soapysdr0.8-module-all libairspyhf1 libfreesrp0 librtlsdr2 libxtrx0 sox fdkaac docker.io && \
+
+RUN apt-get update && \
+    apt-get -y upgrade && \
+    apt-get install --no-install-recommends -y \
+      ca-certificates \
+      gr-funcube \
+      gr-iqbal \
+      curl \
+      wget \
+      docker.io \
+      ffmpeg \
+      libboost-log1.83.0 \
+      libboost-chrono1.83.0t64 \
+      libgnuradio-digital3.10.9t64 \
+      libgnuradio-analog3.10.9t64 \
+      libgnuradio-filter3.10.9t64 \
+      libgnuradio-network3.10.9t64 \
+      libgnuradio-uhd3.10.9t64 \
+      libgnuradio-osmosdr0.2.0t64 \
+      libsoapysdr0.8 \
+      soapysdr0.8-module-all \
+      libairspyhf1 \
+      libfreesrp0 \
+      librtlsdr2 \
+      libxtrx0 && \
     rm -rf /var/lib/apt/lists/* && \
-    rm -rf /usr/share/{doc,man,info} && rm -rf /usr/local/share/{doc,man,info}
+    rm -rf /usr/share/{doc,man,info} && \
+    rm -rf /usr/local/share/{doc,man,info}
 
 COPY --from=builder /newroot /
 
 # Fix the error message level for SmartNet
-RUN mkdir -p /etc/gnuradio/conf.d/ && echo 'log_level = info' >> /etc/gnuradio/conf.d/gnuradio-runtime.conf && ldconfig
+RUN mkdir -p /etc/gnuradio/conf.d/ && \
+    echo 'log_level = info' >> /etc/gnuradio/conf.d/gnuradio-runtime.conf && \
+    ldconfig
+
 WORKDIR /app
 
 # GNURadio requires a place to store some files, can only be set via $HOME env var.

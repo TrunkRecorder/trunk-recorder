@@ -374,6 +374,80 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Audio Archive: " << system->get_audio_archive();
         system->set_transmission_archive(element.value("transmissionArchive", false));
         BOOST_LOG_TRIVIAL(info) << "Transmission Archive: " << system->get_transmission_archive();
+                bool audio_postprocess_enabled = false;
+        int audio_highpass_hz = 0;
+        int audio_lowpass_hz = 0;
+        int audio_bandreject_hz = 0;
+        int audio_bandreject_width_hz = 0;
+        bool audio_loudnorm = false;
+        double audio_loudnorm_i = -16.0;
+        double audio_loudnorm_tp = -1.5;
+        double audio_loudnorm_lra = 11.0;
+        std::string audio_ffmpeg_filter = "";
+
+        if (element.contains("audio_postprocess") && element["audio_postprocess"].is_object()) {
+          const json &audio_post = element["audio_postprocess"];
+
+          audio_postprocess_enabled = audio_post.value("enabled", false);
+          audio_highpass_hz = audio_post.value("highpass_hz", 0);
+          audio_lowpass_hz = audio_post.value("lowpass_hz", 0);
+          audio_bandreject_hz = audio_post.value("bandreject_hz", 0);
+          audio_bandreject_width_hz = audio_post.value("bandreject_width_hz", 0);
+
+          audio_loudnorm = audio_post.value("loudnorm", false);
+          audio_loudnorm_i = audio_post.value("loudnorm_i", -16.0);
+          audio_loudnorm_tp = audio_post.value("loudnorm_tp", -1.5);
+          audio_loudnorm_lra = audio_post.value("loudnorm_lra", 11.0);
+
+          audio_ffmpeg_filter = audio_post.value("ffmpeg_filter", "");
+        }
+
+        if (audio_highpass_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.highpass_hz cannot be negative, forcing to 0";
+          audio_highpass_hz = 0;
+        }
+
+        if (audio_lowpass_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.lowpass_hz cannot be negative, forcing to 0";
+          audio_lowpass_hz = 0;
+        }
+
+        if (audio_bandreject_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.bandreject_hz cannot be negative, forcing to 0";
+          audio_bandreject_hz = 0;
+        }
+
+        if (audio_bandreject_width_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.bandreject_width_hz cannot be negative, forcing to 0";
+          audio_bandreject_width_hz = 0;
+        }
+
+        system->set_audio_postprocess_enabled(audio_postprocess_enabled);
+        system->set_audio_highpass_hz(audio_highpass_hz);
+        system->set_audio_lowpass_hz(audio_lowpass_hz);
+        system->set_audio_bandreject_hz(audio_bandreject_hz);
+        system->set_audio_bandreject_width_hz(audio_bandreject_width_hz);
+        system->set_audio_loudnorm(audio_loudnorm);
+        system->set_audio_loudnorm_i(audio_loudnorm_i);
+        system->set_audio_loudnorm_tp(audio_loudnorm_tp);
+        system->set_audio_loudnorm_lra(audio_loudnorm_lra);
+        system->set_audio_ffmpeg_filter(audio_ffmpeg_filter);
+
+        BOOST_LOG_TRIVIAL(info) << "Audio Postprocess Enabled: " << system->get_audio_postprocess_enabled();
+        BOOST_LOG_TRIVIAL(info) << "Audio Highpass (Hz): " << system->get_audio_highpass_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Lowpass (Hz): " << system->get_audio_lowpass_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Bandreject (Hz): " << system->get_audio_bandreject_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Bandreject Width (Hz): " << system->get_audio_bandreject_width_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm: " << system->get_audio_loudnorm();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm I: " << system->get_audio_loudnorm_i();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm TP: " << system->get_audio_loudnorm_tp();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm LRA: " << system->get_audio_loudnorm_lra();
+
+        if (!system->get_audio_ffmpeg_filter().empty()) {
+          BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: " << system->get_audio_ffmpeg_filter();
+        } else {
+          BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: <none>";
+        }
         system->set_unit_tags_file(element.value("unitTagsFile", ""));
         BOOST_LOG_TRIVIAL(info) << "Unit Tags File: " << system->get_unit_tags_file();
         system->set_unit_tags_ota_file(element.value("unitTagsOTA", ""));

@@ -53,6 +53,37 @@ public:
   virtual void set_upload_script(std::string script) = 0;
   virtual bool get_compress_wav() = 0;
   virtual void set_compress_wav(bool compress) = 0;
+
+  virtual bool get_audio_postprocess_enabled() = 0;
+  virtual void set_audio_postprocess_enabled(bool enabled) = 0;
+
+  virtual int get_audio_highpass_hz() = 0;
+  virtual void set_audio_highpass_hz(int hz) = 0;
+
+  virtual int get_audio_lowpass_hz() = 0;
+  virtual void set_audio_lowpass_hz(int hz) = 0;
+
+  virtual int get_audio_bandreject_hz() = 0;
+  virtual void set_audio_bandreject_hz(int hz) = 0;
+
+  virtual int get_audio_bandreject_width_hz() = 0;
+  virtual void set_audio_bandreject_width_hz(int hz) = 0;
+
+  virtual bool get_audio_loudnorm() = 0;
+  virtual void set_audio_loudnorm(bool enabled) = 0;
+
+  virtual double get_audio_loudnorm_i() = 0;
+  virtual void set_audio_loudnorm_i(double value) = 0;
+
+  virtual double get_audio_loudnorm_tp() = 0;
+  virtual void set_audio_loudnorm_tp(double value) = 0;
+
+  virtual double get_audio_loudnorm_lra() = 0;
+  virtual void set_audio_loudnorm_lra(double value) = 0;
+
+  virtual std::string get_audio_ffmpeg_filter() = 0;
+  virtual void set_audio_ffmpeg_filter(std::string filter) = 0;
+
   virtual std::string get_api_key() = 0;
   virtual void set_api_key(std::string api_key) = 0;
   virtual std::string get_bcfy_api_key() = 0;
@@ -201,6 +232,5 @@ public:
 
   virtual std::string get_filename_format() = 0;
   virtual void set_filename_format(std::string format) = 0;
-
 };
 #endif
