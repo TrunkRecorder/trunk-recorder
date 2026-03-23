@@ -77,7 +77,9 @@ static std::string format_time_custom(const std::string &fmt, const struct tm *t
     buffer_size *= 2;
   }
 
-  BOOST_LOG_TRIVIAL(warning) << "Filename time format output exceeded 64KiB or could not be formatted.";
+  BOOST_LOG_TRIVIAL(warning) << "\033[0;33m"
+                           << "Filename time format output exceeded 64KiB or could not be formatted."
+                           << "\033[0m";
   return "";
 }
 
@@ -171,7 +173,9 @@ static std::string expand_filename_format(const std::string &format,
         }
       } else {
         result += "{" + token + "}";
-        BOOST_LOG_TRIVIAL(warning) << "Unknown filename format token: {" << token << "}";
+        BOOST_LOG_TRIVIAL(warning) << "\033[0;33m"
+                           << "Unknown filename format token: {" << token << "}"
+                           << "\033[0m";
       }
 
       i = end + 1;
@@ -276,8 +280,11 @@ static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &aud
 
   if (override_filter_contains_loudnorm(audio_cfg)) {
     BOOST_LOG_TRIVIAL(warning)
-        << "audio_postprocess.ffmpeg_filter already contains loudnorm; "
-        << "structured loudnorm settings will be ignored to avoid duplication.";
+    << "\033[0;33m"
+    << "audio_postprocess.ffmpeg_filter already contains loudnorm; "
+    << "structured loudnorm settings will be ignored to avoid duplication."
+    << "\033[0m";
+
     return false;
   }
 
@@ -338,7 +345,9 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
 
   FILE *pipe = popen(cmd.str().c_str(), "r");
   if (!pipe) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to start ffmpeg loudnorm analysis pass";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Failed to start ffmpeg loudnorm analysis pass"
+                         << "\033[0m";
     return false;
   }
 
@@ -350,21 +359,25 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
 
   const int pclose_rc = pclose(pipe);
   if (pclose_rc != 0) {
-    BOOST_LOG_TRIVIAL(warning) << "ffmpeg loudnorm first pass returned non-zero exit status: "
-                               << pclose_rc;
+    BOOST_LOG_TRIVIAL(warning) << "\033[0;33m"
+                           << "ffmpeg loudnorm first pass returned non-zero exit status: "
+                           << pclose_rc
+                           << "\033[0m";
   }
 
   const std::size_t json_end = output.rfind('}');
   if (json_end == std::string::npos) {
-    BOOST_LOG_TRIVIAL(error)
-        << "Failed to parse loudnorm first-pass JSON output: no closing brace found";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Failed to parse loudnorm first-pass JSON output: no closing brace found"
+                         << "\033[0m";
     return false;
   }
 
   const std::size_t json_start = output.rfind('{', json_end);
   if (json_start == std::string::npos || json_start >= json_end) {
-    BOOST_LOG_TRIVIAL(error)
-        << "Failed to parse loudnorm first-pass JSON output: no opening brace found";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Failed to parse loudnorm first-pass JSON output: no opening brace found"
+                         << "\033[0m";
     return false;
   }
 
@@ -399,7 +412,9 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
     measured.valid = true;
     return true;
   } catch (const std::exception &e) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to decode loudnorm first-pass JSON: " << e.what();
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Failed to decode loudnorm first-pass JSON: " << e.what()
+                         << "\033[0m";
     BOOST_LOG_TRIVIAL(debug) << "Loudnorm JSON candidate was: " << json_text;
     return false;
   }
@@ -424,8 +439,10 @@ static bool write_concat_list(const std::vector<std::string> &input_files,
                               const std::string &list_filename) {
   std::ofstream list_file(list_filename);
   if (!list_file.is_open()) {
-    BOOST_LOG_TRIVIAL(error) << "Call uploader: Unable to create ffmpeg concat list file: "
-                             << list_filename;
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Call uploader: Unable to create ffmpeg concat list file: "
+                         << list_filename
+                         << "\033[0m";
     return false;
   }
 
@@ -451,7 +468,9 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
                                        const std::string &short_name,
                                        const std::string &talkgroup) {
   if (input_files.empty()) {
-    BOOST_LOG_TRIVIAL(error) << "Call uploader: No input files provided for render_call_audio_artifacts";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Call uploader: No input files provided for render_call_audio_artifacts"
+                         << "\033[0m";
     return -1;
   }
 
@@ -467,15 +486,18 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
   const bool do_loudnorm = should_apply_structured_loudnorm(call_info.audio_postprocess);
   const bool do_compress = call_info.compress_wav;
 
+    std::string loghdr =
+      log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+
   LoudnormMeasured measured;
   bool loudnorm_active = do_loudnorm;
 
   if (do_loudnorm) {
     if (!analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured)) {
-      std::string loghdr =
-          log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-      BOOST_LOG_TRIVIAL(error) << loghdr
-                               << "Loudnorm analysis failed; falling back to cleanup-only audio rendering";
+      BOOST_LOG_TRIVIAL(warning) << loghdr
+                           << "\033[0;33m"
+                           << "Loudnorm analysis failed; falling back to cleanup-only audio rendering"
+                           << "\033[0m";
       loudnorm_active = false;
     }
   }
@@ -487,59 +509,74 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
     final_filter = final_filter.empty() ? loudnorm_filter : final_filter + "," + loudnorm_filter;
   }
 
-  char shell_command[16384];
-  std::ostringstream cmd;
-  cmd << "ffmpeg -y -hide_banner -loglevel error "
-      << "-f concat -safe 0 "
-      << "-i " << shell_escape(list_filename) << " "
-      << "-vn ";
+  auto run_render = [&](const std::string &filter_to_use) -> int {
+    char shell_command[16384];
+    std::ostringstream cmd;
+    cmd << "ffmpeg -y -hide_banner -loglevel error "
+        << "-f concat -safe 0 "
+        << "-i " << shell_escape(list_filename) << " "
+        << "-vn ";
 
-  if (do_compress) {
-    if (final_filter.empty()) {
-      cmd << "-filter_complex " << shell_escape("[0:a]asplit=2[awav][aaac]") << " ";
+    if (do_compress) {
+      if (filter_to_use.empty()) {
+        cmd << "-filter_complex " << shell_escape("[0:a]asplit=2[awav][aaac]") << " ";
+      } else {
+        cmd << "-filter_complex "
+            << shell_escape("[0:a]" + filter_to_use + ",asplit=2[awav][aaac]") << " ";
+      }
+
+      cmd << "-map " << shell_escape("[awav]") << " ";
+      append_common_metadata(cmd, date, short_name, talkgroup);
+      cmd << build_ffmpeg_output_args(false) << " "
+          << shell_escape(call_info.filename) << " ";
+
+      cmd << "-map " << shell_escape("[aaac]") << " ";
+      append_common_metadata(cmd, date, short_name, talkgroup);
+      cmd << build_ffmpeg_output_args(true) << " "
+          << shell_escape(call_info.converted);
     } else {
-      cmd << "-filter_complex "
-          << shell_escape("[0:a]" + final_filter + ",asplit=2[awav][aaac]") << " ";
+      if (!filter_to_use.empty()) {
+        cmd << "-af " << shell_escape(filter_to_use) << " ";
+      }
+
+      append_common_metadata(cmd, date, short_name, talkgroup);
+      cmd << build_ffmpeg_output_args(false) << " "
+          << shell_escape(call_info.filename);
     }
 
-    cmd << "-map " << shell_escape("[awav]") << " ";
-    append_common_metadata(cmd, date, short_name, talkgroup);
-    cmd << build_ffmpeg_output_args(false) << " "
-        << shell_escape(call_info.filename) << " ";
+    const std::string cmd_string = cmd.str();
 
-    cmd << "-map " << shell_escape("[aaac]") << " ";
-    append_common_metadata(cmd, date, short_name, talkgroup);
-    cmd << build_ffmpeg_output_args(true) << " "
-        << shell_escape(call_info.converted);
-  } else {
-    if (!final_filter.empty()) {
-      cmd << "-af " << shell_escape(final_filter) << " ";
+    if (cmd_string.size() >= sizeof(shell_command)) {
+      BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Call uploader: Render command longer than 16384 characters"
+                         << "\033[0m";
+      return -1;
     }
 
-    append_common_metadata(cmd, date, short_name, talkgroup);
-    cmd << build_ffmpeg_output_args(false) << " "
-        << shell_escape(call_info.filename);
+    snprintf(shell_command, sizeof(shell_command), "%s", cmd_string.c_str());
+
+    BOOST_LOG_TRIVIAL(trace) << "Rendering call audio artifacts";
+    BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command;
+
+    return system(shell_command);
+  };
+
+  int rc = run_render(final_filter);
+
+  if (rc > 0 && !final_filter.empty()) {
+    BOOST_LOG_TRIVIAL(warning) << loghdr
+                           << "\033[0;33m"
+                           << "Filtered audio render failed; falling back to unfiltered audio rendering"
+                           << "\033[0m";
+    rc = run_render("");
   }
 
-  const std::string cmd_string = cmd.str();
-
-  if (cmd_string.size() >= sizeof(shell_command)) {
-    BOOST_LOG_TRIVIAL(error) << "Call uploader: Render command longer than 16384 characters";
-    std::remove(list_filename.c_str());
-    return -1;
-  }
-
-  snprintf(shell_command, sizeof(shell_command), "%s", cmd_string.c_str());
-
-  BOOST_LOG_TRIVIAL(trace) << "Rendering call audio artifacts";
-  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command;
-
-  const int rc = system(shell_command);
   std::remove(list_filename.c_str());
 
   if (rc > 0) {
-    BOOST_LOG_TRIVIAL(error)
-        << "Failed to render call audio artifacts, see above error. Make sure you have ffmpeg installed.";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Failed to render call audio artifacts, see above error. Make sure you have ffmpeg installed."
+                         << "\033[0m";
     return -1;
   }
 
@@ -617,8 +654,10 @@ int create_call_json(Call_Data_t &call_info) {
   } else {
     std::string loghdr =
         log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0m\tUnable to create JSON file: "
-                             << call_info.status_filename;
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                         << "\033[0;31mUnable to create JSON file: "
+                         << call_info.status_filename
+                         << "\033[0m";
     return 1;
   }
 }
@@ -630,7 +669,9 @@ bool checkIfFile(const std::string &filePath) {
       return true;
     }
   } catch (boost::filesystem::filesystem_error &e) {
-    BOOST_LOG_TRIVIAL(error) << e.what() << std::endl;
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << e.what()
+                         << "\033[0m";
   }
   return false;
 }
@@ -728,8 +769,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       if (stat(t.filename.c_str(), &statbuf) == 0) {
         input_files.push_back(t.filename);
       } else {
-        BOOST_LOG_TRIVIAL(error) << "Somehow, " << t.filename
-                                 << " doesn't exist, not attempting to provide it to ffmpeg";
+        BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Somehow, " << t.filename
+                         << " doesn't exist, not attempting to provide it to ffmpeg"
+                         << "\033[0m";
       }
     }
 
@@ -901,7 +944,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info.talkgroup_display = call->get_talkgroup_display();
   call_info.patched_talkgroups = sys->get_talkgroup_patch(call_info.talkgroup);
   call_info.min_transmissions_removed = 0;
-  call_info.color_code = 0;
+  call_info.color_code = -1;
 
   std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
@@ -1053,7 +1096,8 @@ void Call_Concluder::conclude_call(Call *call, System *sys, Config config) {
     if (call_info.transmission_list.size() > 0 || call_info.min_transmissions_removed > 0) {
       int result = create_call_json(call_info);
       if (result < 0) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to create metadata JSON for encrypted call";
+        BOOST_LOG_TRIVIAL(error) << loghdr
+                         << "\033[0;31mFailed to create metadata JSON for encrypted call\033[0m";
       }
     }
 
@@ -1062,7 +1106,8 @@ void Call_Concluder::conclude_call(Call *call, System *sys, Config config) {
   }
 
   if (call_info.transmission_list.size() == 0 && call_info.min_transmissions_removed == 0) {
-    BOOST_LOG_TRIVIAL(error) << loghdr << "No Transmissions were recorded!";
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                         << "\033[0;31mNo Transmissions were recorded!\033[0m";
     return;
   } else if (call_info.transmission_list.size() == 0 && call_info.min_transmissions_removed > 0) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "No Transmissions were recorded! "
@@ -1174,9 +1219,11 @@ bool Call_Concluder::shutdown_call_data_workers(std::chrono::seconds timeout) {
   retry_call_list.clear();
 
   if (!call_data_workers.empty()) {
-    BOOST_LOG_TRIVIAL(error) << "Call concluder shutdown timed out after "
-                             << timeout.count() << " seconds; force exiting with "
-                             << call_data_workers.size() << " worker(s) still running.";
+    BOOST_LOG_TRIVIAL(error) << "\033[0;31m"
+                         << "Call concluder shutdown timed out after "
+                         << timeout.count() << " seconds; force exiting with "
+                         << call_data_workers.size() << " worker(s) still running."
+                         << "\033[0m";
 
     std::list<std::future<Call_Data_t>> *abandoned_workers =
         new std::list<std::future<Call_Data_t>>();
