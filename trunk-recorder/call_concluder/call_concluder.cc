@@ -352,58 +352,21 @@ static bool write_concat_list(const std::vector<std::string> &input_files,
   return true;
 }
 
-static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
-                                         const std::string &list_filename,
-                                         const std::string &cleanup_filter,
-                                         LoudnormMeasured &measured) {
-  const std::string analysis_filter = build_loudnorm_analysis_filter(call_info.audio_postprocess);
-  const std::string full_filter =
-      cleanup_filter.empty() ? analysis_filter : cleanup_filter + "," + analysis_filter;
+  LoudnormMeasured measured;
+  bool loudnorm_active = do_loudnorm;
 
-  std::ostringstream cmd;
-  cmd << "ffmpeg -y -hide_banner -loglevel error "
-      << "-f concat -safe 0 "
-      << "-i " << shell_escape(list_filename) << " "
-      << "-af " << shell_escape(full_filter) << " "
-      << "-vn -f null - 2>&1";
-
-  FILE *pipe = popen(cmd.str().c_str(), "r");
-  if (!pipe) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to start ffmpeg loudnorm analysis pass";
-    return false;
+  if (do_loudnorm) {
+    if (!analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured)) {
+      std::string loghdr =
+          log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+      BOOST_LOG_TRIVIAL(error) << loghdr
+                               << "Loudnorm analysis failed; falling back to cleanup-only audio rendering";
+      loudnorm_active = false;
+    }
   }
 
-  std::string output;
-  char buffer[512];
-  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-    output += buffer;
-  }
-
-  pclose(pipe);
-
-  const size_t json_start = output.find('{');
-  const size_t json_end = output.rfind('}');
-  if (json_start == std::string::npos || json_end == std::string::npos || json_end <= json_start) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to parse loudnorm first-pass JSON output";
-    return false;
-  }
-
-  const std::string json_text = output.substr(json_start, json_end - json_start + 1);
-
-  try {
-    const nlohmann::json stats = nlohmann::json::parse(json_text);
-    measured.input_i = stats.at("input_i").get<std::string>();
-    measured.input_tp = stats.at("input_tp").get<std::string>();
-    measured.input_lra = stats.at("input_lra").get<std::string>();
-    measured.input_thresh = stats.at("input_thresh").get<std::string>();
-    measured.target_offset = stats.at("target_offset").get<std::string>();
-    measured.valid = true;
-    return true;
-  } catch (const std::exception &e) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to decode loudnorm first-pass JSON: " << e.what();
-    return false;
-  }
-}
+  std::string final_filter = cleanup_filter;
+  if (loudnorm_active && measured.valid) {
 
 static void append_common_metadata(std::ostringstream &cmd,
                                    const std::string &date,
