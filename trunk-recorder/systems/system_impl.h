@@ -93,6 +93,16 @@ public:
   float tau;
   double analog_levels;
   double digital_levels;
+  bool audio_postprocess_enabled;
+  int audio_highpass_hz;
+  int audio_lowpass_hz;
+  int audio_bandreject_hz;
+  int audio_bandreject_width_hz;
+  bool audio_loudnorm;
+  double audio_loudnorm_i;
+  double audio_loudnorm_tp;
+  double audio_loudnorm_lra;
+  std::string audio_ffmpeg_filter;
 
   unsigned xor_mask_len;
   const char *xor_mask;
@@ -119,6 +129,37 @@ public:
   void set_upload_script(std::string script) override;
   bool get_compress_wav() override;
   void set_compress_wav(bool compress) override;
+
+  bool get_audio_postprocess_enabled() override;
+  void set_audio_postprocess_enabled(bool enabled) override;
+
+  int get_audio_highpass_hz() override;
+  void set_audio_highpass_hz(int hz) override;
+
+  int get_audio_lowpass_hz() override;
+  void set_audio_lowpass_hz(int hz) override;
+
+  int get_audio_bandreject_hz() override;
+  void set_audio_bandreject_hz(int hz) override;
+
+  int get_audio_bandreject_width_hz() override;
+  void set_audio_bandreject_width_hz(int hz) override;
+
+  bool get_audio_loudnorm() override;
+  void set_audio_loudnorm(bool enabled) override;
+
+  double get_audio_loudnorm_i() override;
+  void set_audio_loudnorm_i(double value) override;
+
+  double get_audio_loudnorm_tp() override;
+  void set_audio_loudnorm_tp(double value) override;
+
+  double get_audio_loudnorm_lra() override;
+  void set_audio_loudnorm_lra(double value) override;
+
+  std::string get_audio_ffmpeg_filter() override;
+  void set_audio_ffmpeg_filter(std::string filter) override;
+
   std::string get_api_key() override;
   void set_api_key(std::string api_key) override;
   std::string get_bcfy_api_key() override;

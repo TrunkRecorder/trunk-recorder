@@ -5,7 +5,9 @@ sidebar_position: 3
 
 # Raspberry Pi / Debian
 
-Smaller radio systems can be covered using a Raspberry Pi. If you are interested in doing this, you should really get a Pi 4 or better yet, a Pi 5. It maybe possible to get things running on an older Pi, but you often get unexpect behavior and errors. A Pi 4 can handle 3-4 simultaneous recordings. Make sure you have a good power supply. Also pay attention to heat. If the Pi gets too hot, it will slow down. A good case or fan can help keep it going full tilt. 
+Smaller radio systems can be covered using a Raspberry Pi. If you are interested in doing this, you should really get a Pi 4 or better yet, a Pi 5. It maybe possible to get things running on an older Pi, but you often get unexpect behavior and errors. A Pi 4 can handle 3-4 simultaneous recordings. Make sure you have a good power supply. Also pay attention to heat. If the Pi gets too hot, it will slow down. A good case or fan can help keep it going full tilt.
+
+Trunk Recorder uses `ffmpeg` for concluded call audio processing, including WAV concatenation, optional filtering/normalization, and optional M4A creation.
 
 ## RaspberryOS (aka Raspbian)
 
@@ -25,7 +27,7 @@ After the OS has been written to MicroSD card, we need to change a few files so 
 
 - **On a Mac** `touch /Volumes/boot/ssh`
 - Next, add the WiFi info
-    - `nano /Volumes/boot/wpa_supplicant.conf`
+  - `nano /Volumes/boot/wpa_supplicant.conf`
 
 ```
 country=US
@@ -33,16 +35,17 @@ ctrl_interface=DIR=/var/run/wpa_supplicant GROUP=netdev
 update_config=1
 
 network={
-    ssid="NETWORK-NAME"
-    psk="NETWORK-PASSWORD"
+ssid="NETWORK-NAME"
+psk="NETWORK-PASSWORD"
 }
 ```
+
 - Eject the MicroSD card (first in the OS and then physhically from the reader)
 - Put the MicroSD card in the Pi and power it on.
 
 #### Remote Access
 
-This is a [good guide](https://www.raspberrypi.org/documentation/computers/remote-access.html) for how to find and connect to a Pi on your network. 
+This is a [good guide](https://www.raspberrypi.org/documentation/computers/remote-access.html) for how to find and connect to a Pi on your network.
 
 *These steps should work on a Mac and assume you only have one Pi on the Network*
 - Check to see if it is up: `ping raspberrypi.local`
@@ -57,16 +60,19 @@ This is a [good guide](https://www.raspberrypi.org/documentation/computers/remot
 The following steps setup all of the libraries needed to build Trunk Recorder.
 
 - Update the OS:
-```
+
+```bash
 sudo apt update
 sudo apt upgrade
 ```
+
 - Add all of the libraries needed:
+
 ```bash
-sudo apt -y install libssl-dev openssl curl git fdkaac sox libcurl3-gnutls libcurl4 libcurl4-openssl-dev gnuradio gnuradio-dev gr-osmosdr libhackrf-dev libairspy-dev libairspyhf-dev libuhd-dev cmake make build-essential libboost-all-dev libusb-1.0-0-dev libsndfile1-dev
+sudo apt -y install libssl-dev openssl curl git ffmpeg libcurl3-gnutls libcurl4 libcurl4-openssl-dev gnuradio gnuradio-dev gr-osmosdr libhackrf-dev libairspy-dev libairspyhf-dev libuhd-dev cmake make build-essential libboost-all-dev libusb-1.0-0-dev libsndfile1-dev
 ```
 
-## Configure RTL-SDRs to load correctly:
+## Configure RTL-SDRs to load correctly
 
 ```bash
 wget https://raw.githubusercontent.com/osmocom/rtl-sdr/master/rtl-sdr.rules rtl-sdr.rules
@@ -96,7 +102,8 @@ Download the firmware images. The location of the downloader is different than t
 ```bash
 dpkg -L uhd-host | grep "downloader"
 ```
-The run the downloader at the location identified, it should be something like this:
+
+Then run the downloader at the location identified, it should be something like this:
 
 ```bash
 sudo python3 /usr/libexec/uhd/utils/uhd_images_downloader.py
@@ -142,14 +149,13 @@ The next step is to [configure Trunk Recorder](../CONFIGURE.md) for the system y
 
 Ubuntu has a very good [guide](https://ubuntu.com/tutorials/how-to-install-ubuntu-on-your-raspberry-pi#1-overview) on setting up Ubuntu Server to run on a Raspberry Pi. Follow this to get started.
 
-
 ```bash
 sudo apt update
 sudo apt upgrade
 ```
 
 ```bash
-sudo apt install -y apt-transport-https build-essential ca-certificates fdkaac git gnupg gnuradio gnuradio-dev gr-osmosdr libboost-all-dev libcurl4-openssl-dev libgmp-dev libhackrf-dev liborc-0.4-dev libpthread-stubs0-dev libssl-dev libuhd-dev libusb-dev pkg-config software-properties-common cmake sox libsndfile1-dev
+sudo apt install -y apt-transport-https build-essential ca-certificates ffmpeg git gnupg gnuradio gnuradio-dev gr-osmosdr libboost-all-dev libcurl4-openssl-dev libgmp-dev libhackrf-dev liborc-0.4-dev libpthread-stubs0-dev libssl-dev libuhd-dev libusb-dev pkg-config software-properties-common cmake libsndfile1-dev
 ```
 
 If you are using a HackRF:
@@ -161,7 +167,7 @@ sudo apt install -y hackrf libhackrf-dev libhackrf0
 Configure RTL-SDRs to load correctly:
 
 ```bash
-sudo wget https://raw.githubusercontent.com/osmocom/rtl-sdr/master/rtl-sdr.rules  /etc/udev/rules.d/20.rtlsdr.rules
+sudo wget https://raw.githubusercontent.com/osmocom/rtl-sdr/master/rtl-sdr.rules /etc/udev/rules.d/20.rtlsdr.rules
 ```
 
 ***
@@ -181,9 +187,11 @@ cmake ../trunk-recorder
 make -j `nproc`
 sudo make install
 ```
-Note:  If the Pi hangs during the `make -j 'nproc'` command, try `make` instead (it may take longer but may also prevent locking up the Pi due to all processor cores being 100% in use)
+
+Note: If the Pi hangs during the `make -j 'nproc'` command, try `make` instead (it may take longer but may also prevent locking up the Pi due to all processor cores being 100% in use)
 
 ## Profile
+
 (It takes about 15 minutes for this section.)
 
 Run the command `volk_profile` to ensure that [VOLK (Vector-Optimized Library of Kernels)](https://wiki.gnuradio.org/index.php/Volk) uses the best [SIMD (Single instruction, multiple data)](https://en.wikipedia.org/wiki/SIMD) architecture for your processor.
@@ -192,7 +200,7 @@ Run the command `volk_profile` to ensure that [VOLK (Vector-Optimized Library of
 
 The next step is to [configure Trunk Recorder](CONFIGURE.md) for the system you are trying to capture.
 
-## Running trunk recorder. 
+## Running trunk recorder
 
 If all goes well you should now have the executable named `trunk-recorder`, and created the `config.json` configuration file as described in the [Wiki](https://github.com/TrunkRecorder/trunk-recorder/wiki/Configuring-a-System) and [README](https://github.com/TrunkRecorder/trunk-recorder/blob/master/README.md#configure).
 
@@ -201,4 +209,4 @@ From your build directory (e.g. `trunk-build`) you can now run
 
 ### Runtime options
 
-Trunk Recorder will look for a *config.json* file in the same directory as it is being run in. You can point it to a different config file by using the *--config* argument on the command line, for example: `./trunk-recorder --config=examples/config-wmata-rtl.json`.
+Trunk Recorder will look for a `config.json` file in the same directory as it is being run in. You can point it to a different config file by using the `--config` argument on the command line, for example: `./trunk-recorder --config=examples/config-wmata-rtl.json`.

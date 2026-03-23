@@ -242,8 +242,19 @@ During the status display, each source will report the running average as well a
 | broadcastifySystemId   |          |                            | number                                                                       | *if broadcastifyCallsServer is set* System ID for Broadcastify Calls <br />(this is an integer, and different from the RadioReference system ID) |
 | broadcastifyAllow      |          |                            | array of string/number;<br />["507*", "12?45", 12345]                        | *if broadcastifyCallsServer is set* Optional allow-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), the talkgroup **must** match at least one entry or the upload is skipped. |
 | broadcastifyDeny       |          |                            | array of string/number;<br />["99*", "12345"]                                | *if broadcastifyCallsServer is set* Optional deny-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), any matching talkgroup is skipped. |
-| uploadScript           |          |                            | string                                                                       | The filename of a script that is called after each recording has finished. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` ( or `../`). |
-| compressWav            |          | true                       | bool                                                                         | Convert the recorded .wav file to an .m4a file. **This is required for both OpenMHz and Broadcastify!** The `sox` and `fdkaac` packages need to be installed for this command to work. |
+| uploadScript           |          |                            | string                                                                       | The filename of a script that is called after each call has finished processing. The script is passed the final `.wav` path as the first argument, the call JSON path as the second argument, and the `.m4a` path as the third argument. The `.wav` and JSON files always exist; the `.m4a` file is only created when `compressWav` is enabled. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` (or `../`). |
+| compressWav            |          | true                       | bool                                                                         | Convert the final call `.wav` file to an `.m4a` file. **This is required for both OpenMHz and Broadcastify!** The `.wav` file is always created first; when `compressWav` is enabled, an additional `.m4a` file is created from that `.wav`. Requires `ffmpeg` to be installed. |
+| audio_postprocess      |          |                            | object                                                                       | Optional per-system audio cleanup and normalization settings applied when concluding calls. These settings affect the final `.wav` file, and the optional `.m4a` file is created from that processed `.wav`. Requires `ffmpeg` to be installed. |
+| audio_postprocess.enabled |       | false                      | **true** / **false**                                                         | Enable per-system audio post-processing for concluded calls. When disabled, the final `.wav` is the raw concatenated call audio. |
+| audio_postprocess.highpass_hz |   | 0                          | number                                                                       | Apply an ffmpeg `highpass` filter at the specified frequency in Hz. Set to `0` to disable. Useful for removing low-frequency rumble or hum. |
+| audio_postprocess.lowpass_hz |    | 0                          | number                                                                       | Apply an ffmpeg `lowpass` filter at the specified frequency in Hz. Set to `0` to disable. Useful for reducing high-frequency hiss or interference. |
+| audio_postprocess.bandreject_hz | | 0                          | number                                                                       | Apply an ffmpeg `bandreject` filter centered at this frequency in Hz. Set to `0` to disable. Useful for removing narrow whines or tones. |
+| audio_postprocess.bandreject_width_hz | | 0                    | number                                                                       | Width of the ffmpeg `bandreject` filter in Hz. This must be greater than `0` for the bandreject filter to be applied. |
+| audio_postprocess.loudnorm |     | false                      | **true** / **false**                                                         | Apply ffmpeg `loudnorm` to normalize perceived loudness across calls. |
+| audio_postprocess.loudnorm_i |   | -16.0                      | number                                                                       | Integrated loudness target used by ffmpeg `loudnorm`. |
+| audio_postprocess.loudnorm_tp |  | -1.5                       | number                                                                       | True peak limit used by ffmpeg `loudnorm`. |
+| audio_postprocess.loudnorm_lra | | 11.0                       | number                                                                       | Loudness range target used by ffmpeg `loudnorm`. |
+| audio_postprocess.ffmpeg_filter | | ""                        | string                                                                       | Optional advanced override for the generated ffmpeg audio filter chain. When set to a non-empty string, this exact filter string is used instead of building one from the other `audio_postprocess` settings. |
 | unitScript             |          |                            | string                                                                       | The filename of a script that runs when a radio (unit) registers (is turned on), affiliates (joins a talk group), deregisters (is turned off), gets an acknowledgment response, transmits, gets a data channel grant, a unit-unit answer request or a Location Registration Response. Passed as parameters:  `shortName radioID on\|join\|off\|ackresp\|call\|data\|ans_req\|location`. On joins and transmissions, `talkgroup` is passed as a fourth parameter; on answer requests, the `source` is.  On joins and transmissions, `patchedTalkgroups`  (comma separated list of talkgroup IDs) is passed as a fifth parameter if the talkgroup is part of a patch on the system. See *examples/unit-script.sh* for a logging example. Note that for paths relative to trunk-recorder, this should start with `./`( or `../`). |
 | audioArchive           |          | true                       | **true** / **false**                                                         | Should the recorded audio files be kept after successfully uploading them? |
 | transmissionArchive    |          | false                      | **true** / **false**                                                         | Should each of the individual transmission be kept? These transmission are combined together with other recent ones to form a single call. |
@@ -312,6 +323,64 @@ By default, Trunk Recorder will record the call from the first site to receive t
         }
     ]
     ...
+}
+```
+
+### Audio Postprocess
+
+Trunk Recorder can optionally post-process concluded call audio on a per-system basis using `ffmpeg`.
+
+When `audio_postprocess.enabled` is set to `true`, Trunk Recorder will:
+
+1. concatenate the individual transmission WAV files for the call into an intermediate WAV,
+2. create the final call WAV (applying any configured filters and/or loudness normalization), and
+3. optionally create an `.m4a` version of that final WAV if `compressWav` is enabled.
+
+This means:
+
+- the final `.wav` file always exists,
+- the call JSON file always exists,
+- the `.m4a` file is optional and only created when `compressWav` is enabled.
+
+For most users, the structured settings are recommended. Advanced users may set `audio_postprocess.ffmpeg_filter` to provide an exact ffmpeg filter chain override.
+
+Example uses:
+- remove low-frequency rumble with `highpass_hz`
+- remove high-frequency hiss with `lowpass_hz`
+- remove a narrow interference tone with `bandreject_hz` and `bandreject_width_hz`
+- normalize call loudness with `loudnorm`
+
+#### Example: Advanced ffmpeg filter override
+
+```json
+"audio_postprocess": {
+    "enabled": true,
+    "ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180,loudnorm=I=-16:TP=-1.5:LRA=11"
+}
+```
+
+#### Example: Remove a 4 kHz whine from call audio
+
+```json
+{
+  "shortName": "mysys",
+  "type": "conventional",
+  "channels": [154265000],
+  "audioArchive": true,
+  "callLog": true,
+  "compressWav": true,
+  "audio_postprocess": {
+    "enabled": true,
+    "highpass_hz": 200,
+    "lowpass_hz": 0,
+    "bandreject_hz": 4000,
+    "bandreject_width_hz": 180,
+    "loudnorm": false,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -1.5,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": ""
+  }
 }
 ```
 

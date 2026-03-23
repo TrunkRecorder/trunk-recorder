@@ -57,6 +57,23 @@ struct Config {
   std::string filename_format;
 };
 
+struct Audio_Postprocess_Config {
+  bool enabled = false;
+
+  int highpass_hz = 0;
+  int lowpass_hz = 0;
+
+  int bandreject_hz = 0;
+  int bandreject_width_hz = 0;
+
+  bool loudnorm = false;
+  double loudnorm_i = -16.0;
+  double loudnorm_tp = -1.5;
+  double loudnorm_lra = 11.0;
+
+  std::string ffmpeg_filter = "";
+};
+
 struct Call_Source {
   long source;
   long time;
@@ -88,7 +105,7 @@ enum Call_Data_Status { INITIAL,
                         SUCCESS,
                         RETRY,
                         FAILED };
-                  
+
 enum Recorder_Type { DEBUG,
                       SIGMF,
                       SIGMFC,
@@ -131,6 +148,7 @@ struct Call_Data_t {
   bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
+  std::string raw_filename;
   std::string filename;
   std::string status_filename;
   std::string converted;
@@ -140,6 +158,8 @@ struct Call_Data_t {
   std::string short_name;
   std::string upload_script;
   std::string audio_type;
+
+  Audio_Postprocess_Config audio_postprocess;
 
   int tdma_slot;
   double length;

@@ -226,38 +226,211 @@ const int Call_Concluder::MAX_RETRY = 2;
 std::list<std::future<Call_Data_t>> Call_Concluder::call_data_workers = {};
 std::list<Call_Data_t> Call_Concluder::retry_call_list = {};
 
-int combine_wav(const std::string &files, const std::string &target_filename) {
-  const std::string shell_command = "sox " + files + " '" + target_filename + "' ";
-  int rc = system(shell_command.c_str());
-
-  if (rc > 0) {
-    BOOST_LOG_TRIVIAL(info) << "Combining: " << files << " into: " << target_filename;
-    BOOST_LOG_TRIVIAL(info) << shell_command;
-    BOOST_LOG_TRIVIAL(error) << "Failed to combine recordings, see above error. Make sure you have sox and fdkaac installed.";
-    return -1;
+std::string shell_escape(const std::string &input) {
+  std::string output = "'";
+  for (char c : input) {
+    if (c == '\'') {
+      output += "'\\''";
+    } else {
+      output += c;
+    }
   }
-
-  return static_cast<int>(shell_command.size());
+  output += "'";
+  return output;
 }
-int convert_media(const std::string &filename, const std::string &converted, const std::string &date, const std::string &short_name, const std::string &talkgroup) {
-  std::stringstream shell_command;
-  shell_command << "sox '" << filename << "' --norm=-.01 -t wav - | fdkaac --silent  -p 2 --date '"
-                << date << "' --artist '" << short_name << "' --title '" << talkgroup
-                << "' --moov-before-mdat --ignorelength -b 8000 -o '" << converted << "' -";
-  const std::string shell_command_string = shell_command.str();
 
-  BOOST_LOG_TRIVIAL(trace) << "Converting: " << converted;
-  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command_string;
+std::string trim_whitespace(const std::string &value) {
+  const std::string whitespace = " \t\r\n";
+  const std::size_t start = value.find_first_not_of(whitespace);
+  if (start == std::string::npos) {
+    return "";
+  }
+  const std::size_t end = value.find_last_not_of(whitespace);
+  return value.substr(start, end - start + 1);
+}
 
-  int rc = system(shell_command_string.c_str());
+std::string build_ffmpeg_filter(const Audio_Postprocess_Config &audio_cfg) {
+  if (!audio_cfg.enabled) {
+    return "";
+  }
+
+  std::string override_filter = trim_whitespace(audio_cfg.ffmpeg_filter);
+  if (!override_filter.empty()) {
+    return override_filter;
+  }
+
+  std::vector<std::string> filters;
+
+  if (audio_cfg.highpass_hz > 0) {
+    filters.push_back("highpass=f=" + std::to_string(audio_cfg.highpass_hz));
+  }
+
+  if (audio_cfg.bandreject_hz > 0 && audio_cfg.bandreject_width_hz > 0) {
+    filters.push_back(
+      "bandreject=f=" + std::to_string(audio_cfg.bandreject_hz) +
+      ":w=" + std::to_string(audio_cfg.bandreject_width_hz)
+    );
+  }
+
+  if (audio_cfg.lowpass_hz > 0) {
+    filters.push_back("lowpass=f=" + std::to_string(audio_cfg.lowpass_hz));
+  }
+
+  if (audio_cfg.loudnorm) {
+    std::ostringstream loudnorm;
+    loudnorm << std::fixed << std::setprecision(1)
+             << "loudnorm=I=" << audio_cfg.loudnorm_i
+             << ":TP=" << audio_cfg.loudnorm_tp
+             << ":LRA=" << audio_cfg.loudnorm_lra;
+    filters.push_back(loudnorm.str());
+  }
+
+  if (filters.empty()) {
+    return "";
+  }
+
+  std::ostringstream joined;
+  for (std::size_t i = 0; i < filters.size(); ++i) {
+    if (i > 0) {
+      joined << ",";
+    }
+    joined << filters[i];
+  }
+
+  return joined.str();
+}
+
+std::string escape_ffmpeg_concat_path(const std::string &input) {
+  std::string output;
+  for (char c : input) {
+    if (c == '\'' || c == '\\') {
+      output += '\\';
+    }
+    output += c;
+  }
+  return output;
+}
+
+std::string build_ffmpeg_output_args(bool output_compressed) {
+  if (output_compressed) {
+    return "-c:a aac -b:a 8k -movflags +faststart";
+  }
+
+  return "-c:a pcm_s16le";
+}
+
+int combine_wav(const std::vector<std::string> &input_files, const std::string &target_filename) {
+  char shell_command[4096];
+
+  if (input_files.empty()) {
+    BOOST_LOG_TRIVIAL(error) << "Call uploader: No input files provided to combine_wav";
+    return -1;
+  }
+
+  if (target_filename.empty()) {
+    BOOST_LOG_TRIVIAL(error) << "Call uploader: Invalid target filename for combine_wav";
+    return -1;
+  }
+
+  std::string list_filename = target_filename + ".concat.txt";
+
+  {
+    std::ofstream list_file(list_filename);
+    if (!list_file.is_open()) {
+      BOOST_LOG_TRIVIAL(error) << "Call uploader: Unable to create ffmpeg concat list file: " << list_filename;
+      return -1;
+    }
+
+    for (const auto &file : input_files) {
+      list_file << "file '" << escape_ffmpeg_concat_path(file) << "'\n";
+    }
+  }
+
+  std::ostringstream cmd;
+  cmd << "ffmpeg -y -hide_banner -loglevel error "
+      << "-f concat -safe 0 "
+      << "-i " << shell_escape(list_filename) << " "
+      << "-vn -c:a pcm_s16le "
+      << shell_escape(target_filename);
+
+  std::string cmd_string = cmd.str();
+
+  if (cmd_string.size() >= sizeof(shell_command)) {
+    BOOST_LOG_TRIVIAL(error) << "Call uploader: FFmpeg combine command longer than 4096 characters";
+    std::remove(list_filename.c_str());
+    return -1;
+  }
+
+  snprintf(shell_command, sizeof(shell_command), "%s", cmd_string.c_str());
+
+  BOOST_LOG_TRIVIAL(trace) << "Combining " << input_files.size() << " recordings into: " << target_filename;
+  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command;
+
+  int rc = system(shell_command);
+
+  std::remove(list_filename.c_str());
 
   if (rc > 0) {
-    BOOST_LOG_TRIVIAL(error) << "Failed to convert call recording, see above error. Make sure you have sox and fdkaac installed.";
+    BOOST_LOG_TRIVIAL(error) << "Failed to combine recordings, see above error. Make sure you have ffmpeg installed.";
     return -1;
-  } else {
-    BOOST_LOG_TRIVIAL(trace) << "Finished converting call";
   }
-  return static_cast<int>(shell_command_string.size());
+
+  return 0;
+}
+
+int process_audio(const Call_Data_t &call_info,
+                  const std::string &input_filename,
+                  const std::string &output_filename,
+                  const std::string &date,
+                  const std::string &short_name,
+                  const std::string &talkgroup,
+                  bool output_compressed) {
+  char shell_command[4096];
+
+  std::string input_file = shell_escape(input_filename);
+  std::string output_file = shell_escape(output_filename);
+  std::string date_escaped = shell_escape(date);
+  std::string artist_escaped = shell_escape(short_name);
+  std::string title_escaped = shell_escape(talkgroup);
+
+  std::string filter_chain = build_ffmpeg_filter(call_info.audio_postprocess);
+
+  std::ostringstream cmd;
+  cmd << "ffmpeg -y -hide_banner -loglevel error "
+      << "-i " << input_file << " ";
+
+  if (!filter_chain.empty()) {
+    cmd << "-af " << shell_escape(filter_chain) << " ";
+  }
+
+  cmd << "-vn "
+      << "-metadata date=" << date_escaped << " "
+      << "-metadata artist=" << artist_escaped << " "
+      << "-metadata title=" << title_escaped << " "
+      << build_ffmpeg_output_args(output_compressed) << " "
+      << output_file;
+
+  std::string cmd_string = cmd.str();
+
+  if (cmd_string.size() >= sizeof(shell_command)) {
+    BOOST_LOG_TRIVIAL(error) << "Call uploader: Command longer than 4096 characters";
+    return -1;
+  }
+
+  snprintf(shell_command, sizeof(shell_command), "%s", cmd_string.c_str());
+
+  BOOST_LOG_TRIVIAL(trace) << "Processing audio: " << output_filename;
+  BOOST_LOG_TRIVIAL(trace) << "Command: " << shell_command;
+
+  int rc = system(shell_command);
+
+  if (rc > 0) {
+    BOOST_LOG_TRIVIAL(error) << "Failed to process call recording, see above error. Make sure you have ffmpeg installed.";
+    return -1;
+  }
+
+  BOOST_LOG_TRIVIAL(trace) << "Finished processing audio";
+  return 0;
 }
 
 int create_call_json(Call_Data_t& call_info) {
@@ -399,9 +572,15 @@ void remove_call_files(Call_Data_t call_info, bool plugin_failure=false) {
       }
     }
 
-
+    if (checkIfFile(call_info.raw_filename)) {
+      std::remove(call_info.raw_filename.c_str());
+    }
 
   } else {
+
+    if (checkIfFile(call_info.raw_filename)) {
+      std::remove(call_info.raw_filename.c_str());
+    }
 
     if (checkIfFile(call_info.filename)) {
       std::remove(call_info.filename.c_str());
@@ -429,46 +608,76 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
   int result;
 
   if (call_info.status == INITIAL) {
+    int result;
     std::stringstream shell_command;
     std::string shell_command_string;
-    std::string files;
+    std::vector<std::string> input_files;
 
     struct stat statbuf;
-    // loop through the transmission list, pull in things to fill in totals for call_info
-    // Using a for loop with iterator
     for (std::vector<Transmission>::iterator it = call_info.transmission_list.begin(); it != call_info.transmission_list.end(); ++it) {
       Transmission t = *it;
 
-      if (stat(t.filename.c_str(), &statbuf) == 0)
-      {
-          files.append("'");
-          files.append(t.filename);
-          files.append("' ");
-      }
-      else
-      {
-          BOOST_LOG_TRIVIAL(error) << "Somehow, " << t.filename << " doesn't exist, not attempting to provide it to sox";
+      if (stat(t.filename.c_str(), &statbuf) == 0) {
+        input_files.push_back(t.filename);
+      } else {
+        BOOST_LOG_TRIVIAL(error) << "Somehow, " << t.filename << " doesn't exist, not attempting to provide it to ffmpeg";
       }
     }
 
-    combine_wav(files, call_info.filename);
-
-    result = create_call_json(call_info);
+    result = combine_wav(input_files, call_info.raw_filename);
 
     if (result < 0) {
       call_info.status = FAILED;
       return call_info;
     }
 
-    if (call_info.compress_wav) {
-      // TR records files as .wav files. They need to be compressed before being upload to online services.
+    result = create_call_json(call_info);
 
-      std::string talkgroup_title = call_info.talkgroup_alpha_tag.length() > 0
-                                        ? call_info.talkgroup_alpha_tag
-                                        : std::to_string(call_info.talkgroup);
+    if (result != 0) {
+      call_info.status = FAILED;
+      return call_info;
+    }
 
-      time_t start_time = static_cast<time_t>(call_info.start_time);
-      result = convert_media(call_info.filename, call_info.converted, std::ctime(&start_time), call_info.short_name, talkgroup_title);
+    std::string talkgroup_title = call_info.talkgroup_alpha_tag.length() > 0
+                                      ? call_info.talkgroup_alpha_tag
+                                      : std::to_string(call_info.talkgroup);
+
+    time_t start_time = static_cast<time_t>(call_info.start_time);
+
+    bool do_postprocess = call_info.audio_postprocess.enabled;
+    bool do_compress = call_info.compress_wav;
+
+    // WAV must ALWAYS exist
+    if (do_postprocess) {
+      result = process_audio(call_info,
+                             call_info.raw_filename,
+                             call_info.filename,
+                             std::ctime(&start_time),
+                             call_info.short_name,
+                             talkgroup_title,
+                             false);
+
+      if (result < 0) {
+        call_info.status = FAILED;
+        return call_info;
+      }
+    } else {
+      if (std::rename(call_info.raw_filename.c_str(), call_info.filename.c_str()) != 0) {
+        BOOST_LOG_TRIVIAL(error) << "Failed to rename raw wav to final wav";
+        call_info.status = FAILED;
+        return call_info;
+      }
+    }
+
+    // M4A is optional
+    if (do_compress) {
+      result = process_audio(call_info,
+                             call_info.filename,
+                             call_info.converted,
+                             std::ctime(&start_time),
+                             call_info.short_name,
+                             talkgroup_title,
+                             true);
 
       if (result < 0) {
         call_info.status = FAILED;
@@ -476,11 +685,14 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       }
     }
 
-    // Handle the Upload Script, if set
     if (call_info.upload_script.length() != 0) {
-      shell_command << call_info.upload_script << " '" << call_info.filename << "' '" << call_info.status_filename << "' '" << call_info.converted << "'";
+      shell_command << shell_escape(call_info.upload_script) << " "
+                    << shell_escape(call_info.filename) << " "
+                    << shell_escape(call_info.status_filename) << " "
+                    << shell_escape(call_info.converted);
+
       shell_command_string = shell_command.str();
-      std::string loghdr = log_header( call_info.short_name, call_info.call_num, call_info.talkgroup_display , call_info.freq);
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
       BOOST_LOG_TRIVIAL(info) << loghdr << "\033[0m\tRunning upload script: " << shell_command_string;
 
       result = system(shell_command_string.c_str());
@@ -558,6 +770,7 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call, Call_Data_t call_in
 
   }
 
+  call_info.raw_filename = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".raw.wav";
   call_info.filename = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".wav";
   call_info.status_filename = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".json";
   call_info.converted = base_filename + "-call_" + std::to_string(call->get_call_num()) + ".m4a";
@@ -598,6 +811,16 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
   call_info.call_log            = sys->get_call_log();
   call_info.call_num            = call->get_call_num();
   call_info.compress_wav        = sys->get_compress_wav();
+  call_info.audio_postprocess.enabled = sys->get_audio_postprocess_enabled();
+  call_info.audio_postprocess.highpass_hz = sys->get_audio_highpass_hz();
+  call_info.audio_postprocess.lowpass_hz = sys->get_audio_lowpass_hz();
+  call_info.audio_postprocess.bandreject_hz = sys->get_audio_bandreject_hz();
+  call_info.audio_postprocess.bandreject_width_hz = sys->get_audio_bandreject_width_hz();
+  call_info.audio_postprocess.loudnorm = sys->get_audio_loudnorm();
+  call_info.audio_postprocess.loudnorm_i = sys->get_audio_loudnorm_i();
+  call_info.audio_postprocess.loudnorm_tp = sys->get_audio_loudnorm_tp();
+  call_info.audio_postprocess.loudnorm_lra = sys->get_audio_loudnorm_lra();
+  call_info.audio_postprocess.ffmpeg_filter = sys->get_audio_ffmpeg_filter();
   call_info.talkgroup           = call->get_talkgroup();
   call_info.talkgroup_display   = call->get_talkgroup_display();
   call_info.patched_talkgroups  = sys->get_talkgroup_patch(call_info.talkgroup);
