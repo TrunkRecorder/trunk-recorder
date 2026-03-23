@@ -321,6 +321,90 @@ static std::string build_loudnorm_analysis_filter(const Audio_Postprocess_Config
   return filter.str();
 }
 
+static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
+                                         const std::string &list_filename,
+                                         const std::string &cleanup_filter,
+                                         LoudnormMeasured &measured) {
+  const std::string analysis_filter = build_loudnorm_analysis_filter(call_info.audio_postprocess);
+  const std::string full_filter =
+      cleanup_filter.empty() ? analysis_filter : cleanup_filter + "," + analysis_filter;
+
+  std::ostringstream cmd;
+  cmd << "ffmpeg -y -hide_banner -nostats -loglevel info "
+      << "-f concat -safe 0 "
+      << "-i " << shell_escape(list_filename) << " "
+      << "-af " << shell_escape(full_filter) << " "
+      << "-vn -f null - 2>&1";
+
+  FILE *pipe = popen(cmd.str().c_str(), "r");
+  if (!pipe) {
+    BOOST_LOG_TRIVIAL(error) << "Failed to start ffmpeg loudnorm analysis pass";
+    return false;
+  }
+
+  std::string output;
+  char buffer[512];
+  while (fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+    output += buffer;
+  }
+
+  const int pclose_rc = pclose(pipe);
+  if (pclose_rc != 0) {
+    BOOST_LOG_TRIVIAL(warning) << "ffmpeg loudnorm first pass returned non-zero exit status: "
+                               << pclose_rc;
+  }
+
+  const std::size_t json_end = output.rfind('}');
+  if (json_end == std::string::npos) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Failed to parse loudnorm first-pass JSON output: no closing brace found";
+    return false;
+  }
+
+  const std::size_t json_start = output.rfind('{', json_end);
+  if (json_start == std::string::npos || json_start >= json_end) {
+    BOOST_LOG_TRIVIAL(error)
+        << "Failed to parse loudnorm first-pass JSON output: no opening brace found";
+    return false;
+  }
+
+  const std::string json_text = output.substr(json_start, json_end - json_start + 1);
+
+  try {
+    const nlohmann::json stats = nlohmann::json::parse(json_text);
+
+    auto json_value_to_string = [](const nlohmann::json &v) -> std::string {
+      if (v.is_string()) {
+        return v.get<std::string>();
+      }
+      if (v.is_number_float()) {
+        std::ostringstream oss;
+        oss << v.get<double>();
+        return oss.str();
+      }
+      if (v.is_number_integer()) {
+        return std::to_string(v.get<long long>());
+      }
+      if (v.is_number_unsigned()) {
+        return std::to_string(v.get<unsigned long long>());
+      }
+      return v.dump();
+    };
+
+    measured.input_i = json_value_to_string(stats.at("input_i"));
+    measured.input_tp = json_value_to_string(stats.at("input_tp"));
+    measured.input_lra = json_value_to_string(stats.at("input_lra"));
+    measured.input_thresh = json_value_to_string(stats.at("input_thresh"));
+    measured.target_offset = json_value_to_string(stats.at("target_offset"));
+    measured.valid = true;
+    return true;
+  } catch (const std::exception &e) {
+    BOOST_LOG_TRIVIAL(error) << "Failed to decode loudnorm first-pass JSON: " << e.what();
+    BOOST_LOG_TRIVIAL(debug) << "Loudnorm JSON candidate was: " << json_text;
+    return false;
+  }
+}
+
 static std::string build_loudnorm_render_filter(const Audio_Postprocess_Config &audio_cfg,
                                                 const LoudnormMeasured &m) {
   std::ostringstream filter;
@@ -351,22 +435,6 @@ static bool write_concat_list(const std::vector<std::string> &input_files,
 
   return true;
 }
-
-  LoudnormMeasured measured;
-  bool loudnorm_active = do_loudnorm;
-
-  if (do_loudnorm) {
-    if (!analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured)) {
-      std::string loghdr =
-          log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-      BOOST_LOG_TRIVIAL(error) << loghdr
-                               << "Loudnorm analysis failed; falling back to cleanup-only audio rendering";
-      loudnorm_active = false;
-    }
-  }
-
-  std::string final_filter = cleanup_filter;
-  if (loudnorm_active && measured.valid) {
 
 static void append_common_metadata(std::ostringstream &cmd,
                                    const std::string &date,
@@ -400,16 +468,22 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
   const bool do_compress = call_info.compress_wav;
 
   LoudnormMeasured measured;
+  bool loudnorm_active = do_loudnorm;
+
   if (do_loudnorm) {
     if (!analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured)) {
-      std::remove(list_filename.c_str());
-      return -1;
+      std::string loghdr =
+          log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+      BOOST_LOG_TRIVIAL(error) << loghdr
+                               << "Loudnorm analysis failed; falling back to cleanup-only audio rendering";
+      loudnorm_active = false;
     }
   }
 
   std::string final_filter = cleanup_filter;
-  if (do_loudnorm && measured.valid) {
-    const std::string loudnorm_filter = build_loudnorm_render_filter(call_info.audio_postprocess, measured);
+  if (loudnorm_active && measured.valid) {
+    const std::string loudnorm_filter =
+        build_loudnorm_render_filter(call_info.audio_postprocess, measured);
     final_filter = final_filter.empty() ? loudnorm_filter : final_filter + "," + loudnorm_filter;
   }
 
