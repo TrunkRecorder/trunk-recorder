@@ -265,6 +265,17 @@ static std::string build_cleanup_filter(const Audio_Postprocess_Config &audio_cf
   return joined.str();
 }
 
+static bool is_invalid_loudnorm_value(const std::string &v) {
+  const std::string trimmed = trim_whitespace(lowercase_copy(v));
+  return trimmed.empty() ||
+         trimmed == "-inf" ||
+         trimmed == "inf" ||
+         trimmed == "+inf" ||
+         trimmed == "nan" ||
+         trimmed == "+nan" ||
+         trimmed == "-nan";
+}
+
 static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &audio_cfg) {
   std::string override_filter = trim_whitespace(audio_cfg.ffmpeg_filter);
   if (override_filter.empty()) {
@@ -409,6 +420,23 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
     measured.input_lra = json_value_to_string(stats.at("input_lra"));
     measured.input_thresh = json_value_to_string(stats.at("input_thresh"));
     measured.target_offset = json_value_to_string(stats.at("target_offset"));
+    if (is_invalid_loudnorm_value(measured.input_i) ||
+        is_invalid_loudnorm_value(measured.input_tp) ||
+        is_invalid_loudnorm_value(measured.input_lra) ||
+        is_invalid_loudnorm_value(measured.input_thresh) ||
+        is_invalid_loudnorm_value(measured.target_offset)) {
+      BOOST_LOG_TRIVIAL(warning) << "\033[0;33m"
+                                 << "Loudnorm first-pass returned unusable values "
+                                 << "(input_i=" << measured.input_i
+                                 << ", input_tp=" << measured.input_tp
+                                 << ", input_lra=" << measured.input_lra
+                                 << ", input_thresh=" << measured.input_thresh
+                                 << ", target_offset=" << measured.target_offset
+                                 << "); skipping loudnorm"
+                                 << "\033[0m";
+      return false;
+        }
+
     measured.valid = true;
     return true;
   } catch (const std::exception &e) {
