@@ -13,6 +13,10 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
+#include <cerrno>
 
 namespace fs = std::filesystem;
 
@@ -615,6 +619,172 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
 }
 
 // ---------------------------------------------------------------------------
+// Upload Script helpers
+// ---------------------------------------------------------------------------
+
+static bool parse_command_arguments(const std::string &command,
+                                    std::vector<std::string> &args,
+                                    std::string &error) {
+  args.clear();
+  error.clear();
+
+  std::string current;
+  bool in_single = false;
+  bool in_double = false;
+  bool escaping = false;
+
+  for (char c : command) {
+    if (escaping) {
+      current.push_back(c);
+      escaping = false;
+      continue;
+    }
+
+    if (c == '\\' && !in_single) {
+      escaping = true;
+      continue;
+    }
+
+    if (c == '\'' && !in_double) {
+      in_single = !in_single;
+      continue;
+    }
+
+    if (c == '"' && !in_single) {
+      in_double = !in_double;
+      continue;
+    }
+
+    if (std::isspace(static_cast<unsigned char>(c)) && !in_single && !in_double) {
+      if (!current.empty()) {
+        args.push_back(current);
+        current.clear();
+      }
+      continue;
+    }
+
+    current.push_back(c);
+  }
+
+  if (escaping) {
+    error = "uploadScript ends with a trailing backslash";
+    return false;
+  }
+
+  if (in_single || in_double) {
+    error = "uploadScript contains unmatched quotes";
+    return false;
+  }
+
+  if (!current.empty()) {
+    args.push_back(current);
+  }
+
+  if (args.empty()) {
+    error = "uploadScript is empty after parsing";
+    return false;
+  }
+
+  return true;
+}
+
+static int run_upload_script_argv(const Call_Data_t &call_info) {
+  const std::string script_spec = trim_whitespace(call_info.upload_script);
+  if (script_spec.empty()) {
+    return 0;
+  }
+
+  std::vector<std::string> args;
+  std::string parse_error;
+  if (!parse_command_arguments(script_spec, args, parse_error)) {
+    std::string loghdr =
+        log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                             << "\033[0;31mInvalid uploadScript: "
+                             << parse_error
+                             << "\033[0m";
+    return -1;
+  }
+
+  args.push_back(call_info.filename);
+  args.push_back(call_info.status_filename);
+  args.push_back(call_info.converted);
+
+  std::string loghdr =
+      log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
+
+  std::ostringstream rendered;
+  for (std::size_t i = 0; i < args.size(); ++i) {
+    if (i > 0) {
+      rendered << " ";
+    }
+    rendered << shell_escape(args[i]);
+  }
+
+  BOOST_LOG_TRIVIAL(info) << loghdr << "\033[0m\tRunning upload script: "
+                          << rendered.str();
+
+  std::vector<char *> argv;
+  argv.reserve(args.size() + 1);
+  for (auto &arg : args) {
+    argv.push_back(arg.data());
+  }
+  argv.push_back(nullptr);
+
+  pid_t pid = fork();
+  if (pid < 0) {
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                             << "\033[0;31mFailed to fork for upload script: "
+                             << std::strerror(errno)
+                             << "\033[0m";
+    return -1;
+  }
+
+  if (pid == 0) {
+    execvp(argv[0], argv.data());
+
+    std::fprintf(stderr, "execvp failed for uploadScript '%s': %s\n",
+                 argv[0], std::strerror(errno));
+    _exit(127);
+  }
+
+  int status = 0;
+  pid_t waited = waitpid(pid, &status, 0);
+  if (waited < 0) {
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                             << "\033[0;31mwaitpid failed for upload script: "
+                             << std::strerror(errno)
+                             << "\033[0m";
+    return -1;
+  }
+
+  if (WIFEXITED(status)) {
+    const int exit_code = WEXITSTATUS(status);
+    if (exit_code != 0) {
+      BOOST_LOG_TRIVIAL(error) << loghdr
+                               << "\033[0;31mUpload script exited with code "
+                               << exit_code
+                               << "\033[0m";
+      return exit_code;
+    }
+    return 0;
+  }
+
+  if (WIFSIGNALED(status)) {
+    BOOST_LOG_TRIVIAL(error) << loghdr
+                             << "\033[0;31mUpload script terminated by signal "
+                             << WTERMSIG(status)
+                             << "\033[0m";
+    return -1;
+  }
+
+  BOOST_LOG_TRIVIAL(error) << loghdr
+                           << "\033[0;31mUpload script ended in an unknown state"
+                           << "\033[0m";
+  return -1;
+}
+
+// ---------------------------------------------------------------------------
 // Call JSON / file helpers
 // ---------------------------------------------------------------------------
 
@@ -836,19 +1006,12 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    if (call_info.upload_script.length() != 0) {
-      shell_command << shell_escape(call_info.upload_script) << " "
-                    << shell_escape(call_info.filename) << " "
-                    << shell_escape(call_info.status_filename) << " "
-                    << shell_escape(call_info.converted);
-
-      shell_command_string = shell_command.str();
-      std::string loghdr =
-          log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-      BOOST_LOG_TRIVIAL(info) << loghdr << "\033[0m\tRunning upload script: "
-                              << shell_command_string;
-
-      result = system(shell_command_string.c_str());
+    if (!trim_whitespace(call_info.upload_script).empty()) {
+      result = run_upload_script_argv(call_info);
+      if (result != 0) {
+        call_info.status = FAILED;
+        return call_info;
+      }
     }
   }
 
