@@ -315,7 +315,7 @@ static std::string escape_ffmpeg_concat_path(const std::string &input) {
 
 static std::string build_ffmpeg_output_args(bool output_compressed) {
   if (output_compressed) {
-    return "-c:a aac -b:a 8k -movflags +faststart";
+    return "-c:a aac -ar 8000 -ac 1 -b:a 32k -movflags +faststart";
   }
   return "-c:a pcm_s16le";
 }
@@ -459,7 +459,9 @@ static std::string build_loudnorm_render_filter(const Audio_Postprocess_Config &
          << ":measured_TP=" << m.input_tp
          << ":measured_LRA=" << m.input_lra
          << ":measured_thresh=" << m.input_thresh
-         << ":offset=" << m.target_offset;
+         << ":offset=" << m.target_offset
+         << ":linear=true"
+         << ":dual_mono=true";
   return filter.str();
 }
 
@@ -535,6 +537,7 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
     const std::string loudnorm_filter =
         build_loudnorm_render_filter(call_info.audio_postprocess, measured);
     final_filter = final_filter.empty() ? loudnorm_filter : final_filter + "," + loudnorm_filter;
+    final_filter += ",alimiter=limit=0.89";
   }
 
   auto run_render = [&](const std::string &filter_to_use) -> int {
