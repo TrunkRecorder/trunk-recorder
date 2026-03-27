@@ -318,6 +318,16 @@ public:
     curl_mime_data(part, api_key.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "apiKey");
 
+    if (!call_info.transmission_source_list.empty()) {
+      std::string ota_alias = call_info.transmission_source_list[0].tag_ota;
+      BOOST_LOG_TRIVIAL(info) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
+      if (!ota_alias.empty()) {
+        part = curl_mime_addpart(mime);
+        curl_mime_data(part, ota_alias.c_str(), CURL_ZERO_TERMINATED);
+        curl_mime_name(part, "srcId_alias");
+      }
+    }
+
     multi_handle = curl_multi_init();
 
     /* initialize custom header list (stating that Expect: 100-continue is not wanted */

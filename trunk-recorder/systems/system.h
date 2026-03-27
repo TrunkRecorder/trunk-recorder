@@ -119,6 +119,7 @@ public:
   virtual Talkgroup *find_talkgroup(long tg) = 0;
   virtual Talkgroup *find_talkgroup_by_freq(double freq) = 0;
   virtual std::string find_unit_tag(long unitID) = 0;
+  virtual std::string find_unit_tag_ota(long unitID) = 0;
   virtual void set_talkgroups_file(std::string) = 0;
   virtual void set_channel_file(std::string channel_file) = 0;
   virtual bool has_channel_file() = 0;

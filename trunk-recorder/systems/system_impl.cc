@@ -392,6 +392,9 @@ Talkgroup *System_impl::find_talkgroup_by_freq(double freq) {
 std::string System_impl::find_unit_tag(long unitID) {
   return unit_tags->find_unit_tag(unitID);
 }
+std::string System_impl::find_unit_tag_ota(long unitID) {
+  return unit_tags->find_unit_tag_ota(unitID);
+}
 
 std::vector<double> System_impl::get_channels() {
   return channels;

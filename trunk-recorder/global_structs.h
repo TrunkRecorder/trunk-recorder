@@ -64,6 +64,7 @@ struct Call_Source {
   bool emergency;
   std::string signal_system;
   std::string tag;
+  std::string tag_ota;
 };
 
 struct Call_Freq {

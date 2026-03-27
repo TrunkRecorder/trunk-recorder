@@ -322,7 +322,8 @@ int create_call_json(Call_Data_t& call_info) {
         {"pos", round(call_info.transmission_error_list[i].position * 100.0) / 100.0},  // round to 2 decimal places
         {"emergency", int(call_info.transmission_source_list[i].emergency)},
         {"signal_system", call_info.transmission_source_list[i].signal_system},
-        {"tag", call_info.transmission_source_list[i].tag}};
+        {"tag", call_info.transmission_source_list[i].tag},
+        {"tag_ota", call_info.transmission_source_list[i].tag_ota}};
   }
   // Add created JSON to call_info
   call_info.call_json = json_data;
@@ -676,6 +677,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
 
     // Unit tag (once per segment)
     std::string tag = sys->find_unit_tag(t.source);
+    std::string tag_ota = sys->find_unit_tag_ota(t.source);
     std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
 
     // Log with canonical length and playable position
@@ -707,7 +709,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
 
 
     // Build src/error lists aligned to playable timeline
-    Call_Source call_source = { t.source, t.start_time, playable_pos_s, false, "", tag };
+    Call_Source call_source = { t.source, t.start_time, playable_pos_s, false, "", tag, tag_ota };
     Call_Error  call_error  = { t.start_time, playable_pos_s, seg_len_s,
                                 t.error_count, t.spike_count };
     call_info.transmission_source_list.push_back(call_source);

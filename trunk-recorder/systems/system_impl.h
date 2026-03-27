@@ -185,6 +185,7 @@ public:
   Talkgroup *find_talkgroup(long tg) override;
   Talkgroup *find_talkgroup_by_freq(double freq) override;
   std::string find_unit_tag(long unitID) override;
+  std::string find_unit_tag_ota(long unitID) override;
   void set_talkgroups_file(std::string) override;
   void set_channel_file(std::string channel_file) override;
   bool has_channel_file() override;

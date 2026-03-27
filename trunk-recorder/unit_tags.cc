@@ -243,6 +243,15 @@ std::string UnitTags::find_unit_tag(long tg_number) {
   return "";
 }
 
+std::string UnitTags::find_unit_tag_ota(long unitID) {
+  for (auto it = unit_tags_ota.rbegin(); it != unit_tags_ota.rend(); ++it) {
+    if ((*it)->unit_id == unitID) {
+      return (*it)->alias;
+    }
+  }
+  return "";
+}
+
 void UnitTags::add(std::string pattern, std::string tag) {
   // If the pattern is like /someregex/
   if (pattern.substr(0, 1).compare("/") == 0 && pattern.substr(pattern.length()-1, 1).compare("/") == 0) {
