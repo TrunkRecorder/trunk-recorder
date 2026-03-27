@@ -1,8 +1,8 @@
 From 91597dc6cfd8e3783bd74e47e075ad00e28a58ea Mon Sep 17 00:00:00 2001
 From: lindsay <lindsay@radioreference.com>
 Date: Fri, 27 Mar 2026 11:13:30 -0500
-Subject: [PATCH] Add OTA alias lookup and include srcId_alias in Broadcastify
- uploads
+Subject: [PATCH 1/3] Add OTA alias lookup and include srcId_alias in
+ Broadcastify uploads
 
 Adds find_unit_tag_ota() through the UnitTags/System interface to resolve
 over-the-air aliases for unit IDs. The OTA alias is propagated via the
@@ -155,6 +155,247 @@ index 9dbb082..ea081a1 100644
    void add(std::string pattern, std::string tag);
    bool add_ota(const OTAAlias& ota_alias);
    void set_mode(UnitTagMode mode);
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 0062ce2df13ca1a1ad0fbf3892f01b15004427e8 Mon Sep 17 00:00:00 2001
+From: lindsay <lindsay@radioreference.com>
+Date: Fri, 27 Mar 2026 12:04:20 -0500
+Subject: [PATCH 2/3] Add patch file for OTA alias / Broadcastify srcId_alias
+ support
+
+Provides a downloadable patch for users who want to test the feature
+before it is merged.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ ota-alias-broadcastify.patch | 160 +++++++++++++++++++++++++++++++++++
+ 1 file changed, 160 insertions(+)
+ create mode 100644 ota-alias-broadcastify.patch
+
+diff --git a/ota-alias-broadcastify.patch b/ota-alias-broadcastify.patch
+new file mode 100644
+index 0000000..5253b91
+--- /dev/null
++++ b/ota-alias-broadcastify.patch
+@@ -0,0 +1,160 @@
++From 91597dc6cfd8e3783bd74e47e075ad00e28a58ea Mon Sep 17 00:00:00 2001
++From: lindsay <lindsay@radioreference.com>
++Date: Fri, 27 Mar 2026 11:13:30 -0500
++Subject: [PATCH] Add OTA alias lookup and include srcId_alias in Broadcastify
++ uploads
++
++Adds find_unit_tag_ota() through the UnitTags/System interface to resolve
++over-the-air aliases for unit IDs. The OTA alias is propagated via the
++tag_ota field in Call_Source, included in call JSON output, and sent as
++the srcId_alias field in Broadcastify uploads.
++
++Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
++---
++ plugins/broadcastify_uploader/broadcastify_uploader.cc | 10 ++++++++++
++ trunk-recorder/call_concluder/call_concluder.cc        |  6 ++++--
++ trunk-recorder/global_structs.h                        |  1 +
++ trunk-recorder/systems/system.h                        |  1 +
++ trunk-recorder/systems/system_impl.cc                  |  3 +++
++ trunk-recorder/systems/system_impl.h                   |  1 +
++ trunk-recorder/unit_tags.cc                            |  9 +++++++++
++ trunk-recorder/unit_tags.h                             |  1 +
++ 8 files changed, 30 insertions(+), 2 deletions(-)
++
++diff --git a/plugins/broadcastify_uploader/broadcastify_uploader.cc b/plugins/broadcastify_uploader/broadcastify_uploader.cc
++index ab957dc..5a9c027 100644
++--- a/plugins/broadcastify_uploader/broadcastify_uploader.cc
+++++ b/plugins/broadcastify_uploader/broadcastify_uploader.cc
++@@ -318,6 +318,16 @@ public:
++     curl_mime_data(part, api_key.c_str(), CURL_ZERO_TERMINATED);
++     curl_mime_name(part, "apiKey");
++ 
+++    if (!call_info.transmission_source_list.empty()) {
+++      std::string ota_alias = call_info.transmission_source_list[0].tag_ota;
+++      BOOST_LOG_TRIVIAL(info) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
+++      if (!ota_alias.empty()) {
+++        part = curl_mime_addpart(mime);
+++        curl_mime_data(part, ota_alias.c_str(), CURL_ZERO_TERMINATED);
+++        curl_mime_name(part, "srcId_alias");
+++      }
+++    }
+++
++     multi_handle = curl_multi_init();
++ 
++     /* initialize custom header list (stating that Expect: 100-continue is not wanted */
++diff --git a/trunk-recorder/call_concluder/call_concluder.cc b/trunk-recorder/call_concluder/call_concluder.cc
++index 839a3bc..c96b5c8 100644
++--- a/trunk-recorder/call_concluder/call_concluder.cc
+++++ b/trunk-recorder/call_concluder/call_concluder.cc
++@@ -322,7 +322,8 @@ int create_call_json(Call_Data_t& call_info) {
++         {"pos", round(call_info.transmission_error_list[i].position * 100.0) / 100.0},  // round to 2 decimal places
++         {"emergency", int(call_info.transmission_source_list[i].emergency)},
++         {"signal_system", call_info.transmission_source_list[i].signal_system},
++-        {"tag", call_info.transmission_source_list[i].tag}};
+++        {"tag", call_info.transmission_source_list[i].tag},
+++        {"tag_ota", call_info.transmission_source_list[i].tag_ota}};
++   }
++   // Add created JSON to call_info
++   call_info.call_json = json_data;
++@@ -676,6 +677,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
++ 
++     // Unit tag (once per segment)
++     std::string tag = sys->find_unit_tag(t.source);
+++    std::string tag_ota = sys->find_unit_tag_ota(t.source);
++     std::string display_tag = tag.empty() ? "" : " (\033[0;34m" + tag + "\033[0m)";
++ 
++     // Log with canonical length and playable position
++@@ -707,7 +709,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, Config con
++ 
++ 
++     // Build src/error lists aligned to playable timeline
++-    Call_Source call_source = { t.source, t.start_time, playable_pos_s, false, "", tag };
+++    Call_Source call_source = { t.source, t.start_time, playable_pos_s, false, "", tag, tag_ota };
++     Call_Error  call_error  = { t.start_time, playable_pos_s, seg_len_s,
++                                 t.error_count, t.spike_count };
++     call_info.transmission_source_list.push_back(call_source);
++diff --git a/trunk-recorder/global_structs.h b/trunk-recorder/global_structs.h
++index 5210d35..56877d8 100644
++--- a/trunk-recorder/global_structs.h
+++++ b/trunk-recorder/global_structs.h
++@@ -64,6 +64,7 @@ struct Call_Source {
++   bool emergency;
++   std::string signal_system;
++   std::string tag;
+++  std::string tag_ota;
++ };
++ 
++ struct Call_Freq {
++diff --git a/trunk-recorder/systems/system.h b/trunk-recorder/systems/system.h
++index 6ec7fe2..ba6aeaf 100644
++--- a/trunk-recorder/systems/system.h
+++++ b/trunk-recorder/systems/system.h
++@@ -119,6 +119,7 @@ public:
++   virtual Talkgroup *find_talkgroup(long tg) = 0;
++   virtual Talkgroup *find_talkgroup_by_freq(double freq) = 0;
++   virtual std::string find_unit_tag(long unitID) = 0;
+++  virtual std::string find_unit_tag_ota(long unitID) = 0;
++   virtual void set_talkgroups_file(std::string) = 0;
++   virtual void set_channel_file(std::string channel_file) = 0;
++   virtual bool has_channel_file() = 0;
++diff --git a/trunk-recorder/systems/system_impl.cc b/trunk-recorder/systems/system_impl.cc
++index 1bea741..9ff6cc5 100644
++--- a/trunk-recorder/systems/system_impl.cc
+++++ b/trunk-recorder/systems/system_impl.cc
++@@ -392,6 +392,9 @@ Talkgroup *System_impl::find_talkgroup_by_freq(double freq) {
++ std::string System_impl::find_unit_tag(long unitID) {
++   return unit_tags->find_unit_tag(unitID);
++ }
+++std::string System_impl::find_unit_tag_ota(long unitID) {
+++  return unit_tags->find_unit_tag_ota(unitID);
+++}
++ 
++ std::vector<double> System_impl::get_channels() {
++   return channels;
++diff --git a/trunk-recorder/systems/system_impl.h b/trunk-recorder/systems/system_impl.h
++index eac4364..3725633 100644
++--- a/trunk-recorder/systems/system_impl.h
+++++ b/trunk-recorder/systems/system_impl.h
++@@ -185,6 +185,7 @@ public:
++   Talkgroup *find_talkgroup(long tg) override;
++   Talkgroup *find_talkgroup_by_freq(double freq) override;
++   std::string find_unit_tag(long unitID) override;
+++  std::string find_unit_tag_ota(long unitID) override;
++   void set_talkgroups_file(std::string) override;
++   void set_channel_file(std::string channel_file) override;
++   bool has_channel_file() override;
++diff --git a/trunk-recorder/unit_tags.cc b/trunk-recorder/unit_tags.cc
++index 481c98f..9b4097c 100644
++--- a/trunk-recorder/unit_tags.cc
+++++ b/trunk-recorder/unit_tags.cc
++@@ -243,6 +243,15 @@ std::string UnitTags::find_unit_tag(long tg_number) {
++   return "";
++ }
++ 
+++std::string UnitTags::find_unit_tag_ota(long unitID) {
+++  for (auto it = unit_tags_ota.rbegin(); it != unit_tags_ota.rend(); ++it) {
+++    if ((*it)->unit_id == unitID) {
+++      return (*it)->alias;
+++    }
+++  }
+++  return "";
+++}
+++
++ void UnitTags::add(std::string pattern, std::string tag) {
++   // If the pattern is like /someregex/
++   if (pattern.substr(0, 1).compare("/") == 0 && pattern.substr(pattern.length()-1, 1).compare("/") == 0) {
++diff --git a/trunk-recorder/unit_tags.h b/trunk-recorder/unit_tags.h
++index 9dbb082..ea081a1 100644
++--- a/trunk-recorder/unit_tags.h
+++++ b/trunk-recorder/unit_tags.h
++@@ -24,6 +24,7 @@ public:
++   void load_unit_tags(std::string filename);
++   void load_unit_tags_ota(std::string filename);
++   std::string find_unit_tag(long unitID);
+++  std::string find_unit_tag_ota(long unitID);
++   void add(std::string pattern, std::string tag);
++   bool add_ota(const OTAAlias& ota_alias);
++   void set_mode(UnitTagMode mode);
++-- 
++2.50.1 (Apple Git-155)
++
+-- 
+2.50.1 (Apple Git-155)
+
+
+From 1db995db2278adb37ab8f7e6b09a76aa52b88c25 Mon Sep 17 00:00:00 2001
+From: lindsay <lindsay@radioreference.com>
+Date: Fri, 27 Mar 2026 14:44:36 -0500
+Subject: [PATCH 3/3] Add broadcastifyOTA config flag and change log to debug
+ level
+
+OTA alias upload to Broadcastify is now gated behind "broadcastifyOTA": true
+(defaults to false) to let users opt out of sending personally-identifiable
+alias data to public feeds. OTA aliases remain in JSON metadata regardless.
+Also corrects the log entry from info to debug level.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>
+---
+ plugins/broadcastify_uploader/broadcastify_uploader.cc | 10 ++++++++--
+ 1 file changed, 8 insertions(+), 2 deletions(-)
+
+diff --git a/plugins/broadcastify_uploader/broadcastify_uploader.cc b/plugins/broadcastify_uploader/broadcastify_uploader.cc
+index 5a9c027..f71034e 100644
+--- a/plugins/broadcastify_uploader/broadcastify_uploader.cc
++++ b/plugins/broadcastify_uploader/broadcastify_uploader.cc
+@@ -29,6 +29,7 @@ struct Broadcastify_Uploader_Data {
+   std::vector<Broadcastify_System_Key> keys;
+   std::string bcfy_calls_server;
+   bool ssl_verify_disable;
++  bool ota_enabled;
+ };
+ 
+ boost::mutex curl_share_mutex;
+@@ -318,9 +319,9 @@ public:
+     curl_mime_data(part, api_key.c_str(), CURL_ZERO_TERMINATED);
+     curl_mime_name(part, "apiKey");
+ 
+-    if (!call_info.transmission_source_list.empty()) {
++    if (this->data.ota_enabled && !call_info.transmission_source_list.empty()) {
+       std::string ota_alias = call_info.transmission_source_list[0].tag_ota;
+-      BOOST_LOG_TRIVIAL(info) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
++      BOOST_LOG_TRIVIAL(debug) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
+       if (!ota_alias.empty()) {
+         part = curl_mime_addpart(mime);
+         curl_mime_data(part, ota_alias.c_str(), CURL_ZERO_TERMINATED);
+@@ -518,6 +519,11 @@ public:
+       BOOST_LOG_TRIVIAL(info) << log_prefix << "Broadcastify SSL Verify Disabled";
+     }
+ 
++    this->data.ota_enabled = config_data.value("broadcastifyOTA", false);
++    if (this->data.ota_enabled) {
++      BOOST_LOG_TRIVIAL(info) << log_prefix << "OTA alias upload enabled";
++    }
++
+     for (json element : config_data["systems"]) {
+       bool broadcastify_exists = element.contains("broadcastifyApiKey");
+       if (broadcastify_exists) {
 -- 
 2.50.1 (Apple Git-155)
 
