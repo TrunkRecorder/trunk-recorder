@@ -29,6 +29,7 @@ struct Broadcastify_Uploader_Data {
   std::vector<Broadcastify_System_Key> keys;
   std::string bcfy_calls_server;
   bool ssl_verify_disable;
+  bool ota_enabled;
 };
 
 boost::mutex curl_share_mutex;
@@ -318,9 +319,9 @@ public:
     curl_mime_data(part, api_key.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "apiKey");
 
-    if (!call_info.transmission_source_list.empty()) {
+    if (this->data.ota_enabled && !call_info.transmission_source_list.empty()) {
       std::string ota_alias = call_info.transmission_source_list[0].tag_ota;
-      BOOST_LOG_TRIVIAL(info) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
+      BOOST_LOG_TRIVIAL(debug) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
       if (!ota_alias.empty()) {
         part = curl_mime_addpart(mime);
         curl_mime_data(part, ota_alias.c_str(), CURL_ZERO_TERMINATED);
@@ -516,6 +517,11 @@ public:
     this->data.ssl_verify_disable = config_data.value("broadcastifySslVerifyDisable", false);
     if (this->data.ssl_verify_disable) {
       BOOST_LOG_TRIVIAL(info) << log_prefix << "Broadcastify SSL Verify Disabled";
+    }
+
+    this->data.ota_enabled = config_data.value("broadcastifyOTA", false);
+    if (this->data.ota_enabled) {
+      BOOST_LOG_TRIVIAL(info) << log_prefix << "OTA alias upload enabled";
     }
 
     for (json element : config_data["systems"]) {
