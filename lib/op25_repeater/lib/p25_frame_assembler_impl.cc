@@ -282,6 +282,16 @@ p25_frame_assembler_impl::general_work (int noutput_items,
       silence_frame_count = 0;
     }
 
+    void p25_frame_assembler_impl::crypt_key(uint16_t keyid, uint8_t algid, const std::vector<uint8_t> &key) {
+      p1fdma.crypt_key(keyid, algid, key);
+      p2tdma.crypt_key(keyid, algid, key);
+    }
+
+    void p25_frame_assembler_impl::crypt_reset() {
+      p1fdma.crypt_reset();
+      p2tdma.crypt_reset();
+    }
+
     void p25_frame_assembler_impl::set_phase2_tdma(bool p) {
       d_do_phase2_tdma = p;
 

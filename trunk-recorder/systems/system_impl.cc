@@ -1,5 +1,7 @@
 #include "system_impl.h"
 #include "system.h"
+#include <fstream>
+#include "../config.h"
 
 System *System::make(int sys_num) {
   return (System *)new System_impl(sys_num);
@@ -584,6 +586,70 @@ bool System_impl::get_monitorEncrypted() {
 }
 void System_impl::set_monitorEncrypted(bool monitorEncrypted) {
   d_monitorEncrypted = monitorEncrypted;
+}
+
+std::string System_impl::get_encryption_keys_file() {
+  return d_encryption_keys_file;
+}
+
+void System_impl::set_encryption_keys_file(std::string file) {
+  d_encryption_keys_file = file;
+  if (!file.empty()) {
+    load_encryption_keys();
+  }
+}
+
+const std::vector<std::tuple<uint16_t, uint8_t, std::vector<uint8_t>>>& System_impl::get_encryption_keys() {
+  return d_encryption_keys;
+}
+
+void System_impl::load_encryption_keys() {
+  d_encryption_keys.clear();
+  if (d_encryption_keys_file.empty()) return;
+
+  std::ifstream file(d_encryption_keys_file);
+  if (!file.is_open()) {
+    BOOST_LOG_TRIVIAL(error) << "Unable to open encryption keys file: " << d_encryption_keys_file;
+    return;
+  }
+
+  try {
+    nlohmann::json j;
+    file >> j;
+
+    if (!j.contains("keys") || !j["keys"].is_array()) {
+      BOOST_LOG_TRIVIAL(error) << "Encryption keys file missing 'keys' array: " << d_encryption_keys_file;
+      return;
+    }
+
+    for (const auto& entry : j["keys"]) {
+      std::string keyid_str = entry.value("keyid", "");
+      std::string algid_str = entry.value("algid", "");
+      std::string key_str = entry.value("key", "");
+
+      if (keyid_str.empty() || algid_str.empty() || key_str.empty()) {
+        BOOST_LOG_TRIVIAL(warning) << "Skipping incomplete encryption key entry";
+        continue;
+      }
+
+      uint16_t keyid = (uint16_t)std::stoul(keyid_str, nullptr, 16);
+      uint8_t algid = (uint8_t)std::stoul(algid_str, nullptr, 16);
+
+      std::vector<uint8_t> key_bytes;
+      for (size_t i = 0; i < key_str.length(); i += 2) {
+        key_bytes.push_back((uint8_t)std::stoul(key_str.substr(i, 2), nullptr, 16));
+      }
+
+      d_encryption_keys.emplace_back(keyid, algid, key_bytes);
+      BOOST_LOG_TRIVIAL(info) << "Loaded encryption key: keyid=0x" << std::hex << keyid
+                              << " algid=0x" << (int)algid
+                              << " keylen=" << std::dec << key_bytes.size() << " bytes";
+    }
+
+    BOOST_LOG_TRIVIAL(info) << "Loaded " << d_encryption_keys.size() << " encryption key(s) from " << d_encryption_keys_file;
+  } catch (const std::exception& e) {
+    BOOST_LOG_TRIVIAL(error) << "Error parsing encryption keys file: " << e.what();
+  }
 }
 
 bool System_impl::get_hideUnknown() {

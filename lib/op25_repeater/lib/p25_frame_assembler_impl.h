@@ -90,6 +90,8 @@ public:
 
       void clear_silence_frame_count();
       void clear();
+      void crypt_key(uint16_t keyid, uint8_t algid, const std::vector<uint8_t> &key);
+      void crypt_reset();
       log_ts logts;
     };
 

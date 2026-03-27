@@ -9,6 +9,8 @@
 //#include "../source.h"
 #include "parser.h"
 #include <iomanip>
+#include <tuple>
+#include <vector>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -173,6 +175,9 @@ public:
   virtual void set_hideEncrypted(bool hideEncrypted) = 0;
   virtual bool get_monitorEncrypted() = 0;
   virtual void set_monitorEncrypted(bool monitorEncrypted) = 0;
+  virtual std::string get_encryption_keys_file() = 0;
+  virtual void set_encryption_keys_file(std::string file) = 0;
+  virtual const std::vector<std::tuple<uint16_t, uint8_t, std::vector<uint8_t>>>& get_encryption_keys() = 0;
 
   virtual bool get_hideUnknown() = 0;
   virtual void set_hideUnknown(bool hideUnknown) = 0;

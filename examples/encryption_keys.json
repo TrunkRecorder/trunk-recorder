@@ -1,0 +1,19 @@
+{
+  "keys": [
+    {
+      "keyid": "0x0001",
+      "algid": "0x84",
+      "key": "0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF"
+    },
+    {
+      "keyid": "0x0002",
+      "algid": "0x81",
+      "key": "0123456789ABCDEF"
+    },
+    {
+      "keyid": "0x1b50",
+      "algid": "0xaa",
+      "key": "0123456789"
+    }
+  ]
+}

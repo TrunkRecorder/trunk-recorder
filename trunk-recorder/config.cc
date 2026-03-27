@@ -431,6 +431,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Hide Encrypted Talkgroups: " << system->get_hideEncrypted();
         system->set_monitorEncrypted(element.value("monitorEncrypted", system->get_monitorEncrypted()));
         BOOST_LOG_TRIVIAL(info) << "Monitor Encrypted Calls: " << system->get_monitorEncrypted();
+        system->set_encryption_keys_file(element.value("encryptionKeysFile", ""));
+        if (!system->get_encryption_keys_file().empty()) {
+          BOOST_LOG_TRIVIAL(info) << "Encryption Keys File: " << system->get_encryption_keys_file();
+        }
         system->set_hideUnknown(element.value("hideUnknownTalkgroups", system->get_hideUnknown()));
         BOOST_LOG_TRIVIAL(info) << "Hide Unknown Talkgroups: " << system->get_hideUnknown();
         system->set_min_duration(element.value("minDuration", 0.0));

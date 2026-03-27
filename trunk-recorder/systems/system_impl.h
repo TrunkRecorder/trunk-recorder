@@ -241,6 +241,9 @@ public:
   void set_hideEncrypted(bool hideEncrypted) override;
   bool get_monitorEncrypted() override;
   void set_monitorEncrypted(bool monitorEncrypted) override;
+  std::string get_encryption_keys_file() override;
+  void set_encryption_keys_file(std::string file) override;
+  const std::vector<std::tuple<uint16_t, uint8_t, std::vector<uint8_t>>>& get_encryption_keys() override;
 
   bool get_hideUnknown() override;
   void set_hideUnknown(bool hideUnknown) override;
@@ -274,6 +277,9 @@ private:
   TalkgroupDisplayFormat talkgroup_display_format;
   bool d_hideEncrypted;
   bool d_monitorEncrypted;
+  std::string d_encryption_keys_file;
+  std::vector<std::tuple<uint16_t, uint8_t, std::vector<uint8_t>>> d_encryption_keys;
+  void load_encryption_keys();
   bool d_hideUnknown;
   bool d_multiSite;
   std::string d_multiSiteSystemName;
