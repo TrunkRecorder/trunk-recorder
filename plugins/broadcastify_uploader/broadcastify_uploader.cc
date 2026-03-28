@@ -519,7 +519,7 @@ public:
       BOOST_LOG_TRIVIAL(info) << log_prefix << "Broadcastify SSL Verify Disabled";
     }
 
-    this->data.ota_enabled = config_data.value("broadcastifyOTA", false);
+    this->data.ota_enabled = config_data.value("broadcastifyOTA", true);
     if (this->data.ota_enabled) {
       BOOST_LOG_TRIVIAL(info) << log_prefix << "OTA alias upload enabled";
     }

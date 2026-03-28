@@ -341,15 +341,12 @@ static std::string expand_filename_format(const std::string &format,
 // Audio post-processing helpers
 // ---------------------------------------------------------------------------
 
-// Cleanup filter only — loudnorm is handled separately.
 static std::string build_cleanup_filter(const Audio_Postprocess_Config &cfg) {
   if (!cfg.enabled) return "";
 
   const std::string override = trim_whitespace(cfg.ffmpeg_filter);
   if (!override.empty()) return override;
 
-  // Variadic emit lambda writes directly to the stream — no intermediate
-  // vector<string> or std::to_string heap allocations needed.
   std::ostringstream oss;
   bool first = true;
   auto emit = [&](auto... parts) {
@@ -368,9 +365,6 @@ static std::string build_cleanup_filter(const Audio_Postprocess_Config &cfg) {
   return oss.str();
 }
 
-// Single-pass trim+lowercase on a stack buffer — zero heap allocations.
-// Called 5× per loudnorm analysis pass; the old trim+lowercase_copy approach
-// created two temporary std::strings per call.
 static bool is_invalid_loudnorm_value(const std::string &v) {
   const char *p = v.data(), *e = p + v.size();
   while (p < e && std::isspace(static_cast<unsigned char>(*p)))    ++p;
@@ -396,7 +390,9 @@ static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cf
 }
 
 static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg) {
+  if (!cfg.enabled) return false;
   if (!cfg.loudnorm) return false;
+
   if (override_filter_contains_loudnorm(cfg)) {
     BOOST_LOG_TRIVIAL(warning)
         << "\033[0;33maudio_postprocess.ffmpeg_filter already contains loudnorm; "
@@ -525,8 +521,15 @@ static std::string build_loudnorm_render_filter(const Audio_Postprocess_Config &
   return f.str();
 }
 
-// BUG FIX: flush and check stream state after writes. A full disk silently
-// sets failbit and produces a truncated file, causing a cryptic ffmpeg error.
+static std::string build_loudnorm_single_pass_filter(const Audio_Postprocess_Config &cfg) {
+  std::ostringstream f;
+  f << std::fixed << std::setprecision(1)
+    << "loudnorm=I=" << cfg.loudnorm_i
+    << ":TP="        << cfg.loudnorm_tp
+    << ":LRA="       << cfg.loudnorm_lra;
+  return f.str();
+}
+
 static bool write_concat_list(const std::vector<std::string> &input_files,
                               const std::string &list_filename) {
   std::ofstream list_file(list_filename);
@@ -579,22 +582,43 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
 
   const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
   const bool do_compress           = call_info.compress_wav;
-  bool loudnorm_active             = should_apply_structured_loudnorm(call_info.audio_postprocess);
+
+  bool loudnorm_requested   = should_apply_structured_loudnorm(call_info.audio_postprocess);
+  bool loudnorm_two_pass    = false;
+  bool loudnorm_single_pass = false;
+
+  const bool too_short_for_two_pass = (call_info.length > 0.0 && call_info.length < 1.5);
 
   LoudnormMeasured measured;
-  if (loudnorm_active) {
-    if (!analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured)) {
-      BOOST_LOG_TRIVIAL(warning) << loghdr
-          << "\033[0;33mLoudnorm analysis failed; falling back to cleanup-only rendering\033[0m";
-      loudnorm_active = false;
-    }
+  if (loudnorm_requested) {
+    if (too_short_for_two_pass) {
+      BOOST_LOG_TRIVIAL(debug) << loghdr
+          << "Call too short for reliable loudnorm first pass (" << call_info.length
+          << "s); using single-pass loudnorm";
+      loudnorm_single_pass = true;
+    } else if (analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured) &&
+               measured.valid) {
+      loudnorm_two_pass = true;
+               } else {
+                 BOOST_LOG_TRIVIAL(warning) << loghdr
+                     << "\033[0;33mLoudnorm analysis was not usable for this call; "
+                     << "falling back to single-pass loudnorm rendering\033[0m";
+                 loudnorm_single_pass = true;
+               }
   }
 
   std::string final_filter = cleanup_filter;
-  if (loudnorm_active && measured.valid) {
+  if (loudnorm_two_pass) {
     if (!final_filter.empty()) final_filter += ',';
     final_filter += build_loudnorm_render_filter(call_info.audio_postprocess, measured);
     final_filter += ",alimiter=limit=0.89";
+  } else if (loudnorm_single_pass) {
+    if (!final_filter.empty()) final_filter += ',';
+    final_filter += build_loudnorm_single_pass_filter(call_info.audio_postprocess);
+    final_filter += ",alimiter=limit=0.89";
+  } else {
+    if (!final_filter.empty()) final_filter += ',';
+    final_filter += "dynaudnorm";
   }
 
   // Pre-reserve: compressed path ~36 args, uncompressed ~22.
@@ -771,7 +795,8 @@ int create_call_json(Call_Data_t &call_info) {
         {"pos",           std::round(err.position * 100.0) / 100.0},
         {"emergency",     int(src.emergency)},
         {"signal_system", src.signal_system},
-        {"tag",           src.tag}
+        {"tag",           src.tag},
+        {"tag_ota",       src.tag_ota}
     };
   }
 
@@ -1085,6 +1110,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
     }
 
     const std::string tag = sys->find_unit_tag(t.source);
+    const std::string tag_ota = sys->find_unit_tag_ota(t.source);
 
     {
       std::ostringstream tx;
@@ -1117,7 +1143,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
       call_info.talkgroup = t.talkgroup;
     }
 
-    call_info.transmission_source_list.push_back({t.source, t.start_time, playable_pos_s, false, "", tag});
+    call_info.transmission_source_list.push_back({t.source, t.start_time, playable_pos_s, false, "", tag, tag_ota});
     call_info.transmission_error_list.push_back( {t.start_time, playable_pos_s, seg_len_s, t.error_count, t.spike_count});
 
     call_info.error_count += t.error_count;
