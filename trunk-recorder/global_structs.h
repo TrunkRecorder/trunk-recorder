@@ -66,9 +66,10 @@ struct Audio_Postprocess_Config {
   int bandreject_hz = 0;
   int bandreject_width_hz = 0;
 
-  bool loudnorm = false;
+  bool loudnorm = true;
+  bool loudnorm_two_pass = true;
   double loudnorm_i = -16.0;
-  double loudnorm_tp = -1.5;
+  double loudnorm_tp = -0.1;
   double loudnorm_lra = 11.0;
 
   std::string ffmpeg_filter = "";

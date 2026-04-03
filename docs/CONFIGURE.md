@@ -244,17 +244,7 @@ During the status display, each source will report the running average as well a
 | broadcastifyDeny       |          |                            | array of string/number;<br />["99*", "12345"]                                | *if broadcastifyCallsServer is set* Optional deny-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), any matching talkgroup is skipped. |
 | uploadScript           |          |                            | string                                                                       | The filename of a script that is called after each call has finished processing. The script is passed the final `.wav` path as the first argument, the call JSON path as the second argument, and the `.m4a` path as the third argument. The `.wav` and JSON files always exist; the `.m4a` file is only created when `compressWav` is enabled. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` (or `../`). |
 | compressWav            |          | true                       | bool                                                                         | Convert the final call `.wav` file to an `.m4a` file. **This is required for both OpenMHz and Broadcastify!** The `.wav` file is always created first; when `compressWav` is enabled, an additional `.m4a` file is created from that `.wav`. Requires `ffmpeg` to be installed. |
-| audio_postprocess      |          |                            | object                                                                       | Optional per-system audio cleanup and normalization settings applied when concluding calls. These settings affect the final `.wav` file, and the optional `.m4a` file is created from that processed `.wav`. Requires `ffmpeg` to be installed. |
-| audio_postprocess.enabled |       | false                      | **true** / **false**                                                         | Enable per-system audio post-processing for concluded calls. When disabled, the final `.wav` is the raw concatenated call audio. |
-| audio_postprocess.highpass_hz |   | 0                          | number                                                                       | Apply an ffmpeg `highpass` filter at the specified frequency in Hz. Set to `0` to disable. Useful for removing low-frequency rumble or hum. |
-| audio_postprocess.lowpass_hz |    | 0                          | number                                                                       | Apply an ffmpeg `lowpass` filter at the specified frequency in Hz. Set to `0` to disable. Useful for reducing high-frequency hiss or interference. |
-| audio_postprocess.bandreject_hz | | 0                          | number                                                                       | Apply an ffmpeg `bandreject` filter centered at this frequency in Hz. Set to `0` to disable. Useful for removing narrow whines or tones. |
-| audio_postprocess.bandreject_width_hz | | 0                    | number                                                                       | Width of the ffmpeg `bandreject` filter in Hz. This must be greater than `0` for the bandreject filter to be applied. |
-| audio_postprocess.loudnorm |     | false                      | **true** / **false**                                                         | Apply ffmpeg `loudnorm` to normalize perceived loudness across calls. |
-| audio_postprocess.loudnorm_i |   | -16.0                      | number                                                                       | Integrated loudness target used by ffmpeg `loudnorm`. |
-| audio_postprocess.loudnorm_tp |  | -1.5                       | number                                                                       | True peak limit used by ffmpeg `loudnorm`. |
-| audio_postprocess.loudnorm_lra | | 11.0                       | number                                                                       | Loudness range target used by ffmpeg `loudnorm`. |
-| audio_postprocess.ffmpeg_filter | | ""                        | string                                                                       | Optional advanced override for the generated ffmpeg audio filter chain. When set to a non-empty string, this exact filter string is used instead of building one from the other `audio_postprocess` settings. |
+| audio_postprocess      |          |                            | object                                                                       | Optional per-system audio cleanup and loudness normalization settings applied when concluding calls. Cleanup filtering and loudnorm are configured independently. See the **Audio Post-Processing** section below for full details. |
 | unitScript             |          |                            | string                                                                       | The filename of a script that runs when a radio (unit) registers (is turned on), affiliates (joins a talk group), deregisters (is turned off), gets an acknowledgment response, transmits, gets a data channel grant, a unit-unit answer request or a Location Registration Response. Passed as parameters:  `shortName radioID on\|join\|off\|ackresp\|call\|data\|ans_req\|location`. On joins and transmissions, `talkgroup` is passed as a fourth parameter; on answer requests, the `source` is.  On joins and transmissions, `patchedTalkgroups`  (comma separated list of talkgroup IDs) is passed as a fifth parameter if the talkgroup is part of a patch on the system. See *examples/unit-script.sh* for a logging example. Note that for paths relative to trunk-recorder, this should start with `./`( or `../`). |
 | audioArchive           |          | true                       | **true** / **false**                                                         | Should the recorded audio files be kept after successfully uploading them? |
 | transmissionArchive    |          | false                      | **true** / **false**                                                         | Should each of the individual transmission be kept? These transmission are combined together with other recent ones to form a single call. |
@@ -326,61 +316,164 @@ By default, Trunk Recorder will record the call from the first site to receive t
 }
 ```
 
-### Audio Postprocess
+## Audio Post-Processing
 
-Trunk Recorder can optionally post-process concluded call audio on a per-system basis using `ffmpeg`.
-
-When `audio_postprocess.enabled` is set to `true`, Trunk Recorder will:
-
-1. concatenate the individual transmission WAV files for the call into an intermediate WAV,
-2. create the final call WAV (applying any configured filters and/or loudness normalization), and
-3. optionally create an `.m4a` version of that final WAV if `compressWav` is enabled.
-
-This means:
-
-- the final `.wav` file always exists,
-- the call JSON file always exists,
-- the `.m4a` file is optional and only created when `compressWav` is enabled.
-
-For most users, the structured settings are recommended. Advanced users may set `audio_postprocess.ffmpeg_filter` to provide an exact ffmpeg filter chain override.
-
-Example uses:
-- remove low-frequency rumble with `highpass_hz`
-- remove high-frequency hiss with `lowpass_hz`
-- remove a narrow interference tone with `bandreject_hz` and `bandreject_width_hz`
-- normalize call loudness with `loudnorm`
-
-#### Example: Advanced ffmpeg filter override
+Each system can optionally define an `audio_postprocess` object to control cleanup filters and loudness normalization for saved call audio.
 
 ```json
 "audio_postprocess": {
-    "enabled": true,
-    "ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180,loudnorm=I=-16:TP=-1.5:LRA=11"
+"enabled": false,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": ""
 }
 ```
 
-#### Example: Remove a 4 kHz whine from call audio
+### `audio_postprocess` Object
+
+| Key                 | Required | Default Value | Type                  | Description |
+| ------------------- | :------: | ------------- | --------------------- | ----------- |
+| enabled             |          | false         | **true** / **false**  | Enables the structured cleanup filter chain. This controls `highpass_hz`, `lowpass_hz`, `bandreject_hz`, `bandreject_width_hz`, and use of `ffmpeg_filter` as the base filter chain. It does **not** control loudnorm. |
+| highpass_hz         |          | 0             | number                | Adds an FFmpeg highpass filter when greater than 0. |
+| lowpass_hz          |          | 0             | number                | Adds an FFmpeg lowpass filter when greater than 0. |
+| bandreject_hz       |          | 0             | number                | Adds an FFmpeg bandreject filter center frequency when greater than 0. |
+| bandreject_width_hz |          | 0             | number                | Width for the FFmpeg bandreject filter. Must be greater than 0 to be used. |
+| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization independently of `enabled`. |
+| loudnorm_two_pass   |          | true          | **true** / **false**  | When `true`, attempts two-pass loudnorm and falls back to single-pass when unavailable. When `false`, uses single-pass loudnorm directly. |
+| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target. |
+| loudnorm_tp         |          | -0.1          | number                | FFmpeg loudnorm true peak target. |
+| loudnorm_lra        |          | 11.0          | number                | FFmpeg loudnorm loudness range target. |
+| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain used as the base filter chain when `enabled=true`. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
+
+### How it works
+
+`audio_postprocess.enabled` only controls the base cleanup filter chain. It does **not** enable or disable loudness normalization.
+
+When `enabled` is `true`, Trunk Recorder builds a base filter chain from the structured cleanup settings below:
+
+- `highpass_hz`
+- `lowpass_hz`
+- `bandreject_hz`
+- `bandreject_width_hz`
+
+If `ffmpeg_filter` is provided and `enabled` is `true`, that string is used as the base filter chain instead of the structured cleanup filters.
+
+Loudness normalization is controlled separately by `loudnorm`. It defaults to `true`, even when `audio_postprocess.enabled` is `false`.
+
+### Loudnorm behavior
+
+When `loudnorm` is enabled, Trunk Recorder applies FFmpeg loudnorm using these defaults:
+
+- `I=-16.0`
+- `TP=-0.1`
+- `LRA=11.0`
+
+If `loudnorm_two_pass` is `true`, Trunk Recorder first attempts loudnorm analysis and then renders using two-pass loudnorm.
+
+If two-pass loudnorm cannot be used for a call, such as when the call is too short or the first-pass analysis fails, Trunk Recorder automatically falls back to single-pass loudnorm rendering.
+
+If `loudnorm_two_pass` is `false`, Trunk Recorder skips the analysis pass and uses single-pass loudnorm directly.
+
+### Filter order
+
+The final audio filter chain is built in this order:
+
+1. Base cleanup filter chain or `ffmpeg_filter` override
+2. Built-in loudnorm, if enabled
+
+### Fallback behavior
+
+If a render using loudnorm fails, Trunk Recorder retries using the cleanup-only filter chain.
+
+If that also fails, Trunk Recorder falls back to unfiltered rendering.
+
+### Important notes
+
+- `audio_postprocess.enabled=false` does **not** disable loudnorm
+- `ffmpeg_filter` may still be combined with built-in loudnorm
+- if `ffmpeg_filter` already contains `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization
+- the old implicit `dynaudnorm` fallback is no longer used
+
+### Example configurations
+
+#### Cleanup filters only
 
 ```json
-{
-  "shortName": "mysys",
-  "type": "conventional",
-  "channels": [154265000],
-  "audioArchive": true,
-  "callLog": true,
-  "compressWav": true,
-  "audio_postprocess": {
-    "enabled": true,
-    "highpass_hz": 200,
-    "lowpass_hz": 0,
-    "bandreject_hz": 4000,
-    "bandreject_width_hz": 180,
-    "loudnorm": false,
-    "loudnorm_i": -16.0,
-    "loudnorm_tp": -1.5,
-    "loudnorm_lra": 11.0,
-    "ffmpeg_filter": ""
-  }
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 200,
+"lowpass_hz": 0,
+"bandreject_hz": 4000,
+"bandreject_width_hz": 180,
+"loudnorm": false,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": ""
+}
+```
+
+#### Loudnorm only
+
+```json
+"audio_postprocess": {
+"enabled": false,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": ""
+}
+```
+
+#### Custom filter chain plus built-in loudnorm
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": false,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
+}
+```
+
+#### Fully custom loudnorm in `ffmpeg_filter`
+
+If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped.
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
 }
 ```
 
@@ -746,7 +839,7 @@ A **Header Row** is required for the file, with a header provided for each of th
 
 This file allows for Unit IDs to be assigned a name. The format is 2 columns, the first being the decimal number of the Unit ID, the second is the Unit Name.
 
-Regex is also supported for the Unit ID, which can be used to match radio IDs of a specific pattern. By default, the regex must match the full string (`^pattern$`), however putting the pattern within `/` will allow partial matches. Within the unit name, `$1`, `$2`, etc. will be replaced by the corresponding capture group. For large radio systems, regex may be better instead of specifying a long list of radio IDs. In case a Unit ID will be matched by regex but you do not want to use the associated unit name, you can put the specific unit ID and unit name before the regex, so it will be chosen before reaching the regex.
+Regex is also supported for the Unit ID, which can be used to match radio IDs of a specific pattern. By default, the regex must match the full string (``pattern$`), however putting the pattern within `/` will allow partial matches. Within the unit name, `$1`, `$2`, etc. will be replaced by the corresponding capture group. For large radio systems, regex may be better instead of specifying a long list of radio IDs. In case a Unit ID will be matched by regex but you do not want to use the associated unit name, you can put the specific unit ID and unit name before the regex, so it will be chosen before reaching the regex.
 
 In the second row of the example below, the first capture group `([0-9]{2})` becomes `$1` for the unit name, so an ID like 1210207 gets translated to Engine 20. In the third row, only the start of the string is being matched, so an ID of 173102555 is translated into Ambulance 102.
 
@@ -754,7 +847,7 @@ In the second row of the example below, the first capture group `([0-9]{2})` bec
 | ---------                | ---------    |
 | 911000                   | Dispatch     |
 | 1[1245]10([0-9]{2})[127] | Engine $1    |
-| /^1[78]3(1[0-9]{2})/     | Ambulance $1 |
+| /`1[78]3(1[0-9]{2})/     | Ambulance $1 |
 
 ## customFrequencyTableFile
 

@@ -101,6 +101,14 @@ void System_impl::set_audio_loudnorm(bool enabled) {
   this->audio_loudnorm = enabled;
 }
 
+bool System_impl::get_audio_loudnorm_two_pass() {
+  return this->audio_loudnorm_two_pass;
+}
+
+void System_impl::set_audio_loudnorm_two_pass(bool enabled) {
+  this->audio_loudnorm_two_pass = enabled;
+}
+
 double System_impl::get_audio_loudnorm_i() {
   return this->audio_loudnorm_i;
 }
@@ -189,8 +197,9 @@ System_impl::System_impl(int sys_num) {
   audio_bandreject_hz = 0;
   audio_bandreject_width_hz = 0;
   audio_loudnorm = false;
+  audio_loudnorm_two_pass = true;
   audio_loudnorm_i = -16.0;
-  audio_loudnorm_tp = -1.5;
+  audio_loudnorm_tp = -0.1;
   audio_loudnorm_lra = 11.0;
   audio_ffmpeg_filter = "";
 }

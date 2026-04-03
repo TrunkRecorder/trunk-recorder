@@ -390,15 +390,15 @@ static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cf
 }
 
 static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg) {
-  if (!cfg.enabled) return false;
   if (!cfg.loudnorm) return false;
 
   if (override_filter_contains_loudnorm(cfg)) {
     BOOST_LOG_TRIVIAL(warning)
-        << "\033[0;33maudio_postprocess.ffmpeg_filter already contains loudnorm; "
-        << "structured loudnorm settings will be ignored to avoid duplication.\033[0m";
+    << "\033[0;33maudio_postprocess.ffmpeg_filter already contains loudnorm; "
+    << "built-in loudnorm settings will be skipped to avoid duplicate normalization.\033[0m";
     return false;
   }
+
   return true;
 }
 
@@ -460,7 +460,8 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
 
   if (json_end == std::string::npos || json_start == std::string::npos || json_start >= json_end) {
     BOOST_LOG_TRIVIAL(error) << loghdr
-        << "\033[0;31mFailed to parse loudnorm first-pass JSON: no valid JSON object found\033[0m";
+    << "\033[0;31mFailed to parse loudnorm first-pass JSON: no valid JSON object found; "
+    << "two-pass loudnorm cannot be used for this call\033[0m";
     return false;
   }
 
@@ -489,10 +490,12 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
         is_invalid_loudnorm_value(measured.input_thresh) ||
         is_invalid_loudnorm_value(measured.target_offset)) {
       BOOST_LOG_TRIVIAL(warning) << loghdr
-          << "\033[0;33mLoudnorm first-pass returned unusable values "
-          << "(input_i=" << measured.input_i << ", input_tp=" << measured.input_tp
-          << ", input_lra=" << measured.input_lra << ", input_thresh=" << measured.input_thresh
-          << ", target_offset=" << measured.target_offset << "); skipping loudnorm\033[0m";
+      << "\033[0;33mLoudnorm first-pass returned unusable values "
+      << "(input_i=" << measured.input_i << ", input_tp=" << measured.input_tp
+      << ", input_lra=" << measured.input_lra << ", input_thresh=" << measured.input_thresh
+      << ", target_offset=" << measured.target_offset
+      << "); two-pass loudnorm is unavailable for this call and rendering will fall back to single-pass loudnorm\033[0m";
+
       return false;
     }
 
@@ -500,7 +503,8 @@ static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
     return true;
   } catch (const std::exception &e) {
     BOOST_LOG_TRIVIAL(error) << loghdr
-        << "\033[0;31mFailed to decode loudnorm first-pass JSON: " << e.what() << "\033[0m";
+    << "\033[0;31mFailed to decode loudnorm first-pass JSON: " << e.what()
+    << "; two-pass loudnorm cannot be used for this call\033[0m";
     return false;
   }
 }
@@ -583,42 +587,45 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
   const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
   const bool do_compress           = call_info.compress_wav;
 
-  bool loudnorm_requested   = should_apply_structured_loudnorm(call_info.audio_postprocess);
-  bool loudnorm_two_pass    = false;
-  bool loudnorm_single_pass = false;
+  const bool loudnorm_requested = should_apply_structured_loudnorm(call_info.audio_postprocess);
+  bool apply_loudnorm_two_pass = false;
+  bool apply_loudnorm_single_pass = false;
 
   const bool too_short_for_two_pass = (call_info.length > 0.0 && call_info.length < 1.5);
 
   LoudnormMeasured measured;
   if (loudnorm_requested) {
-    if (too_short_for_two_pass) {
+    if (call_info.audio_postprocess.loudnorm_two_pass) {
+      if (too_short_for_two_pass) {
+        BOOST_LOG_TRIVIAL(debug) << loghdr
+            << "Call too short for reliable loudnorm first pass (" << call_info.length
+            << "s); falling back to single-pass loudnorm";
+        apply_loudnorm_single_pass = true;
+      } else if (analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured) && measured.valid) {
+        apply_loudnorm_two_pass = true;
+        BOOST_LOG_TRIVIAL(debug) << loghdr
+        << "Two-pass loudnorm analysis succeeded; using two-pass loudnorm rendering";
+      } else {
+        BOOST_LOG_TRIVIAL(warning) << loghdr
+        << "\033[0;33mTwo-pass loudnorm analysis was not usable for this call; "
+        << "falling back to single-pass loudnorm rendering\033[0m";
+        apply_loudnorm_single_pass = true;
+      }
+
+    } else {
       BOOST_LOG_TRIVIAL(debug) << loghdr
-          << "Call too short for reliable loudnorm first pass (" << call_info.length
-          << "s); using single-pass loudnorm";
-      loudnorm_single_pass = true;
-    } else if (analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured) &&
-               measured.valid) {
-      loudnorm_two_pass = true;
-               } else {
-                 BOOST_LOG_TRIVIAL(warning) << loghdr
-                     << "\033[0;33mLoudnorm analysis was not usable for this call; "
-                     << "falling back to single-pass loudnorm rendering\033[0m";
-                 loudnorm_single_pass = true;
-               }
+      << "audio_postprocess.loudnorm_two_pass is disabled; using single-pass loudnorm rendering";
+      apply_loudnorm_single_pass = true;
+    }
   }
 
   std::string final_filter = cleanup_filter;
-  if (loudnorm_two_pass) {
+  if (apply_loudnorm_two_pass) {
     if (!final_filter.empty()) final_filter += ',';
     final_filter += build_loudnorm_render_filter(call_info.audio_postprocess, measured);
-    final_filter += ",alimiter=limit=0.89";
-  } else if (loudnorm_single_pass) {
+  } else if (apply_loudnorm_single_pass) {
     if (!final_filter.empty()) final_filter += ',';
     final_filter += build_loudnorm_single_pass_filter(call_info.audio_postprocess);
-    final_filter += ",alimiter=limit=0.89";
-  } else {
-    if (!final_filter.empty()) final_filter += ',';
-    final_filter += "dynaudnorm";
   }
 
   // Pre-reserve: compressed path ~36 args, uncompressed ~22.
@@ -655,9 +662,15 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
 
   int rc = run_render(final_filter);
 
-  if (rc != 0 && !final_filter.empty()) {
+  if (rc != 0 && final_filter != cleanup_filter) {
     BOOST_LOG_TRIVIAL(warning) << loghdr
-        << "\033[0;33mFiltered audio render failed; falling back to unfiltered rendering\033[0m";
+        << "\033[0;33mLoudnorm render failed; retrying with cleanup-only filtering\033[0m";
+    rc = run_render(cleanup_filter);
+  }
+
+  if (rc != 0 && !cleanup_filter.empty()) {
+    BOOST_LOG_TRIVIAL(warning) << loghdr
+        << "\033[0;33mCleanup-filter render failed; falling back to unfiltered rendering\033[0m";
     rc = run_render("");
   }
 

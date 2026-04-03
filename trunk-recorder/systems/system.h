@@ -72,6 +72,9 @@ public:
   virtual bool get_audio_loudnorm() = 0;
   virtual void set_audio_loudnorm(bool enabled) = 0;
 
+  virtual bool get_audio_loudnorm_two_pass() = 0;
+  virtual void set_audio_loudnorm_two_pass(bool enabled) = 0;
+
   virtual double get_audio_loudnorm_i() = 0;
   virtual void set_audio_loudnorm_i(double value) = 0;
 

@@ -99,6 +99,7 @@ public:
   int audio_bandreject_hz;
   int audio_bandreject_width_hz;
   bool audio_loudnorm;
+  bool audio_loudnorm_two_pass;
   double audio_loudnorm_i;
   double audio_loudnorm_tp;
   double audio_loudnorm_lra;
@@ -147,6 +148,9 @@ public:
 
   bool get_audio_loudnorm() override;
   void set_audio_loudnorm(bool enabled) override;
+
+  bool get_audio_loudnorm_two_pass() override;
+  void set_audio_loudnorm_two_pass(bool enabled) override;
 
   double get_audio_loudnorm_i() override;
   void set_audio_loudnorm_i(double value) override;
