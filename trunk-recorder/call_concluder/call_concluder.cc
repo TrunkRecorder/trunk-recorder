@@ -935,7 +935,11 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
   }
 
-  if (!plugman_call_end(call_info)) {
+  int error = 0;
+
+  error = plugman_call_end(call_info);
+
+  if (!error) {
     remove_call_files(call_info);
     call_info.status = SUCCESS;
   } else {
