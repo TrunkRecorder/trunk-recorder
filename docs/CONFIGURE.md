@@ -116,6 +116,9 @@ Here is a map of the different sections of the *config.json* file:
 
 There is a list of available Plugins [here](./Plugins.md).
 
+> Plugins are only loaded if they are explicitly listed in the `plugins` array.
+> Plugins are initialized in the order they appear in the config, and callbacks are run in that same order.
+
 ## Global Configs
 
 
@@ -124,15 +127,12 @@ There is a list of available Plugins [here](./Plugins.md).
 | ver                          |    ✓     |                                                  | number                                                       | The version of formatting for the config file. **This should be set to 2**. Trunk Recorder will not start without this set. |
 | sources                      |    ✓     |                                                  | array of JSON objects<br />[{}]                              | An array of JSON formatted [Source Objects](#source-object) that define the different SDRs available. Source Objects are described below. |
 | systems                      |    ✓     |                                                  | array of JSON objects<br />[{}]                              | An array of JSON formatted [System Objects](#system-object) that define the trunking systems that will be recorded. System Objects are described below. |
-| plugins                      |          |                                                  | array of JSON objects<br />[{}]                              | An array of JSON formatted [Plugin Objects](#plugin-object) that define the different plugins to use. Refer to the [Plugin System](notes/PLUGIN-SYSTEM.md) documentation for more details. |
+| plugins                      |          |                                                  | array of JSON objects<br />[{}]                              | An array of JSON formatted [Plugin Objects](#plugin-object) that define the plugins to load. Plugins are only loaded when listed here, and they run in the same order they appear in this array. Refer to the [Plugin System](notes/PLUGIN-SYSTEM.md) documentation for more details. |
 | defaultMode                  |          | "digital"                                        | **"analog"** or **"digital"**                                | Default mode to use when a talkgroups is not listed in the **talkgroupsFile**. The options are *digital* or *analog*. The default is *digital*. This argument is global and not system-specific, and only affects `smartnet` trunking systems which can have both analog and digital talkpaths. |
 | tempDir                      |          | /dev/shm *(if available)* else current directory | string                                                       | The complete path to the directory where individual Transmissions are recorded, prior to be combined into a single file. It is best to use memory based file system for this. |
 | archiveFilesOnFailure        |          | false                                            | **true** / **false**                                         | If a plugin (like the OpenMHz or Broadcastify uploader) fails, should the files be saved locally or removed. If Audio Archive is set to **true** then audio is always archived and overrides this. | 
 | captureDir                   |          | current directory                                | string                                                       | The complete path to the directory where recordings should be saved. |
 | callTimeout                  |          | 3                                                | number                                                       | A Call will stop recording and save if it has not received anything on the control channel, after this many seconds. |
-| uploadServer                 |          |                                                  | string                                                       | The URL for uploading to OpenMHz. The default is an empty string. See the Config tab for your system in OpenMHz to find what the value should be. |
-| broadcastifyCallsServer      |          |                                                  | string                                                       | The URL for uploading to Broadcastify Calls. The default is an empty string. Refer to [Broadcastify's wiki](https://wiki.radioreference.com/index.php/Broadcastify-Calls-API) for the upload URL. |
-| broadcastifySslVerifyDisable |          | false                                            | **true** / **false**                                         | Optionally disable SSL verification for Broadcastify uploads, given their apparent habit of letting their SSL certificate expire |
 | consoleLog                   |          | true                                             | **true** / **false**                                         | Send logging output to the console                           |
 | logFile                      |          | false                                            | **true** / **false**                                         | Send logging output to a file                                |
 | logDir                       |          | logs/                                            | string                                                       | Where the output logs should be put                          |
@@ -236,16 +236,9 @@ During the status display, each source will report the running average as well a
 | modulation             |          | "qpsk"                     | **"qpsk"** or  **"fsk4"**                                                    | The type of digital modulation that the system uses. You do not need to specify this with **conventionalDMR** systems.          |
 | squelch                |          | -160                       | number                                                                       | Squelch in DB, this needs to be set for all conventional systems. The squelch setting is also used for analog talkgroups in a SmartNet system. I generally use -60 for my rtl-sdr. The closer the squelch is to 0, the stronger the signal has to be to unmute it. |
 | talkgroupsFile         |          |                            | string                                                                       | The filename for a CSV file that provides information about the talkgroups. It determines whether a talkgroup is analog or digital, and what priority it should have. This file should be located in the same directory as the trunk-recorder executable. |
-| apiKey                 |          |                            | string                                                                       | *if uploadServer is set* System-specific API key for uploading calls to OpenMHz.com. See the Config tab for your system in OpenMHz to find what the value should be. |
-| openmhzSystemId        |          | `shortName`                | string                                                                       | *if uploadServer is set* By default, the plugin will upload calls to the `shortName` OpenMHz system.  Setting this value will allow uploads to any specific OpenMHz system with its valid API key.  This is useful in a multi-site setup where multiple trunk-recorder systems may be aggregating calls to the same OpenMHz feed. | 
-| broadcastifyApiKey     |          |                            | string                                                                       | *if broadcastifyCallsServer is set* System-specific API key for Broadcastify Calls |
-| broadcastifySystemId   |          |                            | number                                                                       | *if broadcastifyCallsServer is set* System ID for Broadcastify Calls <br />(this is an integer, and different from the RadioReference system ID) |
-| broadcastifyAllow      |          |                            | array of string/number;<br />["507*", "12?45", 12345]                        | *if broadcastifyCallsServer is set* Optional allow-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), the talkgroup **must** match at least one entry or the upload is skipped. |
-| broadcastifyDeny       |          |                            | array of string/number;<br />["99*", "12345"]                                | *if broadcastifyCallsServer is set* Optional deny-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), any matching talkgroup is skipped. |
 | uploadScript           |          |                            | string                                                                       | The filename of a script that is called after each call has finished processing. The script is passed the final `.wav` path as the first argument, the call JSON path as the second argument, and the `.m4a` path as the third argument. The `.wav` and JSON files always exist; the `.m4a` file is only created when `compressWav` is enabled. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` (or `../`). |
 | compressWav            |          | true                       | bool                                                                         | Convert the final call `.wav` file to an `.m4a` file. **This is required for both OpenMHz and Broadcastify!** The `.wav` file is always created first; when `compressWav` is enabled, an additional `.m4a` file is created from that `.wav`. Requires `ffmpeg` to be installed. |
 | audio_postprocess      |          |                            | object                                                                       | Optional per-system audio cleanup and loudness normalization settings applied when concluding calls. Cleanup filtering and loudnorm are configured independently. See the **Audio Post-Processing** section below for full details. |
-| unitScript             |          |                            | string                                                                       | The filename of a script that runs when a radio (unit) registers (is turned on), affiliates (joins a talk group), deregisters (is turned off), gets an acknowledgment response, transmits, gets a data channel grant, a unit-unit answer request or a Location Registration Response. Passed as parameters:  `shortName radioID on\|join\|off\|ackresp\|call\|data\|ans_req\|location`. On joins and transmissions, `talkgroup` is passed as a fourth parameter; on answer requests, the `source` is.  On joins and transmissions, `patchedTalkgroups`  (comma separated list of talkgroup IDs) is passed as a fifth parameter if the talkgroup is part of a patch on the system. See *examples/unit-script.sh* for a logging example. Note that for paths relative to trunk-recorder, this should start with `./`( or `../`). |
 | audioArchive           |          | true                       | **true** / **false**                                                         | Should the recorded audio files be kept after successfully uploading them? |
 | transmissionArchive    |          | false                      | **true** / **false**                                                         | Should each of the individual transmission be kept? These transmission are combined together with other recent ones to form a single call. |
 | callLog                |          | true                       | **true** / **false**                                                         | Should a json file with the call details be kept after successful uploads? |
@@ -322,17 +315,17 @@ Each system can optionally define an `audio_postprocess` object to control clean
 
 ```json
 "audio_postprocess": {
-"enabled": false,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
-"loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": ""
+    "enabled": false,
+    "highpass_hz": 0,
+    "lowpass_hz": 0,
+    "bandreject_hz": 0,
+    "bandreject_width_hz": 0,
+    "loudnorm": true,
+    "loudnorm_two_pass": true,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -0.1,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": ""
 }
 ```
 
@@ -407,17 +400,17 @@ If that also fails, Trunk Recorder falls back to unfiltered rendering.
 
 ```json
 "audio_postprocess": {
-"enabled": true,
-"highpass_hz": 200,
-"lowpass_hz": 0,
-"bandreject_hz": 4000,
-"bandreject_width_hz": 180,
-"loudnorm": false,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": ""
+    "enabled": true,
+    "highpass_hz": 200,
+    "lowpass_hz": 0,
+    "bandreject_hz": 4000,
+    "bandreject_width_hz": 180,
+    "loudnorm": false,
+    "loudnorm_two_pass": true,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -0.1,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": ""
 }
 ```
 
@@ -425,17 +418,17 @@ If that also fails, Trunk Recorder falls back to unfiltered rendering.
 
 ```json
 "audio_postprocess": {
-"enabled": false,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
-"loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": ""
+    "enabled": false,
+    "highpass_hz": 0,
+    "lowpass_hz": 0,
+    "bandreject_hz": 0,
+    "bandreject_width_hz": 0,
+    "loudnorm": true,
+    "loudnorm_two_pass": true,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -0.1,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": ""
 }
 ```
 
@@ -443,17 +436,17 @@ If that also fails, Trunk Recorder falls back to unfiltered rendering.
 
 ```json
 "audio_postprocess": {
-"enabled": true,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
-"loudnorm": true,
-"loudnorm_two_pass": false,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
+    "enabled": true,
+    "highpass_hz": 0,
+    "lowpass_hz": 0,
+    "bandreject_hz": 0,
+    "bandreject_width_hz": 0,
+    "loudnorm": true,
+    "loudnorm_two_pass": false,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -0.1,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
 }
 ```
 
@@ -463,17 +456,17 @@ If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm set
 
 ```json
 "audio_postprocess": {
-"enabled": true,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
-"loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
+    "enabled": true,
+    "highpass_hz": 0,
+    "lowpass_hz": 0,
+    "bandreject_hz": 0,
+    "bandreject_width_hz": 0,
+    "loudnorm": true,
+    "loudnorm_two_pass": true,
+    "loudnorm_i": -16.0,
+    "loudnorm_tp": -0.1,
+    "loudnorm_lra": 11.0,
+    "ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
 }
 ```
 
@@ -609,172 +602,130 @@ Produces:
 
 ## Plugin Object
 
-| Key     | Required | Default Value | Type                 | Description                                                  |
-| ------- | :------: | ------------- | -------------------- | ------------------------------------------------------------ |
-| library |    ✓     |               | string               | The filename of the plugin library to load. |
-| name    |          |plugin_library | string               | Display name of the plugin used for identification and logging. |
-| enabled |          | true          | **true** / **false** | Control whether a configured plugin is enabled or disabled.   |
-|         |          |               |                      | *Additional elements can be added, they will be passed into the `parse_config` method of the plugin.* |
+Each entry in the top-level `plugins` array describes one plugin to load and the settings that should be passed to it.
 
-##### Rdio Scanner Plugin
+Plugins are only loaded if they are explicitly listed in the `plugins` array. If multiple plugins are configured, they are initialized in the order they appear in the config, and their callbacks are run in that same order.
 
-**Library:** librdioscanner_uploader.so
+### Standard Plugin Object Keys
 
-This plugin makes it easy to connect Trunk Recorder with [Rdio Scanner](https://github.com/chuot/rdio-scanner). It uploads recordings and the information about them. The following additional settings are required:
+| Key     | Required | Default Value                 | Type                 | Description |
+| ------- | :------: | ----------------------------- | -------------------- | ----------- |
+| library |    ✓     |                               | string               | The shared library filename for the plugin, such as `libopenmhz_uploader.so`. |
+| name    |          | derived from library filename | string               | Friendly plugin name. If omitted, Trunk Recorder derives the name from the library filename. For example, `libopenmhz_uploader.so` becomes `openmhz_uploader`. |
+| enabled |          | true                          | **true** / **false** | Whether the configured plugin should be loaded. Disabled plugins are skipped. |
 
-| Key     | Required | Default Value | Type   | Description                                                  |
-| ------- | :------: | ------------- | ------ | ------------------------------------------------------------ |
-| name    |          | Rdio Scanner  | string | Friendly name for this Rdio uploader.  Can be used to better differentiate plugins if multiple are used to feed different servers. |
-| server  |    ✓     |               | string | The URL for uploading to Rdio Scanner. The default is an empty string. It should be the same URL as the one you are using to access Rdio Scanner. |
-| systems |    ✓     |               | array  | This is an array of objects, where each is a system that should be passed to Rdio Scanner. More information about what should be in each object is in the following table. |
+### Additional Plugin Settings
 
-*Rdio Scanner System Object:*
+Plugins may define additional configuration keys beyond `library`, `name`, and `enabled`.
 
-| Key       | Required | Default Value | Type   | Description                                                  |
-| --------- | :------: | ------------- | ------ | ------------------------------------------------------------ |
-| systemId  |    ✓     |               | number | System ID for Rdio Scanner.                                  |
-| apiKey    |    ✓     |               | string | System-specific API key for uploading calls to Rdio Scanner. See the ApiKey section in the Rdio Scanner administrative dashboard for the value it should be. |
-| shortName |    ✓     |               | string | This should match the shortName of a system that is defined in the main section of the config file. |
+Any additional keys included in a plugin object are passed to that plugin during configuration parsing. The exact supported settings depend on the plugin you are using, so refer to that plugin's documentation in [Plugins](./Plugins.md) for its plugin-specific options.
 
+### Plugin Loading Behavior
 
+A plugin object only affects the plugin it belongs to. Plugin-specific settings are not global unless the plugin explicitly documents them that way.
 
-##### Example Plugin Object:
+For example, this object:
 
-```yaml
-        {
-          "name": "My Rdio Server",
-          "library": "librdioscanner_uploader.so",
-          "server": "http://127.0.0.1",
-          "systems": [{
-                  "shortName": "test",
-                  "apiKey": "fakekey",
-                  "systemId": 411
-          }
+```json
+{
+  "name": "rdioscanner_uploader", 
+  "library": "librdioscanner_uploader.so", 
+  "server": "http://127.0.0.1", 
+  "systems": [
+    {
+      "shortName": "county", 
+      "apiKey": "example-key", 
+      "systemId": 411
+    }
+  ]
+}
 ```
 
-##### simplestream Plugin
+tells Trunk Recorder to:
 
-**Name:** simplestream
-**Library:** libsimplestream.so
+1. load `librdioscanner_uploader.so`
+2. identify the plugin as `rdioscanner_uploader`
+3. pass the additional settings such as `server` and `systems` to that plugin
 
-This plugin streams uncompressed audio (16 bit Int, 8 or 16 kHz, mono) to UDP or TCP ports in real time as it is being recorded by trunk-recorder.  It can be configured to stream audio from all talkgroups and systems being recorded or only specified talkgroups and systems.  TGID information can be prepended to the audio data to allow the receiving program to take action based on the TGID.  Audio from different Systems should be streamed to different UDP/TCP ports to prevent crosstalk and interleaved audio from talkgroups with the same TGID on different systems.
+### Notes
 
-This plugin does not, by itself, stream audio to any online services.  Because it sends uncompressed PCM audio, it is not bandwidth efficient and is intended mostly to send audio to other programs running on the same computer as trunk-recorder or to other computers on the LAN.  The programs receiving PCM audio from this plugin may play it on speakers, compress it and stream it to an online service, etc.
+- Only plugins listed in the `plugins` array are loaded.
+- Disabled plugins are skipped.
+- The order of plugin objects in the `plugins` array matters.
+- If a plugin requires extra settings, those settings belong inside that plugin's object.
+- Older configuration values related to plugin behavior are not enough by themselves to load a plugin. The plugin must still be declared in the top-level `plugins` array.
 
-**NOTE 1: In order for this plugin to work, the audioStreaming option in the Global Configs section (see above) must be set to true.**
+### Example Plugin Objects
 
-**NOTE 2: trunk-recorder passes analog audio to this plugin at 16 kHz sample rate and digital audio at 8 kHz sample rate.  JSON metadata (if enabled) will contain the sample rate of the audio being sent.**
+#### Minimal example
 
-| Key     | Required | Default Value | Type   | Description                                                  |
-| ------- | :------: | ------------- | ------ | ------------------------------------------------------------ |
-| streams |    ✓     |               | array  | This is an array of objects, where each is an audio stream that will be sent to a specific IP address and UDP port. More information about what should be in each object is in the following table. |
+```json
+{
+  "plugins": [
+    {
+      "library": "libsimplestream.so"
+    }
+  ]
+}
+```
 
-*Audio Stream Object:*
+In this example, Trunk Recorder loads `libsimplestream.so`, derives the plugin name from the library filename, and uses the plugin's default behavior unless additional settings are provided.
 
-| Key       | Required | Default Value | Type                 | Description                                                  |
-| --------- | :------: | ------------- | -------------------- | ------------------------------------------------------------ |
-| address   |    ✓     |               | string               | IP address to send this audio stream to.  Use "127.0.0.1" to send to the same computer that trunk-recorder is running on. |
-| port      |    ✓     |               | number               | UDP or TCP port that this stream will send audio to.         |
-| TGID      |    ✓     |               | number               | Audio from this Talkgroup ID will be sent on this stream.  Set to 0 to stream all recorded talkgroups. |
-| sendJSON  |          |     false     | **true** / **false** | When set to true, JSON metadata will be prepended to the audio data each time a packet is sent.  JSON fields are talkgroup, patched_talkgroups, src, src_tag, freq, audio_sample_rate, short_name, event (set to "audio").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian). If this is set to **true**, the sendTGID field will be ignored. |
-| sendCallStart |      | false         | **true** / **false** | Only used if sendJSON is set to **true**.  When set to true, a JSON message will be sent at the start of each call that includes the following JSON fields: talkgroup, talkgroup_tag, patched_talkgroups, patched_talkgroup_tags, src, src_tag, freq, short_name, event (set to "call_start").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian).
-| sendCallEnd |      | false         | **true** / **false** | Only used if sendJSON is set to **true**.  When set to true, a JSON message will be sent at the end of each call that includes the following JSON fields: talkgroup, patched_talkgroups, freq, short_name, event (set to "call_end").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian).
-| sendTGID  |          |     false     | **true** / **false** | Deprecated.  Recommend using sendJSON for metadata instead.  If sendJSON is set to true, this setting will be ignored.  When set to true, the TGID will be prepended in long integer format (4 bytes, little endian) to the audio data each time a packet is sent. |
-| shortName |          |               | string               | shortName of the System that audio should be streamed for.  This should match the shortName of a system that is defined in the main section of the config file.  When omitted, all Systems will be streamed to the address and port configured.  If TGIDs from Systems overlap, JSON metadata should be used to prevent interleaved audio for talkgroups from different Systems with the same TGID.
-|  useTCP   |          |     false     | **true** / **false** | When set to true, TCP will be used instead of UDP.
+#### Example with explicit name and plugin-specific settings
 
-###### Plugin Object Example #1:
-This example will stream audio from talkgroup 58914 on system "CountyTrunked" to the local machine on UDP port 9123.
-```yaml
+```json
+{
+  "plugins": [
+    {
+      "name": "rdioscanner_uploader", 
+      "library": "librdioscanner_uploader.so", 
+      "enabled": true, 
+      "server": "http://127.0.0.1", 
+      "systems": [
         {
-          "name":"simplestream",
-          "library":"libsimplestream.so",
-          "streams":[{
-            "TGID":58914,
-            "address":"127.0.0.1",
-            "port":9123,
-            "sendJSON":false,
-            "shortName":"CountyTrunked"}
+          "shortName": "test", 
+          "apiKey": "fakekey", 
+          "systemId": 411
         }
+      ]
+    }
+  ]
+}
 ```
 
-###### Plugin Object Example #2:
-This example will stream audio from talkgroup 58914 from System CountyTrunked to the local machine on UDP port 9123 and stream audio from talkgroup 58916 from System "StateTrunked" to the local machine on UDP port 9124.
-```yaml
+#### Example with multiple plugins
+
+```json
+{
+  "plugins": [
+    {
+      "library": "librdioscanner_uploader.so", 
+      "server": "http://127.0.0.1", 
+      "systems": [
         {
-          "name":"simplestream",
-          "library":"libsimplestream.so",
-          "streams":[{
-            "TGID":58914,
-            "address":"127.0.0.1",
-            "port":9123,
-            "sendJSON":false,
-            "shortName":"CountyTrunked"},
-           {"TGID":58916,
-            "address":"127.0.0.1",
-            "port":9124,
-            "sendJSON":false,
-            "shortName":"StateTrunked"}
-          ]}
+          "shortName": "county", 
+          "apiKey": "fakekey", 
+          "systemId": 411
         }
+      ]
+    }, 
+    {
+      "library": "libsimplestream.so", 
+      "streams": [
+        {
+          "TGID": 58914, 
+          "address": "127.0.0.1", 
+          "port": 9123, 
+          "sendTGID": false, 
+          "shortName": "CountyTrunked"
+        }
+      ]
+    }
+  ]
+}
 ```
 
-###### Plugin Object Example #3:
-This example will stream audio from talkgroups 58914 and 58916 from all Systems to the local machine on the same UDP port 9123.  It will prepend the TGID and other JSON metadata to the audio data in each UDP packet so that the receiving program can differentiate the two audio streams (the receiver may decide to only play one depending on priority, mix the two streams, play one left and one right, etc.)
-```yaml
-        {
-          "name":"simplestream",
-          "library":"libsimplestream.so",
-          "streams":[{
-            "TGID":58914,
-            "address":"127.0.0.1",
-            "port":9123,
-            "sendJSON":true},
-           {"TGID":58916,
-            "address":"127.0.0.1",
-            "port":9123,
-            "sendJSON":true}
-          ]}
-        }
-```
-###### Plugin Object Example #4:
-This example will stream audio from all talkgroups being recorded on System CountyTrunked to the local machine on UDP port 9123.  It will prepend the TGID and other JSON metadata to the audio data in each UDP packet so that the receiving program can decide which ones to play or otherwise handle)
-```yaml
-        {
-          "name":"simplestream",
-          "library":"libsimplestream.so",
-          "streams":[{
-            "TGID":0,
-            "address":"127.0.0.1",
-            "port":9123,
-            "sendJSON":true,
-            "shortName":"CountyTrunked"}
-        }
-```
-##### Example - Sending Audio to pulseaudio
-pulseaudio is the default sound system on many Linux computers, including the Raspberry Pi.  If configured to do so, pulseaudio can accept raw audio via TCP connection using the module-simple-protocol-tcp module.  Each TCP connection will show up as a different "application" in the pavucontrol volume mixer.
-
-An example command to set up pulseaudio to receive 8 kHz digital audio from simplestream on TCP port 9125 (for 16 kHz analog audio, use `rate=16000`):
-```
-pacmd load-module module-simple-protocol-tcp sink=1 playback=true port=9125 format=s16le rate=8000 channels=1
-```
-The matching simplestream config to send audio from talkgroup 58918 to TCP port 9125 would then be something like this:
-```yaml
-        {
-          "name":"simplestream",
-          "library":"libsimplestream.so",
-          "streams":[{
-            "TGID":58918,
-            "address":"127.0.0.1",
-            "port":9125,
-            "sendJSON":false,
-            "shortName":"CountyTrunked",
-            "useTCP":true}
-        }
-```
-#### Example - Sending Audio to FFMPEG for compression
-Here's an FFMPEG command that takes PCM audio from simplestream via UDP, cleans it up, and outputs ogg/opus to stdout.  Note that this will only work if sendTGID and sendJSON are both set to false and only a single talkgroup is fed to ffmpeg over the UDP port, as ffmpeg cannot interpret any metadata.
-`ffmpeg -loglevel warning -f s16le -ar 16000 -ac 1 -i udp://localhost:9125 -af:a adeclick -f:a ogg -c:a libopus -frame_duration:a 20 -vbr:a on -b:a 48000 -application:a voip pipe:1`
+In this example, the Rdio Scanner plugin is initialized first and the simplestream plugin second, because that is the order they appear in the `plugins` array.
 
 ## talkgroupsFile
 

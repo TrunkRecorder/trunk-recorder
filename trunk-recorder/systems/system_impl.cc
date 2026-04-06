@@ -5,30 +5,6 @@ System *System::make(int sys_num) {
   return (System *)new System_impl(sys_num);
 }
 
-std::string System_impl::get_api_key() {
-  return this->api_key;
-}
-
-void System_impl::set_api_key(std::string api_key) {
-  this->api_key = api_key;
-}
-
-std::string System_impl::get_bcfy_api_key() {
-  return this->bcfy_api_key;
-}
-
-void System_impl::set_bcfy_api_key(std::string bcfy_api_key) {
-  this->bcfy_api_key = bcfy_api_key;
-}
-
-int System_impl::get_bcfy_system_id() {
-  return this->bcfy_system_id;
-}
-
-void System_impl::set_bcfy_system_id(int bcfy_system_id) {
-  this->bcfy_system_id = bcfy_system_id;
-}
-
 std::string System_impl::get_short_name() {
   return this->short_name;
 }

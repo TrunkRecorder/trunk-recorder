@@ -20,6 +20,8 @@ Plugin *setup_plugin(std::string plugin_lib, std::string plugin_name) {
   // Based on factory plugin method from Boost: https://www.boost.org/doc/libs/1_64_0/doc/html/boost_dll/tutorial.html#boost_dll.tutorial.factory_method_in_plugin
   boost::filesystem::path lib_path("./");
   Plugin *plugin = new Plugin();
+  plugin->state = PLUGIN_UNKNOWN;
+
   plugin->creator = boost::dll::import_alias<pluginapi_create_t>( // type of imported symbol must be explicitly specified
       plugin_lib,                                                 // path to library
       "create_plugin",                                            // symbol to import
@@ -41,7 +43,7 @@ void initialize_plugins(json config_data, Config *config, std::vector<Source *> 
     for (json element : config_data["plugins"]) {
       std::string plugin_lib = element.value("library", "");
       std::string plugin_name = element.value("name", "");
-      
+
       // If name is not provided, derive it from the library filename
       if (plugin_name.empty() && !plugin_lib.empty()) {
         plugin_name = boost::filesystem::path(plugin_lib).stem().string();
@@ -49,11 +51,16 @@ void initialize_plugins(json config_data, Config *config, std::vector<Source *> 
           plugin_name = plugin_name.substr(3);
         }
       }
-      
+
       bool plugin_enabled = element.value("enabled", true);
       if (plugin_enabled) {
         Plugin *plugin = setup_plugin(plugin_lib, plugin_name);
-        plugin->api->parse_config(element);
+
+        int ret = plugin->api->parse_config(element);
+        if (ret != 0) {
+          plugin->state = PLUGIN_FAILED;
+          BOOST_LOG_TRIVIAL(error) << "Plugin config parse failed: " << plugin_name;
+        }
       }
     }
 
@@ -70,20 +77,19 @@ void initialize_plugins(json config_data, Config *config, std::vector<Source *> 
 
   for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
     Plugin *plugin = *it;
+
+    if (plugin->state == PLUGIN_FAILED) {
+      continue;
+    }
+
     int ret = plugin->api->init(config, sources, systems);
-    if (ret < 0) {
+    if (ret != 0) {
       plugin->state = PLUGIN_FAILED;
+      BOOST_LOG_TRIVIAL(error) << "Plugin init failed: " << plugin->name;
     } else {
       plugin->state = PLUGIN_INITIALIZED;
-      ret = 0;
     }
   }
-}
-
-void add_internal_plugin(std::string name, std::string library, json config_data) {
-
-  Plugin *plugin = setup_plugin(library, name);
-  plugin->api->parse_config(config_data);
 }
 
 void start_plugins(std::vector<Source *> sources, std::vector<System *> systems) {

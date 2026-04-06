@@ -26,7 +26,6 @@ struct Plugin {
 };
 
 void initialize_plugins(json config_data, Config *config, std::vector<Source *> sources, std::vector<System *> systems);
-void add_internal_plugin(std::string name, std::string library, json config_data);
 void start_plugins(std::vector<Source *> sources, std::vector<System *> systems);
 void stop_plugins();
 

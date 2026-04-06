@@ -191,10 +191,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     }
 
     BOOST_LOG_TRIVIAL(info) << "Capture Directory: " << config.capture_dir;
-    config.upload_server = data.value("uploadServer", "");
-    BOOST_LOG_TRIVIAL(info) << "Upload Server: " << config.upload_server;
-    config.bcfy_calls_server = data.value("broadcastifyCallsServer", "");
-    BOOST_LOG_TRIVIAL(info) << "Broadcastify Calls Server: " << config.bcfy_calls_server;
     config.status_server = data.value("statusServer", "");
     BOOST_LOG_TRIVIAL(info) << "Status Server: " << config.status_server;
     config.instance_key = data.value("instanceKey", "");
@@ -358,12 +354,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Filter Width: " << filter_width;
         BOOST_LOG_TRIVIAL(info) << "Squelch: " << element.value("squelch", -160);
         BOOST_LOG_TRIVIAL(info) << "De-emphasis Tau: " << tau;
-        system->set_api_key(element.value("apiKey", ""));
-        BOOST_LOG_TRIVIAL(info) << "API Key: " << system->get_api_key();
-        system->set_bcfy_api_key(element.value("broadcastifyApiKey", ""));
-        BOOST_LOG_TRIVIAL(info) << "Broadcastify API Key: " << system->get_bcfy_api_key();
-        system->set_bcfy_system_id(element.value("broadcastifySystemId", 0));
-        BOOST_LOG_TRIVIAL(info) << "Broadcastify Calls System ID: " << system->get_bcfy_system_id();
         system->set_upload_script(element.value("uploadScript", ""));
         BOOST_LOG_TRIVIAL(info) << "Upload Script: " << system->get_upload_script();
         system->set_compress_wav(element.value("compressWav", true));
@@ -526,13 +516,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_filename_format(element.value("filenameFormat", ""));
         if (!system->get_filename_format().empty()) {
           BOOST_LOG_TRIVIAL(info) << "Filename Format: " << system->get_filename_format();
-        }
-
-        if (!system->get_compress_wav()) {
-          if ((system->get_api_key().length() > 0) || (system->get_bcfy_api_key().length() > 0)) {
-            BOOST_LOG_TRIVIAL(error) << "Compress WAV must be set to true if you are using OpenMHz or Broadcastify";
-            return false;
-          }
         }
 
         systems.push_back(system);
@@ -736,9 +719,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     }
 
     BOOST_LOG_TRIVIAL(info) << "\n\n-------------------------------------\nPLUGINS\n-------------------------------------\n";
-    add_internal_plugin("openmhz_uploader", "libopenmhz_uploader.so", data);
-    add_internal_plugin("broadcastify_uploader", "libbroadcastify_uploader.so", data);
-    add_internal_plugin("unit_script", "libunit_script.so", data);
     initialize_plugins(data, &config, sources, systems);
   } catch (std::exception const &e) {
     BOOST_LOG_TRIVIAL(error) << "Failed parsing Config: " << e.what();
