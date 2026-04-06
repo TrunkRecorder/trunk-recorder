@@ -900,6 +900,11 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
     process_recorder_message_queues(calls);
 
     plugman_poll_one();
+    
+    // Process any pending configuration changes from plugins
+    if (g_config_service != nullptr) {
+      g_config_service->process_pending_changes();
+    }
 
     for (vector<System *>::iterator sys_it = systems.begin(); sys_it != systems.end(); sys_it++) {
       System_impl *system = (System_impl *)*sys_it;

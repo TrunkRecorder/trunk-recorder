@@ -7,6 +7,7 @@
 #include "../systems/system.h"
 #include "../systems/parser.h"
 #include "../formatter.h"
+#include "../config_service.h"
 
 #include <json.hpp>
 
@@ -61,6 +62,14 @@ public:
   // rx_sync slot tracking; for D-STAR/YSF they are 0. Use call->get_talkgroup() and
   // call->get_current_source_id() for authoritative values across all codec types.
   virtual int voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs) { return 0; };
+
+  // Called when a configuration parameter is changed via the ConfigurationService
+  // Allows plugins to react to configuration changes made by other plugins or external sources
+  virtual int on_config_change(const ConfigChangeInfo& change) { return 0; };
+
+  // Get a pointer to the global configuration service (for making changes)
+  ConfigurationService* get_config_service() { return g_config_service; }
+
   //void set_frequency_format(int f) { frequencyFormat = f; }
   virtual ~Plugin_Api(){};
 };

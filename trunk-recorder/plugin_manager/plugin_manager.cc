@@ -359,3 +359,21 @@ void plugman_voice_codec_data(Call *call, int codec_type, long tgid, uint32_t sr
     }
   }
 }
+
+void plugman_config_change(const ConfigChangeInfo& change) {
+  for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
+    Plugin *plugin = *it;
+    if (plugin->state == PLUGIN_RUNNING) {
+      plugin->api->on_config_change(change);
+    }
+  }
+}
+
+void plugman_register_config_listener() {
+  if (g_config_service != nullptr) {
+    g_config_service->register_change_listener([](const ConfigChangeInfo& change) {
+      plugman_config_change(change);
+    });
+    BOOST_LOG_TRIVIAL(info) << "Plugin Manager registered as configuration change listener";
+  }
+}

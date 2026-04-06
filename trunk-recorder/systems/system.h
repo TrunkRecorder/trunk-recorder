@@ -230,5 +230,9 @@ public:
 
   virtual std::string get_filename_format() = 0;
   virtual void set_filename_format(std::string format) = 0;
+
+  virtual int get_config_index() = 0;
+  virtual void set_config_index(int index) = 0;
+
 };
 #endif
