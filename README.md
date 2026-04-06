@@ -8,7 +8,7 @@
 Become a [Sponsor](https://github.com/sponsors/robotastic) to help support continued development and operation!
 Thank you to everyone who has contributed!
 
-## 🎉 V5.0 Our Best Release Yet!!
+## 🎉 V5.2 is now... Our Best Release Yet!!
 Thanks to everyone who contributed, tested and helped collect cored dumps! 
 
 ## Overview
