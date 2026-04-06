@@ -147,10 +147,19 @@ struct Call_Data_t {
   bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
+
+   // Working artifact paths (kept in tempDir while scripts/plugins run)
   std::string raw_filename;
   std::string filename;
   std::string status_filename;
   std::string converted;
+
+  // Final archive destinations (under captureDir)
+  std::string final_raw_filename;
+  std::string final_filename;
+  std::string final_status_filename;
+  std::string final_converted;
+
   int min_transmissions_removed;
 
   int sys_num;

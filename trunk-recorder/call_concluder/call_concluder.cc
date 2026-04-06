@@ -838,52 +838,119 @@ bool checkIfFile(const std::string &filePath) {
   }
 }
 
-// BUG FIX: const reference — Call_Data_t contains vectors and a JSON object;
-// the original by-value signature made a full deep copy on every call.
-void remove_call_files(const Call_Data_t &call_info, bool plugin_failure) {
-  const std::string loghdr =
-      log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-
-  if (plugin_failure) {
-    if (call_info.archive_files_on_failure)
-      BOOST_LOG_TRIVIAL(error) << loghdr << "Upload failed after " << call_info.retry_attempt
-                                << " attempts - " << Color::GRN << "Archiving files" << Color::RST;
-    else
-      BOOST_LOG_TRIVIAL(error) << loghdr << "Upload failed after " << call_info.retry_attempt
-                                << " attempts - " << Color::RED << "Removing files" << Color::RST;
+static int write_call_json_file(const Call_Data_t &call_info) {
+  std::ofstream json_file(call_info.status_filename);
+  if (!json_file.is_open()) {
+    BOOST_LOG_TRIVIAL(error)
+        << log_header(call_info.short_name, call_info.call_num,
+                      call_info.talkgroup_display, call_info.freq)
+        << "\033[0;31mUnable to create JSON file: " << call_info.status_filename << "\033[0m";
+    return 1;
   }
 
-  const bool should_archive = call_info.audio_archive ||
-                               (plugin_failure && call_info.archive_files_on_failure);
-  if (should_archive) {
-    if (call_info.transmission_archive) {
-      for (const auto &t : call_info.transmission_list) {
-        if (!checkIfFile(t.filename)) continue;
-        const boost::filesystem::path target =
-            boost::filesystem::path(fs::path(call_info.filename)
-                                        .replace_filename(fs::path(t.filename).filename()));
-        try {
-          boost::filesystem::copy_file(t.filename, target);
-        } catch (const boost::filesystem::filesystem_error &e) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to copy transmission file: "
-                                   << e.what() << "\033[0m";
-        }
+  json_file << call_info.call_json.dump(2);
+  return 0;
+}
+
+static bool move_file_to_final(const std::string &src, const std::string &dst) {
+  if (src.empty() || dst.empty() || !checkIfFile(src)) {
+    return true;
+  }
+
+  try {
+    fs::create_directories(fs::path(dst).parent_path());
+
+    std::error_code ec;
+    fs::rename(src, dst, ec);
+    if (!ec) {
+      return true;
+    }
+
+    // Cross-device fallback (tmpfs/ramdisk -> disk)
+    fs::copy_file(src, dst, fs::copy_options::overwrite_existing, ec);
+    if (ec) {
+      BOOST_LOG_TRIVIAL(error)
+          << "\033[0;31mFailed to copy file from " << src
+          << " to " << dst << ": " << ec.message() << "\033[0m";
+      return false;
+    }
+
+    fs::remove(src, ec);
+    if (ec) {
+      BOOST_LOG_TRIVIAL(error)
+          << "\033[0;31mCopied file to " << dst
+          << " but failed to remove temp file " << src
+          << ": " << ec.message() << "\033[0m";
+      return false;
+    }
+
+    return true;
+  } catch (const std::exception &e) {
+    BOOST_LOG_TRIVIAL(error)
+        << "\033[0;31mFailed to move file from " << src
+        << " to " << dst << ": " << e.what() << "\033[0m";
+    return false;
+  }
+}
+
+static int finalize_call_files(const Call_Data_t &call_info, bool plugin_failure) {
+  const bool keep_json =
+      call_info.call_log || (plugin_failure && call_info.archive_files_on_failure);
+
+  if (call_info.audio_archive) {
+    if (!move_file_to_final(call_info.filename, call_info.final_filename)) {
+      return -1;
+    }
+
+    if (call_info.compress_wav) {
+      if (!move_file_to_final(call_info.converted, call_info.final_converted)) {
+        return -1;
       }
     }
-    for (const auto &t : call_info.transmission_list)
-      if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
-    if (checkIfFile(call_info.raw_filename))
-      std::remove(call_info.raw_filename.c_str());
-  } else {
-    for (const std::string &f : {call_info.raw_filename, call_info.filename, call_info.converted})
-      if (checkIfFile(f)) std::remove(f.c_str());
-    for (const auto &t : call_info.transmission_list)
-      if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
   }
 
-  const bool keep_json = call_info.call_log || (plugin_failure && call_info.archive_files_on_failure);
-  if (!keep_json && checkIfFile(call_info.status_filename))
-    std::remove(call_info.status_filename.c_str());
+  if (keep_json) {
+    if (!move_file_to_final(call_info.status_filename, call_info.final_status_filename)) {
+      return -1;
+    }
+  }
+
+  if (call_info.transmission_archive) {
+    const fs::path transmission_dir = fs::path(call_info.final_filename).parent_path();
+
+    for (const auto &t : call_info.transmission_list) {
+      if (t.filename.empty() || !checkIfFile(t.filename)) {
+        continue;
+      }
+
+      const fs::path dst = transmission_dir / fs::path(t.filename).filename();
+
+      if (!move_file_to_final(t.filename, dst.string())) {
+        return -1;
+      }
+    }
+  }
+
+  return 0;
+}
+
+static void cleanup_tmp_call_files(const Call_Data_t &call_info) {
+  for (const std::string &f : {
+           call_info.raw_filename,
+           call_info.filename,
+           call_info.status_filename,
+           call_info.converted
+       }) {
+    if (!f.empty() && checkIfFile(f)) {
+      std::remove(f.c_str());
+    }
+  }
+
+  for (const auto &t : call_info.transmission_list) {
+    if (!t.filename.empty() && checkIfFile(t.filename)) {
+      std::remove(t.filename.c_str());
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -905,16 +972,13 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
 
     if (input_files.empty()) {
-      // BUG FIX: clean up transmission files before returning FAILED so they
-      // are not left on disk indefinitely (manage_call_data_workers only acted
-      // on RETRY, never on FAILED).
-      remove_call_files(call_info);
+      cleanup_tmp_call_files(call_info);
       call_info.status = FAILED;
       return call_info;
     }
 
     if (create_call_json(call_info) != 0) {
-      remove_call_files(call_info);
+      cleanup_tmp_call_files(call_info);
       call_info.status = FAILED;
       return call_info;
     }
@@ -923,9 +987,6 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
                                             ? std::to_string(call_info.talkgroup)
                                             : call_info.talkgroup_alpha_tag;
 
-    // BUG FIX: std::ctime() appends '\n' and is not thread-safe (shared static
-    // buffer). Multiple concurrent workers would corrupt each other's date strings.
-    // Use localtime_r + strftime into a stack buffer instead.
     const time_t start_time = static_cast<time_t>(call_info.start_time);
     struct tm start_tm {};
     localtime_r(&start_time, &start_tm);
@@ -934,28 +995,47 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 
     if (render_call_audio_artifacts(call_info, input_files, date_buf,
                                     call_info.short_name, talkgroup_title) < 0) {
-      remove_call_files(call_info);
+      cleanup_tmp_call_files(call_info);
+      call_info.status = FAILED;
+      return call_info;
+    }
+
+    // Write initial JSON into tempDir so uploadScript/plugins can see it
+    if (write_call_json_file(call_info) != 0) {
+      cleanup_tmp_call_files(call_info);
       call_info.status = FAILED;
       return call_info;
     }
 
     if (!trim_whitespace(call_info.upload_script).empty()) {
       if (run_upload_script_argv(call_info) != 0) {
-        remove_call_files(call_info);
+        cleanup_tmp_call_files(call_info);
         call_info.status = FAILED;
         return call_info;
       }
     }
   }
 
-  int error = 0;
+  int error = plugman_call_end(call_info);
 
-  error = plugman_call_end(call_info);
+  // Rewrite JSON after plugins have had a chance to modify call_info.call_json
+  if (write_call_json_file(call_info) != 0) {
+    cleanup_tmp_call_files(call_info);
+    call_info.status = FAILED;
+    return call_info;
+  }
 
   if (!error) {
-    remove_call_files(call_info);
+    if (finalize_call_files(call_info, false) != 0) {
+      cleanup_tmp_call_files(call_info);
+      call_info.status = FAILED;
+      return call_info;
+    }
+
+    cleanup_tmp_call_files(call_info);
     call_info.status = SUCCESS;
   } else {
+    // Keep temp files in place for retry
     call_info.status = RETRY;
   }
 
@@ -966,9 +1046,6 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
 // Call_Concluder methods
 // ---------------------------------------------------------------------------
 
-// BUG FIX: Config taken by const reference throughout — the original passed by
-// value, causing up to 3 deep copies of the full config per call conclusion
-// (conclude_call → create_call_data → create_base_filename).
 Call_Data_t Call_Concluder::create_base_filename(Call *call,
                                                   Call_Data_t call_info,
                                                   System *sys,
@@ -976,26 +1053,33 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
   const std::int64_t start_ms        = call->get_start_time_ms();
   const time_t       work_start_time = static_cast<time_t>(start_ms / 1000);
   const std::string  capture_dir     = call->get_capture_dir();
+  const std::string  temp_dir        = config.temp_dir;
 
   const std::string filename_format = !sys->get_filename_format().empty()
                                           ? sys->get_filename_format()
                                           : config.filename_format;
 
-  std::string base_filename;
+  std::string final_base_filename;
+  std::string temp_base_filename;
 
   if (filename_format.empty()) {
     // BUG FIX: localtime_r instead of localtime.
     struct tm ltm {};
     localtime_r(&work_start_time, &ltm);
 
-    const boost::filesystem::path base_path =
+    const boost::filesystem::path final_base_path =
         boost::filesystem::path(capture_dir) /
         call->get_short_name() /
         std::to_string(1900 + ltm.tm_year) /
         std::to_string(1 + ltm.tm_mon) /
         std::to_string(ltm.tm_mday);
 
-    boost::filesystem::create_directories(base_path);
+    const boost::filesystem::path temp_base_path =
+        boost::filesystem::path(temp_dir) /
+        call->get_short_name();
+
+    boost::filesystem::create_directories(final_base_path);
+    boost::filesystem::create_directories(temp_base_path);
 
     const long long sec   = start_ms / 1000;
     const int       milli = static_cast<int>(start_ms % 1000);
@@ -1003,24 +1087,51 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
     std::ostringstream ts;
     ts << sec << '.' << std::setw(3) << std::setfill('0') << milli;
 
-    base_filename = base_path.string() + "/" +
-                    std::to_string(call->get_talkgroup()) + "-" +
-                    ts.str() + "_" +
-                    std::to_string(static_cast<long>(std::llround(call->get_freq())));
+    const std::string suffix =
+        std::to_string(call->get_talkgroup()) + "-" +
+        ts.str() + "_" +
+        std::to_string(static_cast<long>(std::llround(call->get_freq())));
 
-    if (call->get_tdma_slot() != -1)
-      base_filename += "." + std::to_string(call->get_tdma_slot());
+    final_base_filename = (final_base_path / suffix).string();
+    temp_base_filename  = (temp_base_path / suffix).string();
+
+    if (call->get_tdma_slot() != -1) {
+      const std::string tdma_suffix = "." + std::to_string(call->get_tdma_slot());
+      final_base_filename += tdma_suffix;
+      temp_base_filename  += tdma_suffix;
+    }
   } else {
     const std::string expanded = expand_filename_format(filename_format, call_info, work_start_time);
-    base_filename = capture_dir + "/" + expanded;
-    boost::filesystem::create_directories(boost::filesystem::path(base_filename).parent_path());
+
+    const boost::filesystem::path final_path =
+        boost::filesystem::path(capture_dir) / expanded;
+
+    const boost::filesystem::path temp_path =
+        boost::filesystem::path(temp_dir) /
+        call->get_short_name() /
+        boost::filesystem::path(expanded).filename();
+
+    boost::filesystem::create_directories(final_path.parent_path());
+    boost::filesystem::create_directories(temp_path.parent_path());
+
+    final_base_filename = final_path.string();
+    temp_base_filename  = temp_path.string();
   }
 
-  const std::string stem = base_filename + "-call_" + std::to_string(call->get_call_num());
-  call_info.raw_filename    = stem + ".raw.wav";
-  call_info.filename        = stem + ".wav";
-  call_info.status_filename = stem + ".json";
-  call_info.converted       = stem + ".m4a";
+  const std::string final_stem = final_base_filename + "-call_" + std::to_string(call->get_call_num());
+  const std::string temp_stem  = temp_base_filename  + "-call_" + std::to_string(call->get_call_num());
+
+  // Working artifact paths in tempDir
+  call_info.raw_filename    = temp_stem + ".raw.wav";
+  call_info.filename        = temp_stem + ".wav";
+  call_info.status_filename = temp_stem + ".json";
+  call_info.converted       = temp_stem + ".m4a";
+
+  // Final archive destinations in captureDir
+  call_info.final_raw_filename    = final_stem + ".raw.wav";
+  call_info.final_filename        = final_stem + ".wav";
+  call_info.final_status_filename = final_stem + ".json";
+  call_info.final_converted       = final_stem + ".m4a";
 
   return call_info;
 }
@@ -1195,18 +1306,23 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
   if (call->get_state() == MONITORING && call->get_monitoring_state() == SUPERSEDED) {
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Call has been superseded. Removing files.";
-    remove_call_files(call_info);
+    BOOST_LOG_TRIVIAL(info) << loghdr << "Call has been superseded. Removing temp files.";
+    cleanup_tmp_call_files(call_info);
     return;
   }
 
   if (call_info.encrypted) {
     if (!call_info.transmission_list.empty() || call_info.min_transmissions_removed > 0) {
-      if (create_call_json(call_info) < 0)
+      if (create_call_json(call_info) < 0) {
         BOOST_LOG_TRIVIAL(error) << loghdr
             << "\033[0;31mFailed to create metadata JSON for encrypted call\033[0m";
+      } else {
+        if (write_call_json_file(call_info) == 0) {
+          finalize_call_files(call_info, false);
+        }
+      }
     }
-    remove_call_files(call_info);
+    cleanup_tmp_call_files(call_info);
     return;
   }
 
@@ -1224,7 +1340,7 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
   if (call_info.length <= sys->get_min_duration()) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "Call length: " << call_info.length
                              << " is less than min duration: " << sys->get_min_duration();
-    remove_call_files(call_info);
+    cleanup_tmp_call_files(call_info);
     return;
   }
 
@@ -1246,7 +1362,10 @@ void Call_Concluder::manage_call_data_workers() {
         log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
     if (call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
-      remove_call_files(call_info, true);
+      // Final retry failed: archive anything configured to be kept, then clean tmp
+      finalize_call_files(call_info, true);
+      cleanup_tmp_call_files(call_info);
+
       BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to conclude call - "
                                 << std::put_time(std::localtime(&start_time), "%c %Z");
     } else {
@@ -1281,10 +1400,12 @@ bool Call_Concluder::shutdown_call_data_workers(std::chrono::seconds timeout) {
       it = call_data_workers.erase(it);
 
       if (call_info.status == RETRY) {
-        if (++call_info.retry_attempt > Call_Concluder::MAX_RETRY)
-          remove_call_files(call_info, true);
-        else
+        if (++call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
+          finalize_call_files(call_info, true);
+          cleanup_tmp_call_files(call_info);
+        } else {
           call_data_workers.push_back(std::async(std::launch::async, upload_call_worker, call_info));
+        }
       }
     }
 
@@ -1297,7 +1418,10 @@ bool Call_Concluder::shutdown_call_data_workers(std::chrono::seconds timeout) {
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
   }
 
-  for (auto &pending : retry_call_list) remove_call_files(pending, true);
+  for (auto &pending : retry_call_list) {
+    finalize_call_files(pending, true);
+    cleanup_tmp_call_files(pending);
+  }
   retry_call_list.clear();
 
   if (!call_data_workers.empty()) {

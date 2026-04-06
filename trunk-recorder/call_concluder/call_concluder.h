@@ -22,7 +22,6 @@
 Call_Data_t upload_call_worker(Call_Data_t call_info);
 int         create_call_json(Call_Data_t &call_info);
 bool        checkIfFile(const std::string &filePath);
-void        remove_call_files(const Call_Data_t &call_info, bool plugin_failure = false);
 
 class Call_Concluder {
 public:
