@@ -366,22 +366,33 @@ static std::string build_cleanup_filter(const Audio_Postprocess_Config &cfg) {
 }
 
 static bool is_invalid_loudnorm_value(const std::string &v) {
-  const char *p = v.data(), *e = p + v.size();
-  while (p < e && std::isspace(static_cast<unsigned char>(*p)))    ++p;
-  while (e > p && std::isspace(static_cast<unsigned char>(e[-1]))) --e;
-  if (p == e) return true;
+  const char *p = v.data();
+  const char *e = p + v.size();
+
+  while (p < e && std::isspace(static_cast<unsigned char>(*p))) {
+    ++p;
+  }
+  while (e > p && std::isspace(static_cast<unsigned char>(e[-1]))) {
+    --e;
+  }
+
+  if (p == e) {
+    return true;
+  }
 
   const std::ptrdiff_t len = e - p;
-  if (len > 4) return false;   // longest invalid token is 4 chars
+  if (len > 4) {
+    return false; // longest invalid token is 4 chars
+  }
 
-  char buf[5];
-  for (std::ptrdiff_t j = 0; j < len; ++j)
-    buf[j] = static_cast<char>(std::tolower(static_cast<unsigned char>(p[j])));
-  buf[len] = '\0';
+  std::string lowered;
+  lowered.reserve(static_cast<std::size_t>(len));
+  for (const char *it = p; it < e; ++it) {
+    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(*it))));
+  }
 
-  const std::string_view sv(buf, static_cast<std::size_t>(len));
-  return sv == "-inf" || sv == "inf"  || sv == "+inf" ||
-         sv == "nan"  || sv == "+nan" || sv == "-nan";
+  return lowered == "-inf" || lowered == "inf"  || lowered == "+inf" ||
+         lowered == "nan"  || lowered == "+nan" || lowered == "-nan";
 }
 
 static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cfg) {
