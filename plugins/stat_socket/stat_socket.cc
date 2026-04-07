@@ -256,7 +256,8 @@ public:
 
   }
 
-  int call_end(Call_Data_t call_info) {
+  int call_end(Call_Data_t &call_info, nlohmann::ordered_json &plugin_ctx) override {
+    (void)plugin_ctx;
     if (m_open == false)
       return 0;
     return 0;

@@ -212,7 +212,8 @@ class Simple_Stream : public Plugin_Api {
     return 0;
   }
 
-  int call_end(Call_Data_t call_info) {
+  int call_end(Call_Data_t &call_info, nlohmann::ordered_json &plugin_ctx) override {
+    (void)plugin_ctx;
     boost::system::error_code error;
     BOOST_FOREACH (auto stream, streams){
       if (stream.sendJSON == true && stream.sendCallEnd == true){
