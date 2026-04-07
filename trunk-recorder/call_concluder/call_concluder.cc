@@ -962,10 +962,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       log_header(call_info.short_name, call_info.call_num,
                  call_info.talkgroup_display, call_info.freq);
 
-  BOOST_LOG_TRIVIAL(info) << loghdr
-                          << "upload_call_worker start"
-                          << " status=" << call_info.status
-                          << " transmissions=" << call_info.transmission_list.size();
+  BOOST_LOG_TRIVIAL(debug) << loghdr
+                           << "upload_call_worker start"
+                           << " status=" << call_info.status
+                           << " transmissions=" << call_info.transmission_list.size();
 
   if (call_info.status == INITIAL) {
     std::vector<std::string> input_files;
@@ -975,8 +975,6 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     for (const auto &t : call_info.transmission_list) {
       const bool transmission_file_exists = (stat(t.filename.c_str(), &statbuf) == 0);
       if (transmission_file_exists) {
-        BOOST_LOG_TRIVIAL(debug) << loghdr
-                                 << "Found transmission file: " << t.filename;
         input_files.push_back(t.filename);
       } else {
         BOOST_LOG_TRIVIAL(error) << loghdr
@@ -986,10 +984,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
 
     const bool have_input_files = !input_files.empty();
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "Input file scan complete"
-                            << " have_input_files=" << have_input_files
-                            << " usable_files=" << input_files.size();
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "Input file scan complete"
+                             << " have_input_files=" << have_input_files
+                             << " usable_files=" << input_files.size();
 
     if (!have_input_files) {
       BOOST_LOG_TRIVIAL(error) << loghdr
@@ -999,11 +997,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Creating base call JSON";
     const int create_call_json_result = create_call_json(call_info);
     const bool call_json_created = (create_call_json_result == 0);
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "create_call_json result=" << create_call_json_result;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "create_call_json result=" << create_call_json_result;
 
     if (!call_json_created) {
       BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1023,18 +1020,15 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     char date_buf[64] = {};
     strftime(date_buf, sizeof(date_buf), "%c", &start_tm);
 
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "Rendering call audio artifacts"
-                            << " wav=" << call_info.filename
-                            << " m4a=" << call_info.converted
-                            << " json=" << call_info.status_filename;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "Rendering call audio artifacts";
 
     const int render_audio_result =
         render_call_audio_artifacts(call_info, input_files, date_buf,
                                     call_info.short_name, talkgroup_title);
     const bool audio_rendered = (render_audio_result == 0);
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "render_call_audio_artifacts result=" << render_audio_result;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "render_call_audio_artifacts result=" << render_audio_result;
 
     if (!audio_rendered) {
       BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1044,12 +1038,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "Writing initial call JSON to " << call_info.status_filename;
     const int initial_json_write_result = write_call_json_file(call_info);
     const bool initial_json_written = (initial_json_write_result == 0);
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "Initial JSON write result=" << initial_json_write_result;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "Initial JSON write result=" << initial_json_write_result;
 
     if (!initial_json_written) {
       BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1060,15 +1052,15 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
 
     const bool has_upload_script = !trim_whitespace(call_info.upload_script).empty();
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "Upload script configured=" << has_upload_script;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "Upload script configured=" << has_upload_script;
 
     if (has_upload_script) {
       BOOST_LOG_TRIVIAL(info) << loghdr << "Running upload script";
       const int upload_script_result = run_upload_script_argv(call_info);
       const bool upload_script_succeeded = (upload_script_result == 0);
-      BOOST_LOG_TRIVIAL(info) << loghdr
-                              << "Upload script result=" << upload_script_result;
+      BOOST_LOG_TRIVIAL(debug) << loghdr
+                               << "Upload script result=" << upload_script_result;
 
       if (!upload_script_succeeded) {
         BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1080,18 +1072,16 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
   }
 
-  BOOST_LOG_TRIVIAL(info) << loghdr << "Calling plugman_call_end";
+  BOOST_LOG_TRIVIAL(debug) << loghdr << "Calling plugman_call_end";
   const int plugin_call_end_result = plugman_call_end(call_info);
   const bool plugins_succeeded = (plugin_call_end_result == 0);
-  BOOST_LOG_TRIVIAL(info) << loghdr
-                          << "plugman_call_end result=" << plugin_call_end_result;
+  BOOST_LOG_TRIVIAL(debug) << loghdr
+                           << "plugman_call_end result=" << plugin_call_end_result;
 
-  BOOST_LOG_TRIVIAL(info) << loghdr
-                          << "Writing updated call JSON to " << call_info.status_filename;
   const int updated_json_write_result = write_call_json_file(call_info);
   const bool updated_json_written = (updated_json_write_result == 0);
-  BOOST_LOG_TRIVIAL(info) << loghdr
-                          << "Updated JSON write result=" << updated_json_write_result;
+  BOOST_LOG_TRIVIAL(debug) << loghdr
+                           << "Updated JSON write result=" << updated_json_write_result;
 
   if (!updated_json_written) {
     BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1102,11 +1092,10 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
   }
 
   if (plugins_succeeded) {
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Finalizing call files";
     const int finalize_call_files_result = finalize_call_files(call_info, false);
     const bool finalization_succeeded = (finalize_call_files_result == 0);
-    BOOST_LOG_TRIVIAL(info) << loghdr
-                            << "finalize_call_files result=" << finalize_call_files_result;
+    BOOST_LOG_TRIVIAL(debug) << loghdr
+                             << "finalize_call_files result=" << finalize_call_files_result;
 
     if (!finalization_succeeded) {
       BOOST_LOG_TRIVIAL(error) << loghdr
@@ -1116,14 +1105,12 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Cleaning up temporary call files";
     cleanup_tmp_call_files(call_info);
     call_info.status = SUCCESS;
-    BOOST_LOG_TRIVIAL(info) << loghdr << "upload_call_worker completed successfully";
+    BOOST_LOG_TRIVIAL(info) << loghdr << "Call processing completed successfully";
   } else {
     BOOST_LOG_TRIVIAL(warning) << loghdr
                                << "Plugin processing requested retry; keeping temp files";
-    // Keep temp files in place for retry
     call_info.status = RETRY;
   }
 
