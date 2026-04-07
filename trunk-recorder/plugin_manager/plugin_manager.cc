@@ -185,43 +185,75 @@ int plugman_call_start(Call *call) {
 
 int plugman_call_end(Call_Data_t& call_info) {
   std::vector<int> plugin_retry_list;
-  
+
   std::stringstream logstream;
-  logstream << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num << "C\033[0m\tTG: " << call_info.talkgroup_display << "\tFreq: " << format_freq(call_info.freq) << "\t";
+  logstream << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num
+            << "C\033[0m\tTG: " << call_info.talkgroup_display
+            << "\tFreq: " << format_freq(call_info.freq) << "\t";
   std::string loghdr = logstream.str();
 
-  // On INITIAL, run call_end for all active plugins and note failues 
-  if (call_info.status == INITIAL)
-  {
-    for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
+  // Shared plugin context stored directly at the top level of final call JSON.
+  // Each plugin gets its own namespace at call_info.call_json[plugin_name].
+  if (!call_info.call_json.is_object()) {
+    call_info.call_json = nlohmann::ordered_json::object();
+  }
+
+  // On INITIAL, run call_end for all active plugins in config order.
+  if (call_info.status == INITIAL) {
+    for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); ++it) {
       Plugin *plugin = *it;
-      if (plugin->state == PLUGIN_RUNNING) {
-        int plugin_error = plugin->api->call_end(call_info);
-        if (plugin_error) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "Plugin Manager: call_end -  " << plugin->name << " failed.";
-          int plugin_index = std::distance(plugins.begin(), it );
-          plugin_retry_list.push_back(plugin_index);
-        }
+      if (plugin->state != PLUGIN_RUNNING) {
+        continue;
+      }
+
+      if (!call_info.call_json.contains(plugin->name) ||
+          !call_info.call_json[plugin->name].is_object()) {
+        call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
+      }
+
+      int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
+      if (plugin_error) {
+        BOOST_LOG_TRIVIAL(error) << loghdr
+                                 << "Plugin Manager: call_end - " << plugin->name
+                                 << " failed.";
+        int plugin_index = std::distance(plugins.begin(), it);
+        plugin_retry_list.push_back(plugin_index);
       }
     }
-  } 
-  // On RETRY, run call_end only for plugins reporting previous failue
-  else if (call_info.status == RETRY)
-  {
-    for (std::vector<int>::iterator it = call_info.plugin_retry_list.begin(); it != call_info.plugin_retry_list.end(); it++) {
+  }
+  // On RETRY, run call_end only for plugins that previously failed.
+  else if (call_info.status == RETRY) {
+    for (std::vector<int>::iterator it = call_info.plugin_retry_list.begin();
+         it != call_info.plugin_retry_list.end(); ++it) {
       Plugin *plugin = plugins[*it];
-      if (plugin->state == PLUGIN_RUNNING) {
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Plugin Manager: call_end - retry (" << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY << ") - " << plugin->name;
-        int plugin_error = plugin->api->call_end(call_info);
-        if (plugin_error) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "Plugin Manager: call_end - retry (" << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY << ") - " << plugin->name << " failed.";
-          plugin_retry_list.push_back(*it);
-        }
+      if (plugin->state != PLUGIN_RUNNING) {
+        continue;
+      }
+
+      if (!call_info.call_json.contains(plugin->name) ||
+          !call_info.call_json[plugin->name].is_object()) {
+        call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
+      }
+
+      BOOST_LOG_TRIVIAL(info) << loghdr
+                              << "Plugin Manager: call_end - retry ("
+                              << call_info.retry_attempt << "/"
+                              << Call_Concluder::MAX_RETRY << ") - "
+                              << plugin->name;
+
+      int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
+      if (plugin_error) {
+        BOOST_LOG_TRIVIAL(error) << loghdr
+                                 << "Plugin Manager: call_end - retry ("
+                                 << call_info.retry_attempt << "/"
+                                 << Call_Concluder::MAX_RETRY << ") - "
+                                 << plugin->name << " failed.";
+        plugin_retry_list.push_back(*it);
       }
     }
   }
 
-  if (plugin_retry_list.size() == 0) {
+  if (plugin_retry_list.empty()) {
     return 0;
   } else {
     call_info.plugin_retry_list = plugin_retry_list;
