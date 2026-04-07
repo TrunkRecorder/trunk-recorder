@@ -21,6 +21,7 @@ Plugin *setup_plugin(std::string plugin_lib, std::string plugin_name) {
   boost::filesystem::path lib_path("./");
   Plugin *plugin = new Plugin();
   plugin->state = PLUGIN_UNKNOWN;
+  plugin->plugin_type = "blocking";
 
   plugin->creator = boost::dll::import_alias<pluginapi_create_t>( // type of imported symbol must be explicitly specified
       plugin_lib,                                                 // path to library
@@ -61,6 +62,16 @@ void initialize_plugins(json config_data, Config *config, std::vector<Source *> 
           plugin->state = PLUGIN_FAILED;
           BOOST_LOG_TRIVIAL(error) << "Plugin config parse failed: " << plugin_name;
         }
+
+        std::string plugin_type = element.value("pluginType", "blocking");
+        if (plugin_type != "blocking" && plugin_type != "deferred") {
+          BOOST_LOG_TRIVIAL(warning) << "Unknown pluginType '" << plugin_type
+                                     << "' for plugin " << plugin_name
+                                     << "; defaulting to blocking";
+          plugin_type = "blocking";
+        }
+        plugin->plugin_type = plugin_type;
+
       }
     }
 
@@ -183,82 +194,125 @@ int plugman_call_start(Call *call) {
   return error;
 }
 
-int plugman_call_end(Call_Data_t& call_info) {
+int plugman_call_end_blocking(Call_Data_t& call_info) {
   std::vector<int> plugin_retry_list;
 
-  std::stringstream logstream;
-  logstream << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num
-            << "C\033[0m\tTG: " << call_info.talkgroup_display
-            << "\tFreq: " << format_freq(call_info.freq) << "\t";
-  std::string loghdr = logstream.str();
-
-  // Shared plugin context stored directly at the top level of final call JSON.
-  // Each plugin gets its own namespace at call_info.call_json[plugin_name].
   if (!call_info.call_json.is_object()) {
     call_info.call_json = nlohmann::ordered_json::object();
   }
 
-  // On INITIAL, run call_end for all active plugins in config order.
   if (call_info.status == INITIAL) {
     for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); ++it) {
       Plugin *plugin = *it;
       if (plugin->state != PLUGIN_RUNNING) {
         continue;
       }
-
-      if (!call_info.call_json.contains(plugin->name) ||
-          !call_info.call_json[plugin->name].is_object()) {
-        call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
-      }
-
-      int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
-      if (plugin_error) {
-        BOOST_LOG_TRIVIAL(error) << loghdr
-                                 << "Plugin Manager: call_end - " << plugin->name
-                                 << " failed.";
-        int plugin_index = std::distance(plugins.begin(), it);
-        plugin_retry_list.push_back(plugin_index);
-      }
-    }
-  }
-  // On RETRY, run call_end only for plugins that previously failed.
-  else if (call_info.status == RETRY) {
-    for (std::vector<int>::iterator it = call_info.plugin_retry_list.begin();
-         it != call_info.plugin_retry_list.end(); ++it) {
-      Plugin *plugin = plugins[*it];
-      if (plugin->state != PLUGIN_RUNNING) {
+      if (plugin->plugin_type != "blocking") {
         continue;
       }
 
       if (!call_info.call_json.contains(plugin->name) ||
           !call_info.call_json[plugin->name].is_object()) {
         call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
-      }
-
-      BOOST_LOG_TRIVIAL(info) << loghdr
-                              << "Plugin Manager: call_end - retry ("
-                              << call_info.retry_attempt << "/"
-                              << Call_Concluder::MAX_RETRY << ") - "
-                              << plugin->name;
+          }
 
       int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
       if (plugin_error) {
-        BOOST_LOG_TRIVIAL(error) << loghdr
-                                 << "Plugin Manager: call_end - retry ("
-                                 << call_info.retry_attempt << "/"
-                                 << Call_Concluder::MAX_RETRY << ") - "
-                                 << plugin->name << " failed.";
+        int plugin_index = std::distance(plugins.begin(), it);
+        plugin_retry_list.push_back(plugin_index);
+      }
+    }
+  } else if (call_info.status == RETRY) {
+    for (std::vector<int>::iterator it = call_info.blocking_plugin_retry_list.begin();
+         it != call_info.blocking_plugin_retry_list.end(); ++it) {
+      Plugin *plugin = plugins[*it];
+      if (plugin->state != PLUGIN_RUNNING) {
+        continue;
+      }
+      if (plugin->plugin_type != "blocking") {
+        continue;
+      }
+
+      if (!call_info.call_json.contains(plugin->name) ||
+          !call_info.call_json[plugin->name].is_object()) {
+        call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
+          }
+
+      int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
+      if (plugin_error) {
         plugin_retry_list.push_back(*it);
       }
+         }
+  }
+
+  if (plugin_retry_list.empty()) {
+    call_info.blocking_plugin_retry_list.clear();
+    return 0;
+  }
+
+  call_info.blocking_plugin_retry_list = plugin_retry_list;
+  return 1;
+}
+
+int plugman_call_end_deferred(Call_Data_t& call_info) {
+  std::vector<int> plugin_retry_list;
+  std::vector<std::pair<int, std::future<int>>> deferred_workers;
+
+  if (!call_info.call_json.is_object()) {
+    call_info.call_json = nlohmann::ordered_json::object();
+  }
+
+  auto launch_deferred_plugin = [&](int plugin_index) {
+    Plugin *plugin = plugins[plugin_index];
+    if (plugin->state != PLUGIN_RUNNING) {
+      return;
+    }
+    if (plugin->plugin_type != "deferred") {
+      return;
+    }
+
+    Call_Data_t plugin_call_info = call_info;
+
+    nlohmann::ordered_json plugin_ctx = nlohmann::ordered_json::object();
+    if (plugin_call_info.call_json.contains(plugin->name) &&
+        plugin_call_info.call_json[plugin->name].is_object()) {
+      plugin_ctx = plugin_call_info.call_json[plugin->name];
+        }
+
+    deferred_workers.push_back({
+      plugin_index,
+      std::async(std::launch::async, [plugin, plugin_call_info, plugin_ctx]() mutable {
+        return plugin->api->call_end(plugin_call_info, plugin_ctx);
+      })
+    });
+  };
+
+  if (call_info.status == INITIAL) {
+    for (int i = 0; i < static_cast<int>(plugins.size()); ++i) {
+      launch_deferred_plugin(i);
+    }
+  } else if (call_info.status == RETRY) {
+    for (std::vector<int>::iterator it = call_info.deferred_plugin_retry_list.begin();
+         it != call_info.deferred_plugin_retry_list.end(); ++it) {
+      launch_deferred_plugin(*it);
+         }
+  }
+
+  for (auto &worker : deferred_workers) {
+    int plugin_index = worker.first;
+    int plugin_error = worker.second.get();
+    if (plugin_error) {
+      plugin_retry_list.push_back(plugin_index);
     }
   }
 
   if (plugin_retry_list.empty()) {
+    call_info.deferred_plugin_retry_list.clear();
     return 0;
-  } else {
-    call_info.plugin_retry_list = plugin_retry_list;
-    return 1;
   }
+
+  call_info.deferred_plugin_retry_list = plugin_retry_list;
+  return 1;
 }
 
 int plugman_calls_active(std::vector<Call *> calls) {

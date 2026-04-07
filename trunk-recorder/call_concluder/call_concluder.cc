@@ -1072,48 +1072,25 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
   }
 
-  BOOST_LOG_TRIVIAL(debug) << loghdr << "Calling plugman_call_end";
-  const int plugin_call_end_result = plugman_call_end(call_info);
-  const bool plugins_succeeded = (plugin_call_end_result == 0);
-  BOOST_LOG_TRIVIAL(debug) << loghdr
-                           << "plugman_call_end result=" << plugin_call_end_result;
+  const int deferred_plugin_result = plugman_call_end_deferred(call_info);
+  const bool deferred_plugins_succeeded = (deferred_plugin_result == 0);
 
-  const int updated_json_write_result = write_call_json_file(call_info);
-  const bool updated_json_written = (updated_json_write_result == 0);
-  BOOST_LOG_TRIVIAL(debug) << loghdr
-                           << "Updated JSON write result=" << updated_json_write_result;
+  if (!deferred_plugins_succeeded) {
+    call_info.status = RETRY;
+    return call_info;
+  }
 
-  if (!updated_json_written) {
-    BOOST_LOG_TRIVIAL(error) << loghdr
-                             << "Updated JSON write failed";
+  // All plugins are complete. Only now archive/finalize anything configured to be kept.
+  const int finalize_call_files_result = finalize_call_files(call_info, false);
+  const bool finalization_succeeded = (finalize_call_files_result == 0);
+  if (!finalization_succeeded) {
     cleanup_tmp_call_files(call_info);
     call_info.status = FAILED;
     return call_info;
   }
 
-  if (plugins_succeeded) {
-    const int finalize_call_files_result = finalize_call_files(call_info, false);
-    const bool finalization_succeeded = (finalize_call_files_result == 0);
-    BOOST_LOG_TRIVIAL(debug) << loghdr
-                             << "finalize_call_files result=" << finalize_call_files_result;
-
-    if (!finalization_succeeded) {
-      BOOST_LOG_TRIVIAL(error) << loghdr
-                               << "Call file finalization failed";
-      cleanup_tmp_call_files(call_info);
-      call_info.status = FAILED;
-      return call_info;
-    }
-
-    cleanup_tmp_call_files(call_info);
-    call_info.status = SUCCESS;
-    BOOST_LOG_TRIVIAL(info) << loghdr << "Call processing completed successfully";
-  } else {
-    BOOST_LOG_TRIVIAL(warning) << loghdr
-                               << "Plugin processing requested retry; keeping temp files";
-    call_info.status = RETRY;
-  }
-
+  cleanup_tmp_call_files(call_info);
+  call_info.status = SUCCESS;
   return call_info;
 }
 
@@ -1391,12 +1368,14 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
       if (create_call_json(call_info) < 0) {
         BOOST_LOG_TRIVIAL(error) << loghdr
             << "\033[0;31mFailed to create metadata JSON for encrypted call\033[0m";
+      } else if (write_call_json_file(call_info) != 0) {
+        BOOST_LOG_TRIVIAL(error) << loghdr
+            << "\033[0;31mFailed to write metadata JSON for encrypted call\033[0m";
       } else {
-        if (write_call_json_file(call_info) == 0) {
-          finalize_call_files(call_info, false);
-        }
+        finalize_call_files(call_info, false);
       }
     }
+
     cleanup_tmp_call_files(call_info);
     return;
   }
@@ -1436,7 +1415,7 @@ void Call_Concluder::manage_call_data_workers() {
     const std::string loghdr =
         log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
-    if (call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
+    if (call_info.retry_attempt > MAX_RETRY) {
       // Final retry failed: archive anything configured to be kept, then clean tmp
       finalize_call_files(call_info, true);
       cleanup_tmp_call_files(call_info);
@@ -1475,7 +1454,7 @@ bool Call_Concluder::shutdown_call_data_workers(std::chrono::seconds timeout) {
       it = call_data_workers.erase(it);
 
       if (call_info.status == RETRY) {
-        if (++call_info.retry_attempt > Call_Concluder::MAX_RETRY) {
+        if (++call_info.retry_attempt > MAX_RETRY) {
           finalize_call_files(call_info, true);
           cleanup_tmp_call_files(call_info);
         } else {

@@ -24,6 +24,7 @@ struct Plugin {
   boost::shared_ptr<Plugin_Api> api;
   plugin_state_t state;
   std::string name;
+  std::string plugin_type; // "blocking" or "deferred"
 };
 
 void initialize_plugins(json config_data, Config *config, std::vector<Source *> sources, std::vector<System *> systems);
@@ -35,7 +36,8 @@ void plugman_audio_callback(Call *call, Recorder *recorder, int16_t *samples, in
 int plugman_signal(long unitId, const char *signaling_type, gr::blocks::SignalType sig_type, Call *call, System *system, Recorder *recorder);
 int plugman_trunk_message(std::vector<TrunkMessage> messages, System *system);
 int plugman_call_start(Call *call);
-int plugman_call_end(Call_Data_t& call_info);
+int plugman_call_end_blocking(Call_Data_t& call_info);
+int plugman_call_end_deferred(Call_Data_t& call_info);
 int plugman_calls_active(std::vector<Call *> calls);
 void plugman_setup_recorder(Recorder *recorder);
 void plugman_setup_system(System *system);
