@@ -12,7 +12,7 @@ The following message types are sent
   * Contains message decode rates for all systems, non trucked systems will have a zero value
   * Sent every 3 seconds
 * **systems**
-  * Contains a array of systems 
+  * Contains an array of systems 
   * Sent when the socket is first connected
 * **system**
   * Contains a single system
@@ -28,7 +28,7 @@ The following message types are sent
   * Sent when a call is completed
 * **recorders**
   * Contains an array of all recorders
-  * Sent when he socket is first connected
+  * Sent when the socket is first connected
 * **recorder**
   * Contains a single recorder
   * Sent when a record has changed

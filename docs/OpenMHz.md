@@ -64,15 +64,15 @@ To load this file into OpenMHz, open up your system and goto the Talkgroups tab.
 
 ### Creating Groups
 
-User can select a set of talkgroups that they want to listen to and groups makes that easier to do. A group is just a predefined set of talkgroups. For example, create a Fire Department group and select all of related talkgroups.
+User can select a set of talkgroups that they want to listen to and groups makes that easier to do. A group is just a predefined set of talkgroups. For example, create a Fire Department group and select all of the related talkgroups.
 
-After you have loaded up some talkgroups, open up your system and goto the Groups tab. Click the **Create Group**. Add a name for your group and then select the talkgroups for it. If you accidently add a talkgroup, you can remove it by clicking on the **x** next to it on the list on the right hand side. When you are done, simply hit save.
+After you have loaded up some talkgroups, open up your system and goto the Groups tab. Click the **Create Group**. Add a name for your group and then select the talkgroups for it. If you accidentally add a talkgroup, you can remove it by clicking on the **x** next to it on the list on the right hand side. When you are done, simply hit save.
 
 ![Creating a group](./media/create_group.png)
 
 On the main list of groups, you can click on the pencil icon to edit and group and the **x** to delete it. If you want to change the order the groups are listed in, use the arrows next to a group to move it up or down the list. Make sure you click **Save Order** when you are done.
 
-** Configuring Trunk Recorder
+## Configuring Trunk Recorder
 
 Now that you have OpenMHz setup, it is time to start sending recordings from Trunk Recorder. Click on the **Config** tab to bring up the configuration info for this system. Here is an example from a test system:
 

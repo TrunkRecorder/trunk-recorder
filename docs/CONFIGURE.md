@@ -797,7 +797,7 @@ The columns are:
 | Hex       |       | The Talkgroup Number formatted as a hex number. This value is currently not used. |
 | Category |    |  The category for the Talkgroup |
 | Tag       |   |  The Service Tag for the Talkgroup |
-| Priority |    | The priority field specifies the number of recorders the system must have available to record a new call for the talkgroup. For example, a priority of 1, the highest means as long as at least a single recorder is available, the system will record the new call. If the priority is 2, the system would at least 2 free recorders to record the new call, and so on. If there is no priority set for a talkgroup entry, a prioity of 1 is assumed. <br/> Talkgroups assigned a priority of -1 will never be recorded, regardless of the number of available recorders. |
+| Priority |    | The priority field specifies the number of recorders the system must have available to record a new call for the talkgroup. For example, a priority of 1, the highest means as long as at least a single recorder is available, the system will record the new call. If the priority is 2, the system would need at least 2 free recorders to record the new call, and so on. If there is no priority set for a talkgroup entry, a prioity of 1 is assumed. <br/> Talkgroups assigned a priority of -1 will never be recorded, regardless of the number of available recorders. |
 | Preferred NAC |     | In Multi-Site mode, the preferred NAC (`nnnn`, e.g. `1234`), RFSS/SiteID (`RRRRssss`, e.g. `00010023`), or multiSiteSystemNumber to record a specific talkgroup.|
 | Comment |        | Use this field to capture comments about a talkgroup. It will be ignored by Trunk Recorder. |
 
