@@ -404,10 +404,10 @@ static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg
 
 static void append_ffmpeg_output_args(std::vector<std::string> &args, bool compressed) {
   if (compressed)
-    args.insert(args.end(), {"-c:a", "aac", "-ar", "8000", "-ac", "1",
+    args.insert(args.end(), {"-c:a", "aac", "-ar", "16000", "-ac", "1",
                               "-b:a", "32k", "-movflags", "+faststart"});
   else
-    args.insert(args.end(), {"-c:a", "pcm_s16le"});
+    args.insert(args.end(), {"-c:a", "pcm_s16le", "-ar", "16000", "-ac", "1"});
 }
 
 struct LoudnormMeasured {
