@@ -9,9 +9,6 @@ using namespace boost::asio;
 
 typedef struct plugin_t plugin_t;
 typedef struct stream_t stream_t;
-std::vector<stream_t> streams;
-io_service my_tcp_io_service;
-long max_tcp_index = 0;
 
 struct plugin_t {
   Config* config;
@@ -35,8 +32,11 @@ struct stream_t {
 class Simple_Stream : public Plugin_Api {
   typedef boost::asio::io_service io_service;
   io_service my_io_service;
+  io_service my_tcp_io_service;
   ip::udp::endpoint remote_endpoint;
   ip::udp::socket my_socket{my_io_service};
+  std::vector<stream_t> streams;
+  long max_tcp_index = 0;
   public:
   
   Simple_Stream(){
