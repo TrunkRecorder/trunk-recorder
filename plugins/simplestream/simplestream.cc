@@ -93,7 +93,7 @@ class Simple_Stream : public Plugin_Api {
     int recorder_id = local_recorder.get_num();
     long wav_hz = local_recorder.get_wav_hz();
     boost::system::error_code error;
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
         if (patched_talkgroups.size() == 0){
           patched_talkgroups.push_back(call_tgid);  //call_info.talkgroup may be negative - we cast stream.TGID to signed for comparison
@@ -165,7 +165,7 @@ class Simple_Stream : public Plugin_Api {
       }
     }
     
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (stream.sendJSON == true && stream.sendCallStart == true){
         if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
           if (patched_talkgroups.size() == 0){
@@ -216,7 +216,7 @@ class Simple_Stream : public Plugin_Api {
 
   int call_end(Call_Data_t call_info) {
     boost::system::error_code error;
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (stream.sendJSON == true && stream.sendCallEnd == true){
         if (0==stream.short_name.compare(call_info.short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
           std::vector<long> patched_talkgroups;
