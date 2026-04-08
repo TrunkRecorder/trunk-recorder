@@ -84,6 +84,7 @@ public:
   double max_call_duration;
   double min_transmission_duration;
   bool compress_wav;
+  std::string audio_bitrate;
   bool conversation_mode;
   bool qpsk_mod;
   double squelch_db;
@@ -127,6 +128,8 @@ public:
   void set_upload_script(std::string script) override;
   bool get_compress_wav() override;
   void set_compress_wav(bool compress) override;
+  std::string get_audio_bitrate() override;
+  void set_audio_bitrate(std::string bitrate) override;
 
   bool get_audio_postprocess_enabled() override;
   void set_audio_postprocess_enabled(bool enabled) override;

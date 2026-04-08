@@ -23,7 +23,7 @@ Each Conventional Recorder also has a Squelch setting. Once a Conventional Recor
 
 - Use a visual signal analyzer program, like GQRX to explore the signal you are trying to capture
   - Adjust the gain settings so that you have strong signals without adding a lot of noise. Copy these gain settings into the `config.json` file.
-  - Note the Db value for the noise floor. You should set the squelch value to be in between the noise floor value and the the signal peak values.
+  - Note the Db value for the noise floor. You should set the squelch value to be in between the noise floor value and the signal peak values.
   - In the `config.json` file you can specify the squelch value for the whole system, or do it channel by channel, or a mix:
   - **System Wide Squelch**
     - `config.json`

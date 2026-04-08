@@ -148,6 +148,7 @@ struct Call_Data_t {
   bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
+  std::string audio_bitrate = "32k";
 
    // Working artifact paths (kept in tempDir while scripts/plugins run)
   std::string raw_filename;

@@ -9,7 +9,7 @@ Become a [Sponsor](https://github.com/sponsors/robotastic) to help support conti
 Thank you to everyone who has contributed!
 
 ## 🎉 V5.2 is now... Our Best Release Yet!!
-Thanks to everyone who contributed, tested and helped collect cored dumps! 
+Thanks to everyone who contributed, tested and helped collect core dumps! 
 
 ## Overview
 Need help? Got something working? Share it!
@@ -71,7 +71,7 @@ RTL-SDR dongles; HackRF; Ettus USRP B200, B210, B205; BladeRF; Airspy; SDRplay
 ### Playback & Sharing
 By default, Trunk Recorder just dumps a lot of recorded files into a directory. Here are a couple of options to make it easier to browse through recordings and share them on the Internet.
 * [OpenMHz](https://github.com/robotastic/trunk-recorder/wiki/Uploading-to-OpenMHz): This is my free hosted platform for sharing recordings
-* [Trunk Player](https://github.com/ScanOC/trunk-player): A great Python based server, if you want to you want to run your own
+* [Trunk Player](https://github.com/ScanOC/trunk-player): A great Python based server, if you want to run your own
 * [Rdio Scanner](https://github.com/chuot/rdio-scanner): Provide a good looking, scanner style interface for listening to Trunk Recorder
 * Broadcastify Calls (API): see Radio Reference [forum thread](https://forums.radioreference.com/threads/405236/) and [wiki page](https://wiki.radioreference.com/index.php/Broadcastify-Calls-Trunk-Recorder)
 * [Broadcastify via Liquidsoap](https://github.com/robotastic/trunk-recorder/wiki/Streaming-online-to-Broadcastify-with-Liquid-Soap)
@@ -88,7 +88,7 @@ By default, Trunk Recorder just dumps a lot of recorded files into a directory. 
 
 ### Troubleshooting
 
-If are having trouble, check out the [FAQ](docs/FAQ.md) and/or ask a question on the [Discord Server](https://discord.gg/btJAhESnks) 
+If you are having trouble, check out the [FAQ](docs/FAQ.md) and/or ask a question on the [Discord Server](https://discord.gg/btJAhESnks) 
 
 
 ## How Trunking Works
