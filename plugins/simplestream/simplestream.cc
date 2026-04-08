@@ -49,7 +49,17 @@ class Simple_Stream : public Plugin_Api {
       stream.TGID = element["TGID"];
       stream.address = element["address"];
       stream.port = element["port"];
-      stream.remote_endpoint = ip::udp::endpoint(ip::address::from_string(stream.address), stream.port);
+      if (!stream.tcp) {
+        ip::udp::resolver udp_resolver(my_io_service);
+        ip::udp::resolver::query udp_query(stream.address, std::to_string(stream.port));
+        boost::system::error_code ec;
+        ip::udp::resolver::iterator iter = udp_resolver.resolve(udp_query, ec);
+        if (ec) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve UDP address " << stream.address << ": " << ec.message();
+          continue;
+        }
+        stream.remote_endpoint = iter->endpoint();
+      }
       stream.sendTGID = element.value("sendTGID",false);
       stream.sendJSON = element.value("sendJSON",false);
       stream.sendCallStart = element.value("sendCallStart",false);
@@ -288,7 +298,18 @@ class Simple_Stream : public Plugin_Api {
       if (stream.tcp == true){
         ip::tcp::socket *my_tcp_socket = new ip::tcp::socket{my_tcp_io_service};
         stream.tcp_socket = my_tcp_socket;
-        stream.tcp_socket->connect(ip::tcp::endpoint( boost::asio::ip::address::from_string(stream.address), stream.port ));
+        ip::tcp::resolver tcp_resolver(my_tcp_io_service);
+        ip::tcp::resolver::query tcp_query(stream.address, std::to_string(stream.port));
+        boost::system::error_code ec;
+        ip::tcp::resolver::iterator iter = tcp_resolver.resolve(tcp_query, ec);
+        if (ec) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve TCP address " << stream.address << ": " << ec.message();
+          continue;
+        }
+        stream.tcp_socket->connect(iter->endpoint(), ec);
+        if (ec) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: TCP connect failed to " << stream.address << ":" << stream.port << ": " << ec.message();
+        }
       }
     }
     my_socket.open(ip::udp::v4());
