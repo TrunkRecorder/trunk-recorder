@@ -1083,6 +1083,22 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     }
   }
 
+  const int blocking_plugin_result = plugman_call_end_blocking(call_info);
+  const bool blocking_plugins_succeeded = (blocking_plugin_result == 0);
+
+  if (!blocking_plugins_succeeded) {
+    call_info.status = RETRY;
+    return call_info;
+  }
+
+  const int updated_json_write_result = write_call_json_file(call_info);
+  const bool updated_json_written = (updated_json_write_result == 0);
+  if (!updated_json_written) {
+    cleanup_tmp_call_files(call_info);
+    call_info.status = FAILED;
+    return call_info;
+  }
+
   const int deferred_plugin_result = plugman_call_end_deferred(call_info);
   const bool deferred_plugins_succeeded = (deferred_plugin_result == 0);
 
