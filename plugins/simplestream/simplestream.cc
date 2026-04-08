@@ -56,7 +56,7 @@ class Simple_Stream : public Plugin_Api {
       stream.sendCallEnd = element.value("sendCallEnd",false);
       stream.tcp = element.value("useTCP",false);
       stream.short_name = element.value("shortName", "");
-      BOOST_LOG_TRIVIAL(info) << "simplestreamer will stream audio from TGID " <<stream.TGID << " on System " <<stream.short_name << " to " << stream.address <<" on port " << stream.port << " tcp is "<<stream.tcp;
+      BOOST_LOG_TRIVIAL(info) << "SimpleStream will stream audio from TGID " <<stream.TGID << " on System " <<stream.short_name << " to " << stream.address <<" on port " << stream.port << " tcp is "<<stream.tcp;
       streams.push_back(stream);
     }
     return 0;
@@ -129,10 +129,17 @@ class Simple_Stream : public Plugin_Api {
             }
             send_buffer.push_back(buffer(samples, sampleCount*2));
             if(stream.tcp == true){
-              stream.tcp_socket->send(send_buffer);
+              try {
+                stream.tcp_socket->send(send_buffer);
+              } catch (const boost::system::system_error &e) {
+                BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+              }
             }
             else{
               my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+              if (error) {
+                BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+              }
             }
           }
         }
@@ -201,10 +208,17 @@ class Simple_Stream : public Plugin_Api {
                 send_buffer.push_back(buffer(json_string));  //prepend json data
               }
               if(stream.tcp == true){
-                stream.tcp_socket->send(send_buffer);
+                try {
+                  stream.tcp_socket->send(send_buffer);
+                } catch (const boost::system::system_error &e) {
+                  BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+                }
               }
               else{
                 my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+                if (error) {
+                  BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+                }
               }
             }
           }
@@ -249,10 +263,17 @@ class Simple_Stream : public Plugin_Api {
                 send_buffer.push_back(buffer(json_string));  //prepend json data
               }
               if(stream.tcp == true){
-                stream.tcp_socket->send(send_buffer);
+                try {
+                  stream.tcp_socket->send(send_buffer);
+                } catch (const boost::system::system_error &e) {
+                  BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+                }
               }
               else{
                 my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+                if (error) {
+                  BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+                }
               }
             }
           }
