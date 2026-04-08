@@ -5,7 +5,7 @@ sidebar_position: 3
 
 # Raspberry Pi / Debian
 
-Smaller radio systems can be covered using a Raspberry Pi. If you are interested in doing this, you should really get a Pi 4 or better yet, a Pi 5. It maybe possible to get things running on an older Pi, but you often get unexpect behavior and errors. A Pi 4 can handle 3-4 simultaneous recordings. Make sure you have a good power supply. Also pay attention to heat. If the Pi gets too hot, it will slow down. A good case or fan can help keep it going full tilt.
+Smaller radio systems can be covered using a Raspberry Pi. If you are interested in doing this, you should really get a Pi 4 or better yet, a Pi 5. It maybe possible to get things running on an older Pi, but you often get unexpected behavior and errors. A Pi 4 can handle 3-4 simultaneous recordings. Make sure you have a good power supply. Also pay attention to heat. If the Pi gets too hot, it will slow down. A good case or fan can help keep it going full tilt.
 
 Trunk Recorder uses `ffmpeg` for concluded call audio processing, including WAV concatenation, optional filtering/normalization, and optional M4A creation.
 
@@ -40,7 +40,7 @@ psk="NETWORK-PASSWORD"
 }
 ```
 
-- Eject the MicroSD card (first in the OS and then physhically from the reader)
+- Eject the MicroSD card (first in the OS and then physically from the reader)
 - Put the MicroSD card in the Pi and power it on.
 
 #### Remote Access
