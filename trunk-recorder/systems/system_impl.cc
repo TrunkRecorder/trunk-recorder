@@ -53,6 +53,14 @@ void System_impl::set_compress_wav(bool compress) {
   this->compress_wav = compress;
 }
 
+std::string System_impl::get_audio_bitrate() {
+  return this->audio_bitrate;
+}
+
+void System_impl::set_audio_bitrate(std::string bitrate) {
+  this->audio_bitrate = bitrate;
+}
+
 bool System_impl::get_audio_postprocess_enabled() {
   return this->audio_postprocess_enabled;
 }

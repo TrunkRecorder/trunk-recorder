@@ -402,12 +402,18 @@ static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg
   return true;
 }
 
-static void append_ffmpeg_output_args(std::vector<std::string> &args, bool compressed) {
-  if (compressed)
+static void append_ffmpeg_output_args(std::vector<std::string> &args,
+                                      bool compressed,
+                                      const std::string &audio_bitrate) {
+  if (compressed) {
+    const std::string bitrate =
+        trim_whitespace(audio_bitrate).empty() ? "32k" : trim_whitespace(audio_bitrate);
+
     args.insert(args.end(), {"-c:a", "aac", "-ar", "16000", "-ac", "1",
-                              "-b:a", "32k", "-movflags", "+faststart"});
-  else
+                             "-b:a", bitrate, "-movflags", "+faststart"});
+  } else {
     args.insert(args.end(), {"-c:a", "pcm_s16le", "-ar", "16000", "-ac", "1"});
+  }
 }
 
 struct LoudnormMeasured {
@@ -643,17 +649,17 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
           : "[0:a]" + filter + ",asplit=2[awav][aaac]";
       args.insert(args.end(), {"-filter_complex", split, "-map", "[awav]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
-      append_ffmpeg_output_args(args, false);
+      append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
 
       args.insert(args.end(), {"-map", "[aaac]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
-      append_ffmpeg_output_args(args, true);
+      append_ffmpeg_output_args(args, true, call_info.audio_bitrate);
       args.push_back(call_info.converted);
     } else {
       if (!filter.empty()) args.insert(args.end(), {"-af", filter});
       append_common_metadata_args(args, date, short_name, talkgroup);
-      append_ffmpeg_output_args(args, false);
+      append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
     }
 
@@ -1055,6 +1061,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.call_log             = sys->get_call_log();
   call_info.call_num             = call->get_call_num();
   call_info.compress_wav         = sys->get_compress_wav();
+  call_info.audio_bitrate        = sys->get_audio_bitrate();
 
   call_info.audio_postprocess.enabled             = sys->get_audio_postprocess_enabled();
   call_info.audio_postprocess.highpass_hz         = sys->get_audio_highpass_hz();

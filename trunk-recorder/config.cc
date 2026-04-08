@@ -368,6 +368,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Upload Script: " << system->get_upload_script();
         system->set_compress_wav(element.value("compressWav", true));
         BOOST_LOG_TRIVIAL(info) << "Compress .wav Files: " << system->get_compress_wav();
+        system->set_audio_bitrate(element.value("compressBitrate", "32k"));
+        BOOST_LOG_TRIVIAL(info) << "Audio Bitrate: " << system->get_audio_bitrate();
         system->set_call_log(element.value("callLog", true));
         BOOST_LOG_TRIVIAL(info) << "Call Log: " << system->get_call_log();
         system->set_audio_archive(element.value("audioArchive", true));

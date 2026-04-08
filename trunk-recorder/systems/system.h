@@ -53,6 +53,8 @@ public:
   virtual void set_upload_script(std::string script) = 0;
   virtual bool get_compress_wav() = 0;
   virtual void set_compress_wav(bool compress) = 0;
+  virtual std::string get_audio_bitrate() = 0;
+  virtual void set_audio_bitrate(std::string bitrate) = 0;
 
   virtual bool get_audio_postprocess_enabled() = 0;
   virtual void set_audio_postprocess_enabled(bool enabled) = 0;
