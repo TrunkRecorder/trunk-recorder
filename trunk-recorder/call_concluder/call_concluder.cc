@@ -1,7 +1,6 @@
 #include "call_concluder.h"
 #include "../plugin_manager/plugin_manager.h"
 
-#include <boost/filesystem.hpp>
 #include <filesystem>
 
 #include <algorithm>
@@ -215,8 +214,15 @@ static bool run_process_capture_combined_output(const std::vector<std::string> &
   close(pipefd[1]);
   char buf[4096];
   ssize_t nread;
-  while ((nread = read(pipefd[0], buf, sizeof(buf))) > 0)
-    output.append(buf, static_cast<std::size_t>(nread));
+  while ((nread = read(pipefd[0], buf, sizeof(buf))) != 0) {
+    if (nread > 0) {
+      output.append(buf, static_cast<std::size_t>(nread));
+    } else if (errno != EINTR) {
+      BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mread() failed capturing output of "
+                                << friendly_name << ": " << std::strerror(errno) << "\033[0m";
+      break;
+    }
+  }
   close(pipefd[0]);
 
   int status = 0;
@@ -366,33 +372,10 @@ static std::string build_cleanup_filter(const Audio_Postprocess_Config &cfg) {
 }
 
 static bool is_invalid_loudnorm_value(const std::string &v) {
-  const char *p = v.data();
-  const char *e = p + v.size();
-
-  while (p < e && std::isspace(static_cast<unsigned char>(*p))) {
-    ++p;
-  }
-  while (e > p && std::isspace(static_cast<unsigned char>(e[-1]))) {
-    --e;
-  }
-
-  if (p == e) {
-    return true;
-  }
-
-  const std::ptrdiff_t len = e - p;
-  if (len > 4) {
-    return false; // longest invalid token is 4 chars
-  }
-
-  std::string lowered;
-  lowered.reserve(static_cast<std::size_t>(len));
-  for (const char *it = p; it < e; ++it) {
-    lowered.push_back(static_cast<char>(std::tolower(static_cast<unsigned char>(*it))));
-  }
-
-  return lowered == "-inf" || lowered == "inf"  || lowered == "+inf" ||
-         lowered == "nan"  || lowered == "+nan" || lowered == "-nan";
+  const std::string s = lowercase_copy(trim_whitespace(v));
+  return s.empty() ||
+         s == "-inf" || s == "inf"  || s == "+inf" ||
+         s == "nan"  || s == "+nan" || s == "-nan";
 }
 
 static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cfg) {
@@ -417,8 +400,8 @@ static void append_ffmpeg_output_args(std::vector<std::string> &args,
                                       bool compressed,
                                       const std::string &audio_bitrate) {
   if (compressed) {
-    const std::string bitrate =
-        trim_whitespace(audio_bitrate).empty() ? "32k" : trim_whitespace(audio_bitrate);
+    const std::string trimmed = trim_whitespace(audio_bitrate);
+    const std::string bitrate = trimmed.empty() ? "32k" : trimmed;
 
     args.insert(args.end(), {"-c:a", "aac", "-ar", "16000", "-ac", "1",
                              "-b:a", bitrate, "-movflags", "+faststart"});
@@ -596,7 +579,10 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
   const std::string list_filename = call_info.raw_filename.empty()
                                         ? (call_info.filename     + ".concat.txt")
                                         : (call_info.raw_filename + ".concat.txt");
-  if (!write_concat_list(input_files, list_filename)) return -1;
+  if (!write_concat_list(input_files, list_filename)) {
+    std::remove(list_filename.c_str()); // remove any partial file left by write failure
+    return -1;
+  }
 
   const std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
@@ -847,9 +833,9 @@ int create_call_json(Call_Data_t &call_info) {
 
 bool checkIfFile(const std::string &filePath) {
   try {
-    const boost::filesystem::path p(filePath);
-    return boost::filesystem::exists(p) && boost::filesystem::is_regular_file(p);
-  } catch (const boost::filesystem::filesystem_error &e) {
+    const fs::path p(filePath);
+    return fs::exists(p) && fs::is_regular_file(p);
+  } catch (const fs::filesystem_error &e) {
     BOOST_LOG_TRIVIAL(error) << "\033[0;31m" << e.what() << "\033[0m";
     return false;
   }
@@ -988,7 +974,7 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
     std::vector<std::string> input_files;
     input_files.reserve(call_info.transmission_list.size());
 
-    struct stat statbuf;
+    struct stat statbuf = {};
     for (const auto &t : call_info.transmission_list) {
       const bool transmission_file_exists = (stat(t.filename.c_str(), &statbuf) == 0);
       if (transmission_file_exists) {
@@ -1068,24 +1054,16 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    const bool has_upload_script = !trim_whitespace(call_info.upload_script).empty();
+    const int upload_script_result = run_upload_script_argv(call_info);
     BOOST_LOG_TRIVIAL(debug) << loghdr
-                             << "Upload script configured=" << has_upload_script;
+                             << "Upload script result=" << upload_script_result;
 
-    if (has_upload_script) {
-      BOOST_LOG_TRIVIAL(info) << loghdr << "Running upload script";
-      const int upload_script_result = run_upload_script_argv(call_info);
-      const bool upload_script_succeeded = (upload_script_result == 0);
-      BOOST_LOG_TRIVIAL(debug) << loghdr
-                               << "Upload script result=" << upload_script_result;
-
-      if (!upload_script_succeeded) {
-        BOOST_LOG_TRIVIAL(error) << loghdr
-                                 << "Upload script failed";
-        cleanup_tmp_call_files(call_info);
-        call_info.status = FAILED;
-        return call_info;
-      }
+    if (upload_script_result != 0) {
+      BOOST_LOG_TRIVIAL(error) << loghdr
+                               << "Upload script failed";
+      cleanup_tmp_call_files(call_info);
+      call_info.status = FAILED;
+      return call_info;
     }
   }
 
@@ -1152,19 +1130,19 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
     struct tm ltm {};
     localtime_r(&work_start_time, &ltm);
 
-    const boost::filesystem::path final_base_path =
-        boost::filesystem::path(capture_dir) /
+    const fs::path final_base_path =
+        fs::path(capture_dir) /
         call->get_short_name() /
         std::to_string(1900 + ltm.tm_year) /
         std::to_string(1 + ltm.tm_mon) /
         std::to_string(ltm.tm_mday);
 
-    const boost::filesystem::path temp_base_path =
-        boost::filesystem::path(temp_dir) /
+    const fs::path temp_base_path =
+        fs::path(temp_dir) /
         call->get_short_name();
 
-    boost::filesystem::create_directories(final_base_path);
-    boost::filesystem::create_directories(temp_base_path);
+    fs::create_directories(final_base_path);
+    fs::create_directories(temp_base_path);
 
     const long long sec   = start_ms / 1000;
     const int       milli = static_cast<int>(start_ms % 1000);
@@ -1188,16 +1166,16 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
   } else {
     const std::string expanded = expand_filename_format(filename_format, call_info, work_start_time);
 
-    const boost::filesystem::path final_path =
-        boost::filesystem::path(capture_dir) / expanded;
+    const fs::path final_path =
+        fs::path(capture_dir) / expanded;
 
-    const boost::filesystem::path temp_path =
-        boost::filesystem::path(temp_dir) /
+    const fs::path temp_path =
+        fs::path(temp_dir) /
         call->get_short_name() /
-        boost::filesystem::path(expanded).filename();
+        fs::path(expanded).filename();
 
-    boost::filesystem::create_directories(final_path.parent_path());
-    boost::filesystem::create_directories(temp_path.parent_path());
+    fs::create_directories(final_path.parent_path());
+    fs::create_directories(temp_path.parent_path());
 
     final_base_filename = final_path.string();
     temp_base_filename  = temp_path.string();
@@ -1262,6 +1240,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.audio_postprocess.loudnorm_i          = sys->get_audio_loudnorm_i();
   call_info.audio_postprocess.loudnorm_tp         = sys->get_audio_loudnorm_tp();
   call_info.audio_postprocess.loudnorm_lra        = sys->get_audio_loudnorm_lra();
+  call_info.audio_postprocess.loudnorm_two_pass   = sys->get_audio_loudnorm_two_pass();
   call_info.audio_postprocess.ffmpeg_filter       = sys->get_audio_ffmpeg_filter();
 
   call_info.talkgroup                 = call->get_talkgroup();
@@ -1302,14 +1281,12 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
     const double       seg_len_s = seg_ms / 1000.0;
 
     if (seg_len_s < min_tx_s) {
-      // BUG FIX: original always logged "Removing" and deleted the file even
-      // when transmission_archive was true. Both are now gated correctly.
       ++call_info.min_transmissions_removed;
-      if (!call_info.transmission_archive) {
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission shorter than "
-                                 << min_tx_s << "s (actual: " << seg_len_s << "s).";
-        if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
-      }
+      BOOST_LOG_TRIVIAL(info) << loghdr << "Removing transmission shorter than "
+                               << min_tx_s << "s (actual: " << seg_len_s << "s).";
+      // Always delete the file: short transmissions are excluded from both the
+      // output and the archive, so they must not accumulate in tmpDir.
+      if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
       it = call_info.transmission_list.erase(it);
       continue;
     }
@@ -1399,7 +1376,7 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
 
   if (call_info.encrypted) {
     if (!call_info.transmission_list.empty() || call_info.min_transmissions_removed > 0) {
-      if (create_call_json(call_info) < 0) {
+      if (create_call_json(call_info) != 0) {
         BOOST_LOG_TRIVIAL(error) << loghdr
             << "\033[0;31mFailed to create metadata JSON for encrypted call\033[0m";
       } else if (write_call_json_file(call_info) != 0) {
@@ -1422,6 +1399,7 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
           << "No Transmissions were recorded! "
           << call_info.min_transmissions_removed << " transmissions less than "
           << sys->get_min_tx_duration() << " seconds were removed.";
+    cleanup_tmp_call_files(call_info);
     return;
   }
 
@@ -1449,19 +1427,22 @@ void Call_Concluder::manage_call_data_workers() {
     const std::string loghdr =
         log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
+    struct tm start_tm {};
+    localtime_r(&start_time, &start_tm);
+
     if (call_info.retry_attempt > MAX_RETRY) {
       // Final retry failed: archive anything configured to be kept, then clean tmp
       finalize_call_files(call_info, true);
       cleanup_tmp_call_files(call_info);
 
       BOOST_LOG_TRIVIAL(error) << loghdr << "Failed to conclude call - "
-                                << std::put_time(std::localtime(&start_time), "%c %Z");
+                                << std::put_time(&start_tm, "%c %Z");
     } else {
       const long backoff = (1L << call_info.retry_attempt) * 60 + random_jitter(10);
       call_info.process_call_time = time(nullptr) + backoff;
       retry_call_list.push_back(call_info);
       BOOST_LOG_TRIVIAL(error) << loghdr
-          << std::put_time(std::localtime(&start_time), "%c %Z")
+          << std::put_time(&start_tm, "%c %Z")
           << " retry attempt " << call_info.retry_attempt
           << " in " << backoff << "s\t retry queue: " << retry_call_list.size() << " calls";
     }
