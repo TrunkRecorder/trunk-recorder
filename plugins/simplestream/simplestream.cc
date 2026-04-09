@@ -47,8 +47,34 @@ class Simple_Stream : public Plugin_Api {
     for (json element : config_data["streams"]) {
       stream_t stream;
       stream.TGID = element["TGID"];
-      stream.address = element["address"];
-      stream.port = element["port"];
+
+      if (element.contains("url")) {
+        // Parse url field: udp://hostname:port or tcp://hostname:port
+        std::string url = element["url"];
+        if (url.substr(0, 6) == "udp://") {
+          stream.tcp = false;
+          url = url.substr(6);
+        } else if (url.substr(0, 6) == "tcp://") {
+          stream.tcp = true;
+          url = url.substr(6);
+        } else {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: invalid URL scheme in \"" << element["url"] << "\", expected udp:// or tcp://";
+          continue;
+        }
+        size_t colon = url.rfind(':');
+        if (colon == std::string::npos) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: missing port in URL \"" << element["url"].get<std::string>() << "\"";
+          continue;
+        }
+        stream.address = url.substr(0, colon);
+        stream.port = static_cast<uint32_t>(std::stoul(url.substr(colon + 1)));
+      } else {
+        BOOST_LOG_TRIVIAL(warning) << "SimpleStream: address/port/useTCP are deprecated, please use the url field instead (e.g. \"url\": \"udp://hostname:port\")";
+        stream.address = element["address"];
+        stream.port = element["port"];
+        stream.tcp = element.value("useTCP", false);
+      }
+
       if (!stream.tcp) {
         ip::udp::resolver udp_resolver(my_io_service);
         ip::udp::resolver::query udp_query(stream.address, std::to_string(stream.port));
@@ -60,11 +86,11 @@ class Simple_Stream : public Plugin_Api {
         }
         stream.remote_endpoint = iter->endpoint();
       }
+
       stream.sendTGID = element.value("sendTGID",false);
       stream.sendJSON = element.value("sendJSON",false);
       stream.sendCallStart = element.value("sendCallStart",false);
       stream.sendCallEnd = element.value("sendCallEnd",false);
-      stream.tcp = element.value("useTCP",false);
       stream.short_name = element.value("shortName", "");
       BOOST_LOG_TRIVIAL(info) << "SimpleStream will stream audio from TGID " <<stream.TGID << " on System " <<stream.short_name << " to " << stream.address <<" on port " << stream.port << " tcp is "<<stream.tcp;
       streams.push_back(stream);
