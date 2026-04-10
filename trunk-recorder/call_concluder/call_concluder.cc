@@ -549,7 +549,7 @@ static bool write_concat_list(const std::vector<std::string> &input_files,
     return false;
   }
   for (const auto &f : input_files)
-    list_file << "file '" << escape_ffmpeg_concat_path(f) << "'\n";
+    list_file << "file '" << escape_ffmpeg_concat_path(fs::path(f).filename().string()) << "'\n";
 
   list_file.flush();
   if (!list_file.good()) {
@@ -582,9 +582,9 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
     return -1;
   }
 
-  const std::string list_filename = call_info.raw_filename.empty()
-                                        ? (call_info.filename     + ".concat.txt")
-                                        : (call_info.raw_filename + ".concat.txt");
+  const fs::path transmission_dir = fs::path(input_files[0]).parent_path();
+  const std::string list_filename = (transmission_dir /
+      (fs::path(call_info.filename).filename().string() + ".concat.txt")).string();
   if (!write_concat_list(input_files, list_filename)) return -1;
 
   const std::string loghdr =
@@ -878,10 +878,8 @@ void remove_call_files(const Call_Data_t &call_info, bool plugin_failure) {
     }
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
-    if (checkIfFile(call_info.raw_filename))
-      std::remove(call_info.raw_filename.c_str());
   } else {
-    for (const std::string &f : {call_info.raw_filename, call_info.filename, call_info.converted})
+    for (const std::string &f : {call_info.filename, call_info.converted})
       if (checkIfFile(f)) std::remove(f.c_str());
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
@@ -1023,7 +1021,6 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
   }
 
   const std::string stem = base_filename + "-call_" + std::to_string(call->get_call_num());
-  call_info.raw_filename    = stem + ".raw.wav";
   call_info.filename        = stem + ".wav";
   call_info.status_filename = stem + ".json";
   call_info.converted       = stem + ".m4a";

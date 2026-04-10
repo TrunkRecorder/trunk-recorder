@@ -150,7 +150,6 @@ struct Call_Data_t {
   bool call_log;
   bool compress_wav;
   std::string audio_bitrate = "32k";
-  std::string raw_filename;
   std::string filename;
   std::string status_filename;
   std::string converted;
