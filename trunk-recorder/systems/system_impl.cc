@@ -149,6 +149,14 @@ void System_impl::set_audio_ffmpeg_filter(std::string filter) {
   this->audio_ffmpeg_filter = filter;
 }
 
+bool System_impl::get_audio_debug_wav() {
+  return this->audio_debug_wav;
+}
+
+void System_impl::set_audio_debug_wav(bool enabled) {
+  this->audio_debug_wav = enabled;
+}
+
 double System_impl::get_min_duration() {
   return this->min_call_duration;
 }
@@ -210,6 +218,7 @@ System_impl::System_impl(int sys_num) {
   audio_loudnorm_tp = -0.1;
   audio_loudnorm_lra = 11.0;
   audio_ffmpeg_filter = "";
+  audio_debug_wav = false;
 }
 
 void System_impl::set_xor_mask(unsigned long sys_id, unsigned long wacn, unsigned long nac) {
