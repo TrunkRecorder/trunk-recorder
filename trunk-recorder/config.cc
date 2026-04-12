@@ -387,7 +387,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         double audio_loudnorm_tp = -0.1;
         double audio_loudnorm_lra = 11.0;
         std::string audio_ffmpeg_filter = "";
-        bool audio_debug_wav = false;
+        bool audio_output_raw_audio = false;
 
         if (element.contains("audio_postprocess") && element["audio_postprocess"].is_object()) {
           const json &audio_post = element["audio_postprocess"];
@@ -405,7 +405,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           audio_loudnorm_lra = audio_post.value("loudnorm_lra", 11.0);
 
           audio_ffmpeg_filter = audio_post.value("ffmpeg_filter", "");
-          audio_debug_wav = audio_post.value("debug_wav", false);
+          audio_output_raw_audio = audio_post.value("outputRawAudio", false);
         }
 
         if (audio_highpass_hz < 0) {
@@ -439,7 +439,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_audio_loudnorm_tp(audio_loudnorm_tp);
         system->set_audio_loudnorm_lra(audio_loudnorm_lra);
         system->set_audio_ffmpeg_filter(audio_ffmpeg_filter);
-        system->set_audio_debug_wav(audio_debug_wav);
+        system->set_audio_output_raw_audio(audio_output_raw_audio);
 
         BOOST_LOG_TRIVIAL(info) << "Audio Postprocess Enabled: " << system->get_audio_postprocess_enabled();
         BOOST_LOG_TRIVIAL(info) << "Audio Highpass (Hz): " << system->get_audio_highpass_hz();
@@ -457,7 +457,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         } else {
           BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: <none>";
         }
-        BOOST_LOG_TRIVIAL(info) << "Audio Debug WAV: " << system->get_audio_debug_wav();
+        BOOST_LOG_TRIVIAL(info) << "Audio Output Raw Audio: " << system->get_audio_output_raw_audio();
         system->set_unit_tags_file(element.value("unitTagsFile", ""));
         BOOST_LOG_TRIVIAL(info) << "Unit Tags File: " << system->get_unit_tags_file();
         system->set_unit_tags_ota_file(element.value("unitTagsOTA", ""));

@@ -74,7 +74,7 @@ struct Audio_Postprocess_Config {
 
   std::string ffmpeg_filter = "";
 
-  bool debug_wav = false;
+  bool output_raw_audio = false;
 };
 
 struct Call_Source {
@@ -155,7 +155,7 @@ struct Call_Data_t {
   std::string filename;
   std::string status_filename;
   std::string converted;
-  std::string debug_filename;
+  std::string raw_audio_filename;
   int min_transmissions_removed;
 
   int sys_num;

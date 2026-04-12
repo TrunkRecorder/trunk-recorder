@@ -324,7 +324,7 @@ Each system can optionally define an `audio_postprocess` object to control clean
 ```json
 "audio_postprocess": {
 "enabled": false,
-"debug_wav": false,
+"outputRawAudio": false,
 "highpass_hz": 0,
 "lowpass_hz": 0,
 "bandreject_hz": 0,
@@ -343,7 +343,7 @@ Each system can optionally define an `audio_postprocess` object to control clean
 | Key                 | Required | Default Value | Type                  | Description |
 | ------------------- | :------: | ------------- | --------------------- | ----------- |
 | enabled             |          | false         | **true** / **false**  | Enables the structured cleanup filter chain. This controls `highpass_hz`, `lowpass_hz`, `bandreject_hz`, `bandreject_width_hz`, and use of `ffmpeg_filter` as the base filter chain. It does **not** control loudnorm. |
-| debug_wav           |          | false         | **true** / **false**  | When enabled, saves an additional `.debug.wav` file alongside the normal call output. This file is a verbatim concatenation of the raw transmission recordings with no filtering, resampling, or loudness normalization applied — the original sample rate and bit depth are preserved exactly. Useful for comparing the effect of post-processing settings or diagnosing audio quality issues. See **Debug WAV** below. |
+| outputRawAudio      |          | false         | **true** / **false**  | When enabled, saves an additional `.raw.wav` file alongside the normal call output. This file is a verbatim concatenation of the raw transmission recordings with no filtering, resampling, or loudness normalization applied — the original sample rate and bit depth are preserved exactly. Useful for comparing the effect of post-processing settings or diagnosing audio quality issues. See **Raw Audio Output** below. |
 | highpass_hz         |          | 0             | number                | Adds an FFmpeg highpass filter when greater than 0. |
 | lowpass_hz          |          | 0             | number                | Adds an FFmpeg lowpass filter when greater than 0. |
 | bandreject_hz       |          | 0             | number                | Adds an FFmpeg bandreject filter center frequency when greater than 0. |
@@ -405,15 +405,15 @@ If that also fails, Trunk Recorder falls back to unfiltered rendering.
 - if `ffmpeg_filter` already contains `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization
 - the old implicit `dynaudnorm` fallback is no longer used
 
-### Debug WAV
+### Raw Audio Output
 
-When `debug_wav` is `true`, Trunk Recorder writes an additional file named `<stem>.debug.wav` to the capture directory after each call concludes.
+When `outputRawAudio` is `true`, Trunk Recorder writes an additional file named `<stem>.raw.wav` to the capture directory after each call concludes.
 
 The debug file is produced by concatenating the raw transmission recordings using an FFmpeg stream copy — no decoding, re-encoding, filtering, resampling, or loudness normalization is applied. The audio is bit-for-bit identical to what the recorder wrote, just joined into a single file.
 
 **File retention:**
 
-- The `.debug.wav` is always kept in the capture directory, even when `audioArchive` is `false`. When the normal processed audio is deleted after upload, the debug file remains.
+- The `.raw.wav` is always kept in the capture directory, even when `audioArchive` is `false`. When the normal processed audio is deleted after upload, the raw audio file remains.
 - If a call fails all plugin retry attempts and `archiveFilesOnFailure` is also `false`, the debug file is removed along with the other call artifacts.
 
 **Typical use cases:**
@@ -457,7 +457,7 @@ The debug file is produced by concatenating the raw transmission recordings usin
 "loudnorm_tp": -0.1,
 "loudnorm_lra": 11.0,
 "ffmpeg_filter": "",
-"debug_wav": false
+"outputRawAudio": false
 }
 ```
 
@@ -499,16 +499,16 @@ If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm set
 }
 ```
 
-#### Debug WAV alongside processed output
+#### Raw audio output alongside processed output
 
-Saves a verbatim `.debug.wav` next to the normal processed call files. All other post-processing settings still apply to the normal output.
+Saves a verbatim `.raw.wav` next to the normal processed call files. All other post-processing settings still apply to the normal output.
 
 ```json
 "audio_postprocess": {
 "enabled": true,
 "highpass_hz": 200,
 "loudnorm": true,
-"debug_wav": true
+"outputRawAudio": true
 }
 ```
 

@@ -560,33 +560,33 @@ static bool write_concat_list(const std::vector<std::string> &input_files,
   return true;
 }
 
-static void write_debug_wav(const Call_Data_t &call_info,
-                            const std::vector<std::string> &input_files) {
+static void write_raw_audio_output(const Call_Data_t &call_info,
+                                   const std::vector<std::string> &input_files) {
   const std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
   const fs::path transmission_dir = fs::path(input_files[0]).parent_path();
   const std::string list_filename = (transmission_dir /
-      (fs::path(call_info.debug_filename).filename().string() + ".concat.txt")).string();
+      (fs::path(call_info.raw_audio_filename).filename().string() + ".concat.txt")).string();
 
   if (!write_concat_list(input_files, list_filename)) {
-    BOOST_LOG_TRIVIAL(warning) << loghdr << "\033[0;33mDebug WAV: failed to write concat list\033[0m";
+    BOOST_LOG_TRIVIAL(warning) << loghdr << "\033[0;33mRaw audio output: failed to write concat list\033[0m";
     return;
   }
 
   const std::vector<std::string> args = {
       "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
       "-f", "concat", "-safe", "0", "-i", list_filename,
-      "-c:a", "copy", call_info.debug_filename
+      "-c:a", "copy", call_info.raw_audio_filename
   };
 
-  const int rc = run_process_wait(args, loghdr, "ffmpeg debug wav");
+  const int rc = run_process_wait(args, loghdr, "ffmpeg raw audio output");
   std::remove(list_filename.c_str());
 
   if (rc != 0)
-    BOOST_LOG_TRIVIAL(warning) << loghdr << "\033[0;33mDebug WAV write failed; skipping\033[0m";
+    BOOST_LOG_TRIVIAL(warning) << loghdr << "\033[0;33mRaw audio output write failed; skipping\033[0m";
   else
-    BOOST_LOG_TRIVIAL(debug) << loghdr << "Debug WAV written: " << call_info.debug_filename;
+    BOOST_LOG_TRIVIAL(debug) << loghdr << "Raw audio output written: " << call_info.raw_audio_filename;
 }
 
 static void append_common_metadata_args(std::vector<std::string> &args,
@@ -913,7 +913,7 @@ void remove_call_files(const Call_Data_t &call_info, bool plugin_failure) {
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
 
-    // Debug WAV is intentionally kept on success (audio_archive=false) — it is
+    // Raw audio output is intentionally kept on success (audio_archive=false) — it is
   }
 
   const bool keep_json = call_info.call_log || (plugin_failure && call_info.archive_files_on_failure);
@@ -974,8 +974,8 @@ Call_Data_t upload_call_worker(Call_Data_t call_info) {
       return call_info;
     }
 
-    if (call_info.audio_postprocess.debug_wav)
-      write_debug_wav(call_info, input_files);
+    if (call_info.audio_postprocess.output_raw_audio)
+      write_raw_audio_output(call_info, input_files);
 
     if (!trim_whitespace(call_info.upload_script).empty()) {
       if (run_upload_script_argv(call_info) != 0) {
@@ -1058,7 +1058,7 @@ Call_Data_t Call_Concluder::create_base_filename(Call *call,
   call_info.filename        = stem + ".wav";
   call_info.status_filename = stem + ".json";
   call_info.converted       = stem + ".m4a";
-  call_info.debug_filename  = stem + ".debug.wav";
+  call_info.raw_audio_filename = stem + ".raw.wav";
 
   return call_info;
 }
@@ -1105,7 +1105,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.audio_postprocess.loudnorm_tp         = sys->get_audio_loudnorm_tp();
   call_info.audio_postprocess.loudnorm_lra        = sys->get_audio_loudnorm_lra();
   call_info.audio_postprocess.ffmpeg_filter       = sys->get_audio_ffmpeg_filter();
-  call_info.audio_postprocess.debug_wav           = sys->get_audio_debug_wav();
+  call_info.audio_postprocess.output_raw_audio     = sys->get_audio_output_raw_audio();
 
   call_info.talkgroup                 = call->get_talkgroup();
   call_info.talkgroup_display         = call->get_talkgroup_display();

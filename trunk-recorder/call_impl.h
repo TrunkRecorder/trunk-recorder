@@ -130,7 +130,7 @@ protected:
   std::string transmission_filename;
   std::string converted_filename;
   std::string status_filename;
-  std::string debug_filename;
+  std::string raw_audio_filename;
   std::string sigmf_filename;
   std::string path;
   bool phase2_tdma;

@@ -105,7 +105,7 @@ public:
   double audio_loudnorm_tp;
   double audio_loudnorm_lra;
   std::string audio_ffmpeg_filter;
-  bool audio_debug_wav;
+  bool audio_output_raw_audio;
 
   unsigned xor_mask_len;
   const char *xor_mask;
@@ -168,8 +168,8 @@ public:
   std::string get_audio_ffmpeg_filter() override;
   void set_audio_ffmpeg_filter(std::string filter) override;
 
-  bool get_audio_debug_wav() override;
-  void set_audio_debug_wav(bool enabled) override;
+  bool get_audio_output_raw_audio() override;
+  void set_audio_output_raw_audio(bool enabled) override;
 
   std::string get_api_key() override;
   void set_api_key(std::string api_key) override;
