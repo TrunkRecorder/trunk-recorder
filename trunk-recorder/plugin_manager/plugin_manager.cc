@@ -107,6 +107,11 @@ void start_plugins(std::vector<Source *> sources, std::vector<System *> systems)
   for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
     Plugin *plugin = *it;
 
+    if (plugin->state == PLUGIN_FAILED) {
+      BOOST_LOG_TRIVIAL(warning) << "Skipping start for failed plugin: " << plugin->name;
+      continue;
+    }
+
     /* ----- Plugin Start ----- */
     if (plugin->state == PLUGIN_INITIALIZED) {
       int err = plugin->api->start();
@@ -233,16 +238,29 @@ int plugman_call_end_blocking(Call_Data_t& call_info) {
         continue;
       }
 
+      BOOST_LOG_TRIVIAL(info) << "[" << call_info.short_name << "]\t" << call_info.call_num
+                              << "C\tTG: " << call_info.talkgroup_display
+                              << "\tFreq: " << format_freq(call_info.freq)
+                              << "\tPlugin Manager: call_end retry ("
+                              << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY
+                              << ") - " << plugin->name;
+
       if (!call_info.call_json.contains(plugin->name) ||
           !call_info.call_json[plugin->name].is_object()) {
         call_info.call_json[plugin->name] = nlohmann::ordered_json::object();
-          }
+      }
 
       int plugin_error = plugin->api->call_end(call_info, call_info.call_json[plugin->name]);
       if (plugin_error) {
+        BOOST_LOG_TRIVIAL(error) << "[" << call_info.short_name << "]\t" << call_info.call_num
+                                 << "C\tTG: " << call_info.talkgroup_display
+                                 << "\tFreq: " << format_freq(call_info.freq)
+                                 << "\tPlugin Manager: call_end retry ("
+                                 << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY
+                                 << ") - " << plugin->name << " failed.";
         plugin_retry_list.push_back(*it);
       }
-         }
+    }
   }
 
   if (plugin_retry_list.empty()) {
@@ -287,16 +305,20 @@ int plugman_call_end_deferred(Call_Data_t& call_info) {
     });
   };
 
-  if (call_info.status == INITIAL) {
+  // First invocation: run all deferred plugins. Subsequent invocations: retry only failures.
+  // Using a flag instead of call_info.status so that deferred plugins still run when
+  // we reach this function for the first time after a blocking-plugin retry.
+  if (!call_info.deferred_plugins_ran) {
     for (int i = 0; i < static_cast<int>(plugins.size()); ++i) {
       launch_deferred_plugin(i);
     }
-  } else if (call_info.status == RETRY) {
-    for (std::vector<int>::iterator it = call_info.deferred_plugin_retry_list.begin();
-         it != call_info.deferred_plugin_retry_list.end(); ++it) {
-      launch_deferred_plugin(*it);
-         }
+  } else {
+    for (int idx : call_info.deferred_plugin_retry_list) {
+      launch_deferred_plugin(idx);
+    }
   }
+
+  call_info.deferred_plugins_ran = true;
 
   for (auto &worker : deferred_workers) {
     int plugin_index = worker.first;

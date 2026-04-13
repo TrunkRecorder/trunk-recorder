@@ -186,6 +186,7 @@ struct Call_Data_t {
 
   std::vector<int> blocking_plugin_retry_list;
   std::vector<int> deferred_plugin_retry_list;
+  bool deferred_plugins_ran = false;
   nlohmann::ordered_json call_json;
 };
 
