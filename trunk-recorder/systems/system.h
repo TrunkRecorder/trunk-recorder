@@ -89,12 +89,6 @@ public:
   virtual std::string get_audio_ffmpeg_filter() = 0;
   virtual void set_audio_ffmpeg_filter(std::string filter) = 0;
 
-  virtual std::string get_api_key() = 0;
-  virtual void set_api_key(std::string api_key) = 0;
-  virtual std::string get_bcfy_api_key() = 0;
-  virtual void set_bcfy_api_key(std::string bcfy_api_key) = 0;
-  virtual int get_bcfy_system_id() = 0;
-  virtual void set_bcfy_system_id(int bcfy_system_id) = 0;
   virtual double get_min_duration() = 0;
   virtual void set_min_duration(double duration) = 0;
   virtual double get_max_duration() = 0;
@@ -238,5 +232,9 @@ public:
 
   virtual std::string get_filename_format() = 0;
   virtual void set_filename_format(std::string format) = 0;
+
+  virtual int get_config_index() = 0;
+  virtual void set_config_index(int index) = 0;
+
 };
 #endif

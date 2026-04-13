@@ -2,6 +2,7 @@
 #define PLUGIN_MANAGER_H
 
 #include "../call_concluder/call_concluder.h"
+#include "../config_service.h"
 #include "../recorders/recorder.h"
 #include "../source.h"
 #include "../systems/system.h"
@@ -23,10 +24,10 @@ struct Plugin {
   boost::shared_ptr<Plugin_Api> api;
   plugin_state_t state;
   std::string name;
+  std::string plugin_type; // "blocking" or "deferred"
 };
 
 void initialize_plugins(json config_data, Config *config, std::vector<Source *> sources, std::vector<System *> systems);
-void add_internal_plugin(std::string name, std::string library, json config_data);
 void start_plugins(std::vector<Source *> sources, std::vector<System *> systems);
 void stop_plugins();
 
@@ -35,7 +36,8 @@ void plugman_audio_callback(Call *call, Recorder *recorder, int16_t *samples, in
 int plugman_signal(long unitId, const char *signaling_type, gr::blocks::SignalType sig_type, Call *call, System *system, Recorder *recorder);
 int plugman_trunk_message(std::vector<TrunkMessage> messages, System *system);
 int plugman_call_start(Call *call);
-int plugman_call_end(Call_Data_t& call_info);
+int plugman_call_end_blocking(Call_Data_t& call_info);
+int plugman_call_end_deferred(Call_Data_t& call_info);
 int plugman_calls_active(std::vector<Call *> calls);
 void plugman_setup_recorder(Recorder *recorder);
 void plugman_setup_system(System *system);
@@ -51,4 +53,9 @@ void plugman_unit_data_grant(System *system, long source_id);
 void plugman_unit_answer_request(System *system, long source_id, long talkgroup);
 void plugman_unit_location(System *system, long source_id, long talkgroup_num);
 void plugman_voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs);
+void plugman_config_change(const ConfigChangeInfo& change);
+
+// Register the plugin manager as a listener for configuration changes
+void plugman_register_config_listener();
+
 #endif // PLUGIN_MANAGER_H

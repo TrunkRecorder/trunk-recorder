@@ -9,6 +9,14 @@ int Source::get_num() {
   return src_num;
 };
 
+int Source::get_config_index() {
+  return config_index;
+}
+
+void Source::set_config_index(int index) {
+  config_index = index;
+}
+
 gr::basic_block_sptr Source::get_src_block() {
   return source_block;
 }
@@ -62,6 +70,7 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   max_sigmf_recorders = 0;
   max_analog_recorders = 0;
   debug_recorder_port = 0;
+  config_index = -1;
   attached_detector = false;
   attached_selector = false;
   next_selector_port = 0;
@@ -168,6 +177,7 @@ void Source::set_iq_source(std::string iq_file, bool repeat, double center, doub
   max_sigmf_recorders = 0;
   max_analog_recorders = 0;
   debug_recorder_port = 0;
+  config_index = -1;
   attached_detector = false;
   attached_selector = false;
   next_selector_port = 0;
@@ -306,6 +316,12 @@ void Source::set_freq_corr(double p) {
 
 void Source::set_error(double e) {
   error = e;
+  if (driver == "osmosdr") {
+    cast_to_osmo_sptr(source_block)->set_center_freq(center + error, 0);
+  } else if (driver == "usrp") {
+    cast_to_usrp_sptr(source_block)->set_center_freq(center + error, 0);
+  }
+
 }
 
 double Source::get_error() {
@@ -369,6 +385,11 @@ int Source::get_gain_by_name(std::string name) {
 
 double Source::get_gain() {
   return gain;
+}
+
+
+bool Source::get_gain_mode() {
+  return gain_mode;
 }
 
 void Source::set_gain_mode(bool m) {

@@ -210,7 +210,7 @@ public:
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
 
-      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share); 
+      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share);
       curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, curl_dns_ttl);
 
       curl_multi_add_handle(multi_handle, curl);
@@ -299,23 +299,26 @@ public:
       if (res == CURLM_OK && response_code == 200) {
         struct stat file_info;
         stat(call_info.converted.c_str(), &file_info);
-        std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
+        std::string loghdr = log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
         BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
         ;
         return 0;
       }
     }
-    std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
+    std::string loghdr = log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
     // Configuration errors - skip the retry queue
-    static const struct { const char* match; const char* message; bool is_error; } config_errors[] = {
-      {"API Keys do not match",    "Error: Invalid API Key", true},
-      {"ShortName does not exist", "Error: Invalid System Name", true},
-      {"Error, invalid filename",  "Error: Invalid Filename", true},
-      {"Talkgroup does not exist", "Skipped: System Ignoring Unknown Talkgroups", false}
-    };
-    
-    for (const auto& error : config_errors) {
+    static const struct {
+      const char *match;
+      const char *message;
+      bool is_error;
+    } config_errors[] = {
+        {"API Keys do not match", "Error: Invalid API Key", true},
+        {"ShortName does not exist", "Error: Invalid System Name", true},
+        {"Error, invalid filename", "Error: Invalid Filename", true},
+        {"Talkgroup does not exist", "Skipped: System Ignoring Unknown Talkgroups", false}};
+
+    for (const auto &error : config_errors) {
       if (response_buffer.find(error.match) != std::string::npos) {
         if (error.is_error) {
           BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload " << error.message;
@@ -325,13 +328,14 @@ public:
         return 0;
       }
     }
-    
+
     // Default error - add to the retry queue
     BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error: " << response_buffer;
     return 1;
   }
 
-  int call_end(Call_Data_t call_info) {
+  int call_end(Call_Data_t &call_info, nlohmann::ordered_json &plugin_ctx) override {
+    (void)plugin_ctx;
     return upload(call_info);
   }
 
@@ -387,6 +391,37 @@ public:
     curl_dns_ttl = 300;
 
     return 0;
+  }
+
+  int init(Config *config, std::vector<Source *> sources, std::vector<System *> systems) override {
+    std::string log_prefix = "\t[OpenMHz]\t";
+
+    for (const auto &cfg_sys : data.systems) {
+      System *matched = nullptr;
+
+      for (auto *sys : systems) {
+        if (sys && sys->get_short_name() == cfg_sys.short_name) {
+          matched = sys;
+          break;
+        }
+      }
+
+      if (!matched) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix
+                                 << "Configured system shortName '" << cfg_sys.short_name
+                                 << "' was not found in the loaded systems";
+        return 1;
+      }
+
+      if (!matched->get_compress_wav()) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix
+                                 << "System '" << cfg_sys.short_name
+                                 << "' must have compressWav=true for the OpenMHz plugin";
+        return 1;
+      }
+    }
+
+    return Plugin_Api::init(config, sources, systems);
   }
 
   // curl callbacks

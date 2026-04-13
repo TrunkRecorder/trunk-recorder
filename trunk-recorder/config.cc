@@ -117,6 +117,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
               << "byte position of error: " << e.byte << std::endl;
   }
 
+  // Store the raw parsed JSON so we can track which keys were explicitly set
+  config.loaded_json = data;
+
   try {
     // const std::string json_filename = "config.json";
 
@@ -191,10 +194,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     }
 
     BOOST_LOG_TRIVIAL(info) << "Capture Directory: " << config.capture_dir;
-    config.upload_server = data.value("uploadServer", "");
-    BOOST_LOG_TRIVIAL(info) << "Upload Server: " << config.upload_server;
-    config.bcfy_calls_server = data.value("broadcastifyCallsServer", "");
-    BOOST_LOG_TRIVIAL(info) << "Broadcastify Calls Server: " << config.bcfy_calls_server;
     config.status_server = data.value("statusServer", "");
     BOOST_LOG_TRIVIAL(info) << "Status Server: " << config.status_server;
     config.instance_key = data.value("instanceKey", "");
@@ -246,11 +245,13 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
     BOOST_LOG_TRIVIAL(info) << "\n-------------------------------------\nSYSTEMS\n-------------------------------------\n";
 
+    int sys_json_index = 0;
     for (json element : data["systems"]) {
       bool system_enabled = element.value("enabled", true);
       if (system_enabled) {
         // each system should have a unique index value;
         System *system = System::make(sys_count++);
+        system->set_config_index(sys_json_index);
 
         std::stringstream default_script;
         unsigned long sys_id;
@@ -358,12 +359,6 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Filter Width: " << filter_width;
         BOOST_LOG_TRIVIAL(info) << "Squelch: " << element.value("squelch", -160);
         BOOST_LOG_TRIVIAL(info) << "De-emphasis Tau: " << tau;
-        system->set_api_key(element.value("apiKey", ""));
-        BOOST_LOG_TRIVIAL(info) << "API Key: " << system->get_api_key();
-        system->set_bcfy_api_key(element.value("broadcastifyApiKey", ""));
-        BOOST_LOG_TRIVIAL(info) << "Broadcastify API Key: " << system->get_bcfy_api_key();
-        system->set_bcfy_system_id(element.value("broadcastifySystemId", 0));
-        BOOST_LOG_TRIVIAL(info) << "Broadcastify Calls System ID: " << system->get_bcfy_system_id();
         system->set_upload_script(element.value("uploadScript", ""));
         BOOST_LOG_TRIVIAL(info) << "Upload Script: " << system->get_upload_script();
         system->set_compress_wav(element.value("compressWav", true));
@@ -530,19 +525,14 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           BOOST_LOG_TRIVIAL(info) << "Filename Format: " << system->get_filename_format();
         }
 
-        if (!system->get_compress_wav()) {
-          if ((system->get_api_key().length() > 0) || (system->get_bcfy_api_key().length() > 0)) {
-            BOOST_LOG_TRIVIAL(error) << "Compress WAV must be set to true if you are using OpenMHz or Broadcastify";
-            return false;
-          }
-        }
-
         systems.push_back(system);
         BOOST_LOG_TRIVIAL(info);
       }
+      sys_json_index++;
     }
 
     BOOST_LOG_TRIVIAL(info) << "\n\n-------------------------------------\nSOURCES\n-------------------------------------\n";
+    int source_json_index = 0;
     for (json element : data["sources"]) {
 
       bool source_enabled = element.value("enabled", true);
@@ -731,16 +721,15 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           source->create_debug_recorder(tb, source_count);
         }
 
+        source->set_config_index(source_json_index);
         sources.push_back(source);
         source_count++;
         BOOST_LOG_TRIVIAL(info) << "\n-------------------------------------\n\n";
       }
+      source_json_index++;
     }
 
     BOOST_LOG_TRIVIAL(info) << "\n\n-------------------------------------\nPLUGINS\n-------------------------------------\n";
-    add_internal_plugin("openmhz_uploader", "libopenmhz_uploader.so", data);
-    add_internal_plugin("broadcastify_uploader", "libbroadcastify_uploader.so", data);
-    add_internal_plugin("unit_script", "libunit_script.so", data);
     initialize_plugins(data, &config, sources, systems);
   } catch (std::exception const &e) {
     BOOST_LOG_TRIVIAL(error) << "Failed parsing Config: " << e.what();
@@ -758,4 +747,39 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
   }
   BOOST_LOG_TRIVIAL(info) << "\n\n";
   return true;
+}
+
+bool save_config(const Config &config) {
+  if (config.config_file.empty()) {
+    BOOST_LOG_TRIVIAL(error) << "save_config: No config file path set";
+    return false;
+  }
+
+  try {
+    // Create a backup of the current config file with a timestamp
+    if (boost::filesystem::exists(config.config_file)) {
+      auto now = std::chrono::system_clock::now();
+      auto time_t_now = std::chrono::system_clock::to_time_t(now);
+      std::tm tm_now;
+      localtime_r(&time_t_now, &tm_now);
+      char time_buf[32];
+      std::strftime(time_buf, sizeof(time_buf), "%Y%m%d_%H%M%S", &tm_now);
+
+      std::string backup_file = config.config_file + "." + time_buf + ".bak";
+      boost::filesystem::copy_file(config.config_file, backup_file);
+      BOOST_LOG_TRIVIAL(info) << "Configuration backup saved to: " << backup_file;
+    }
+
+    std::ofstream f(config.config_file);
+    if (!f.is_open()) {
+      BOOST_LOG_TRIVIAL(error) << "save_config: Could not open file for writing: " << config.config_file;
+      return false;
+    }
+    f << config.loaded_json.dump(4) << std::endl;
+    BOOST_LOG_TRIVIAL(info) << "Configuration saved to: " << config.config_file;
+    return true;
+  } catch (const std::exception &e) {
+    BOOST_LOG_TRIVIAL(error) << "save_config: Failed to save config: " << e.what();
+    return false;
+  }
 }

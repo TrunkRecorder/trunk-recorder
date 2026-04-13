@@ -64,13 +64,10 @@ public:
   std::string unit_tags_mode;
   std::string custom_freq_table_file;
   std::string short_name;
-  std::string api_key;
-  std::string bcfy_api_key;
   std::string default_mode;
   std::string system_type;
   std::string upload_script;
   std::string filename_format;
-  int bcfy_system_id;
   int message_count;
   int decode_rate;
   int retune_attempts;
@@ -167,12 +164,7 @@ public:
   std::string get_audio_ffmpeg_filter() override;
   void set_audio_ffmpeg_filter(std::string filter) override;
 
-  std::string get_api_key() override;
-  void set_api_key(std::string api_key) override;
-  std::string get_bcfy_api_key() override;
-  void set_bcfy_api_key(std::string bcfy_api_key) override;
-  int get_bcfy_system_id() override;
-  void set_bcfy_system_id(int bcfy_system_id) override;
+
   double get_min_duration() override;
   void set_min_duration(double duration) override;
   double get_max_duration() override;
@@ -318,6 +310,9 @@ public:
   std::string get_filename_format() override;
   void set_filename_format(std::string format) override;
 
+  int get_config_index() override;
+  void set_config_index(int index) override;
+
 private:
   TalkgroupDisplayFormat talkgroup_display_format;
   bool d_hideEncrypted;
@@ -331,5 +326,6 @@ private:
   bool d_fsync_enabled;
   bool d_star_enabled;
   bool d_tps_enabled;
+  int d_config_index;
 };
 #endif

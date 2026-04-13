@@ -26,10 +26,9 @@ struct Transmission {
 };
 
 struct Config {
+  nlohmann::json loaded_json; // Raw JSON from config file - tracks which keys were explicitly set
   std::string config_file;
   std::string upload_script;
-  std::string upload_server;
-  std::string bcfy_calls_server;
   std::string status_server;
   std::string instance_key;
   std::string instance_id;
@@ -150,10 +149,19 @@ struct Call_Data_t {
   bool call_log;
   bool compress_wav;
   std::string audio_bitrate = "32k";
+
+   // Working artifact paths (kept in tempDir while scripts/plugins run)
   std::string raw_filename;
   std::string filename;
   std::string status_filename;
   std::string converted;
+
+  // Final archive destinations (under captureDir)
+  std::string final_raw_filename;
+  std::string final_filename;
+  std::string final_status_filename;
+  std::string final_converted;
+
   int min_transmissions_removed;
 
   int sys_num;
@@ -176,7 +184,9 @@ struct Call_Data_t {
   time_t process_call_time;
   int retry_attempt;
 
-  std::vector<int> plugin_retry_list;
+  std::vector<int> blocking_plugin_retry_list;
+  std::vector<int> deferred_plugin_retry_list;
+  bool deferred_plugins_ran = false;
   nlohmann::ordered_json call_json;
 };
 

@@ -5,9 +5,9 @@
 #include "../../trunk-recorder/call_concluder/call_concluder.h"
 #include "../../trunk-recorder/plugin_manager/plugin_api.h"
 #include "../trunk-recorder/gr_blocks/decoder_wrapper.h"
+#include <boost/algorithm/string.hpp>
 #include <boost/dll/alias.hpp> // for BOOST_DLL_ALIAS
 #include <boost/foreach.hpp>
-#include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 #include <sys/stat.h>
 
@@ -43,7 +43,7 @@ class Broadcastify_Uploader : public Plugin_Api {
   std::string plugin_name;
 
 private:
-  static std::string glob_to_regex_str(const std::string& glob) {
+  static std::string glob_to_regex_str(const std::string &glob) {
     // Convert glob (* and ?) to a fully-anchored regex: ^...$
     std::string rx;
     rx.reserve(glob.size() * 2);
@@ -51,19 +51,33 @@ private:
 
     for (char c : glob) {
       switch (c) {
-        case '*': rx += ".*"; break;
-        case '?': rx += ".";  break;
+      case '*':
+        rx += ".*";
+        break;
+      case '?':
+        rx += ".";
+        break;
 
-        // escape regex metacharacters
-        case '.': case '+': case '(': case ')': case '^': case '$':
-        case '|': case '{': case '}': case '[': case ']': case '\\':
-          rx += "\\";
-          rx += c;
-          break;
+      // escape regex metacharacters
+      case '.':
+      case '+':
+      case '(':
+      case ')':
+      case '^':
+      case '$':
+      case '|':
+      case '{':
+      case '}':
+      case '[':
+      case ']':
+      case '\\':
+        rx += "\\";
+        rx += c;
+        break;
 
-        default:
-          rx += c;
-          break;
+      default:
+        rx += c;
+        break;
       }
     }
 
@@ -71,15 +85,17 @@ private:
     return rx;
   }
 
-  static bool match_any(const std::string& value, const std::vector<boost::regex>& patterns) {
-    for (const auto& r : patterns) {
-      if (boost::regex_match(value, r)) return true;
+  static bool match_any(const std::string &value, const std::vector<boost::regex> &patterns) {
+    for (const auto &r : patterns) {
+      if (boost::regex_match(value, r))
+        return true;
     }
     return false;
   }
 
-  static bool passes_talkgroup_filter(const Broadcastify_System_Key* sys, uint32_t talkgroup) {
-    if (!sys) return true; // no system config => don't filter here
+  static bool passes_talkgroup_filter(const Broadcastify_System_Key *sys, uint32_t talkgroup) {
+    if (!sys)
+      return true; // no system config => don't filter here
     const std::string tg = std::to_string(talkgroup);
 
     // If allow list is set, MUST match it
@@ -96,18 +112,18 @@ private:
   }
 
   static void compile_patterns_from_json(
-    const json& parent,
-    const char* key,
-    std::vector<boost::regex>& out_compiled,
-    std::vector<std::string>& out_raw,
-    const std::string& log_prefix,
-    const std::string& sys_short_name
-  ) {
+      const json &parent,
+      const char *key,
+      std::vector<boost::regex> &out_compiled,
+      std::vector<std::string> &out_raw,
+      const std::string &log_prefix,
+      const std::string &sys_short_name) {
     out_compiled.clear();
     out_raw.clear();
 
-    if (!parent.contains(key)) return;
-    const auto& j = parent.at(key);
+    if (!parent.contains(key))
+      return;
+    const auto &j = parent.at(key);
 
     if (!j.is_array()) {
       BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
@@ -115,7 +131,7 @@ private:
       return;
     }
 
-    for (const auto& v : j) {
+    for (const auto &v : j) {
       std::string pat;
       if (v.is_string()) {
         pat = v.get<std::string>();
@@ -126,12 +142,13 @@ private:
       }
 
       boost::algorithm::trim(pat);
-      if (pat.empty()) continue;
+      if (pat.empty())
+        continue;
 
       try {
         out_raw.push_back(pat);
         out_compiled.emplace_back(glob_to_regex_str(pat));
-      } catch (const boost::regex_error& e) {
+      } catch (const boost::regex_error &e) {
         BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
                                  << " invalid pattern in " << key
                                  << " value='" << pat << "' : " << e.what();
@@ -140,14 +157,13 @@ private:
   }
 
   static bool compile_patterns_try_keys(
-    const json& parent,
-    const std::vector<const char*>& keys,
-    std::vector<boost::regex>& out_compiled,
-    std::vector<std::string>& out_raw,
-    const std::string& log_prefix,
-    const std::string& sys_short_name
-  ) {
-    for (const char* k : keys) {
+      const json &parent,
+      const std::vector<const char *> &keys,
+      std::vector<boost::regex> &out_compiled,
+      std::vector<std::string> &out_raw,
+      const std::string &log_prefix,
+      const std::string &sys_short_name) {
+    for (const char *k : keys) {
       if (parent.contains(k)) {
         compile_patterns_from_json(parent, k, out_compiled, out_raw, log_prefix, sys_short_name);
         return true; // stop on first key present (even if empty array)
@@ -223,7 +239,7 @@ public:
       curl_easy_setopt(curl, CURLOPT_UPLOAD, 1L);
 
       /* HTTP PUT please */
-      //curl_easy_setopt(curl, CURLOPT_PUT, 1L);
+      // curl_easy_setopt(curl, CURLOPT_PUT, 1L);
 
       /* specify target URL, and note that this URL should include a file
        name, not only a directory */
@@ -437,7 +453,7 @@ public:
       /* free slist */
       curl_slist_free_all(headerlist);
 
-      std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
       if (res != CURLM_OK || response_code != 200) {
         BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Metadata Upload Error: " << response_buffer;
@@ -485,7 +501,8 @@ public:
     }
   }
 
-  int call_end(Call_Data_t call_info) {
+  int call_end(Call_Data_t &call_info, nlohmann::ordered_json &plugin_ctx) override {
+    (void)plugin_ctx;
     return upload(call_info);
   }
 
@@ -541,17 +558,15 @@ public:
         //   broadcastifyWhitelist / broadcastifyBlacklist
         //   talkgroupWhitelist / talkgroupBlacklist
         compile_patterns_try_keys(
-          element,
-          {"broadcastifyAllow", "broadcastifyWhitelist", "talkgroupWhitelist"},
-          key.tg_allow, key.tg_allow_raw,
-          log_prefix, key.short_name
-        );
+            element,
+            {"broadcastifyAllow", "broadcastifyWhitelist", "talkgroupWhitelist"},
+            key.tg_allow, key.tg_allow_raw,
+            log_prefix, key.short_name);
         compile_patterns_try_keys(
-          element,
-          {"broadcastifyDeny", "broadcastifyBlacklist", "talkgroupBlacklist"},
-          key.tg_deny, key.tg_deny_raw,
-          log_prefix, key.short_name
-        );
+            element,
+            {"broadcastifyDeny", "broadcastifyBlacklist", "talkgroupBlacklist"},
+            key.tg_deny, key.tg_deny_raw,
+            log_prefix, key.short_name);
 
         if (!key.tg_allow_raw.empty() || !key.tg_deny_raw.empty()) {
           BOOST_LOG_TRIVIAL(info) << log_prefix << "Talkgroup filters for " << key.short_name
@@ -581,6 +596,37 @@ public:
     curl_dns_ttl = 300;
 
     return 0;
+  }
+
+  int init(Config *config, std::vector<Source *> sources, std::vector<System *> systems) override {
+    std::string log_prefix = "\t[Broadcastify]\t";
+
+    for (const auto &cfg_sys : data.keys) {
+      System *matched = nullptr;
+
+      for (auto *sys : systems) {
+        if (sys && sys->get_short_name() == cfg_sys.short_name) {
+          matched = sys;
+          break;
+        }
+      }
+
+      if (!matched) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix
+                                 << "Configured system shortName '" << cfg_sys.short_name
+                                 << "' was not found in the loaded systems";
+        return 1;
+      }
+
+      if (!matched->get_compress_wav()) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix
+                                 << "System '" << cfg_sys.short_name
+                                 << "' must have compressWav=true for the Broadcastify plugin";
+        return 1;
+      }
+    }
+
+    return Plugin_Api::init(config, sources, systems);
   }
 
   // curl callbacks

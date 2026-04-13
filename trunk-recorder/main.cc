@@ -66,6 +66,7 @@
 #include <gnuradio/uhd/usrp_source.h>
 
 #include "plugin_manager/plugin_manager.h"
+#include "config_service.h"
 
 #include "cmake.h"
 #include "git.h"
@@ -121,7 +122,13 @@ int main(int argc, char **argv) {
     exit(1);
   }
 
+  // Initialize the configuration service for runtime config changes
+  init_config_service(&config, &sources, &systems);
+
   start_plugins(sources, systems);
+  
+  // Register plugin manager to receive configuration change notifications
+  plugman_register_config_listener();
 
   if (setup_systems(config, tb, sources, systems, calls)) {
 
@@ -138,6 +145,9 @@ int main(int argc, char **argv) {
 
     BOOST_LOG_TRIVIAL(info) << "stopping plugins" << std::endl;
     stop_plugins();
+    
+    BOOST_LOG_TRIVIAL(info) << "shutting down configuration service" << std::endl;
+    shutdown_config_service();
   } else {
     BOOST_LOG_TRIVIAL(error) << "Unable to setup a System to record, exiting..." << std::endl;
   }
