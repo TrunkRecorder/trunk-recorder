@@ -7,19 +7,10 @@
 
 using namespace boost::asio;
 
-// Boost 1.66 replaced io_service with io_context and from_string with make_address
-#if BOOST_VERSION >= 106600
-  using asio_io_context = boost::asio::io_context;
-  #define ASIO_MAKE_ADDRESS(addr) boost::asio::ip::make_address(addr)
-#else
-  using asio_io_context = boost::asio::io_service;
-  #define ASIO_MAKE_ADDRESS(addr) boost::asio::ip::address::from_string(addr)
-#endif
-
 typedef struct plugin_t plugin_t;
 typedef struct stream_t stream_t;
 std::vector<stream_t> streams;
-asio_io_context my_tcp_io_context;
+boost::asio::io_context my_tcp_io_context;
 long max_tcp_index = 0;
 
 struct plugin_t {
@@ -42,7 +33,7 @@ struct stream_t {
 };
 
 class Simple_Stream : public Plugin_Api {
-  asio_io_context my_io_context;
+  boost::asio::io_context my_io_context;
   ip::udp::endpoint remote_endpoint;
   ip::udp::socket my_socket{my_io_context};
   public:
@@ -57,7 +48,7 @@ class Simple_Stream : public Plugin_Api {
       stream.TGID = element["TGID"];
       stream.address = element["address"];
       stream.port = element["port"];
-      stream.remote_endpoint = ip::udp::endpoint(ASIO_MAKE_ADDRESS(stream.address), stream.port);
+      stream.remote_endpoint = ip::udp::endpoint(ip::make_address(stream.address), stream.port);
       stream.sendTGID = element.value("sendTGID",false);
       stream.sendJSON = element.value("sendJSON",false);
       stream.sendCallStart = element.value("sendCallStart",false);
@@ -275,7 +266,7 @@ class Simple_Stream : public Plugin_Api {
       if (stream.tcp == true){
         ip::tcp::socket *my_tcp_socket = new ip::tcp::socket{my_tcp_io_context};
         stream.tcp_socket = my_tcp_socket;
-        stream.tcp_socket->connect(ip::tcp::endpoint( ASIO_MAKE_ADDRESS(stream.address), stream.port ));
+        stream.tcp_socket->connect(ip::tcp::endpoint( ip::make_address(stream.address), stream.port ));
       }
     }
     my_socket.open(ip::udp::v4());
