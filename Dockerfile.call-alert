@@ -1,0 +1,92 @@
+# Build stage: reuse trunk-reporter's pre-built runtime as base,
+# then compile only trunk-recorder from our patched source.
+FROM ghcr.io/trunk-reporter/trunk-recorder:latest AS runtime_base
+
+FROM ubuntu:24.04 AS builder
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get -y upgrade && \
+    apt-get install --no-install-recommends -y \
+        build-essential ca-certificates cmake curl git \
+        gnuradio-dev gr-osmosdr \
+        libosmosdr-dev libairspy-dev libairspyhf-dev libbladerf-dev \
+        libboost-all-dev libcurl4-openssl-dev libfreesrp-dev \
+        libgmp-dev libhackrf-dev libmirisdr-dev liborc-0.4-dev \
+        libpthread-stubs0-dev librtlsdr-dev libsndfile1-dev \
+        libsoapysdr-dev libssl-dev libuhd-dev \
+        libusb-dev libusb-1.0-0-dev libxtrx-dev \
+        pkg-config wget python3-six ffmpeg && \
+    rm -rf /var/lib/apt/lists/*
+
+# Paho MQTT (required by mqtt_status plugin carried in trunk-reporter image)
+WORKDIR /deps
+RUN git clone --depth 1 --branch v1.3.13 https://github.com/eclipse/paho.mqtt.c.git && \
+    cd paho.mqtt.c && \
+    cmake -Bbuild -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON -DPAHO_BUILD_STATIC=OFF && \
+    cmake --build build -j$(nproc) && cmake --install build
+
+RUN git clone --depth 1 --branch v1.4.1 https://github.com/eclipse/paho.mqtt.cpp.git && \
+    cd paho.mqtt.cpp && \
+    cmake -Bbuild -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON -DPAHO_BUILD_STATIC=OFF && \
+    cmake --build build -j$(nproc) && cmake --install build
+
+RUN ldconfig
+
+# Clone trunk-recorder pinned to the same commit the trunk-reporter plugins
+# were built against (v5.1.1 @ 31d0059)
+WORKDIR /src
+RUN git clone https://github.com/TrunkRecorder/trunk-recorder.git . && \
+    git checkout 31d0059e934ce0801b9a8df83d1a0d9edd27e824
+
+# Apply Call Alert (TSBK 0x1F) decoding patch directly
+RUN python3 - <<'EOF'
+import re
+
+# 1. parser.h — add CALL_ALERT to MessageType enum
+path = "trunk-recorder/systems/parser.h"
+src = open(path).read()
+src = src.replace("  TDULC = 17,\n  UNKNOWN = 99",
+                  "  TDULC = 17,\n  CALL_ALERT = 18,\n  UNKNOWN = 99")
+open(path, "w").write(src)
+
+# 2. p25_parser.cc — replace stub with real decode
+path = "trunk-recorder/systems/p25_parser.cc"
+src = open(path).read()
+old = '  } else if (opcode == 0x1f) {\n    BOOST_LOG_TRIVIAL(debug) << "tsbk1f: Call Alert";'
+new = '''  } else if (opcode == 0x1f) { // Call Alert
+    unsigned long src = bitset_shift_mask(tsbk, 16, 0xffffff);
+    unsigned long dst = bitset_shift_mask(tsbk, 40, 0xffffff);
+
+    message.message_type = CALL_ALERT;
+    message.source = src;
+    message.talkgroup = dst;
+
+    BOOST_LOG_TRIVIAL(info) << "tsbk1f\\tCall Alert\\tSource Unit: " << std::dec << src << "\\tTarget Unit: " << dst;'''
+assert old in src, "p25_parser.cc stub not found — check source version"
+src = src.replace(old, new)
+open(path, "w").write(src)
+
+# 3. monitor_systems.cc — add CALL_ALERT case to switch
+path = "trunk-recorder/monitor_systems.cc"
+src = open(path).read()
+old = "    case UU_ANS_REQ:\n      unit_answer_request(sys, message.source, message.talkgroup);\n      break;\n\n    case INVALID_CC_MESSAGE:"
+new = "    case UU_ANS_REQ:\n      unit_answer_request(sys, message.source, message.talkgroup);\n      break;\n\n    case CALL_ALERT:\n      break;\n\n    case INVALID_CC_MESSAGE:"
+assert old in src, "monitor_systems.cc switch not found — check source version"
+src = src.replace(old, new)
+open(path, "w").write(src)
+
+print("All patches applied successfully")
+EOF
+
+WORKDIR /src/build
+RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
+
+# Final image: start from trunk-reporter (has all plugins) and replace the binary
+FROM runtime_base
+
+COPY --from=builder /newroot/usr/local/bin/trunk-recorder /usr/local/bin/trunk-recorder
+
+WORKDIR /app
+ENV HOME=/tmp
+CMD trunk-recorder --config=/app/config.json

@@ -22,6 +22,7 @@ enum MessageType {
   UU_V_UPDATE = 15,
   INVALID_CC_MESSAGE = 16,
   TDULC = 17,
+  CALL_ALERT = 18,
   UNKNOWN = 99
 };
 

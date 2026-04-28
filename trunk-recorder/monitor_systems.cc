@@ -674,6 +674,9 @@ void handle_message(std::vector<TrunkMessage> messages, System *sys, Config &con
       unit_answer_request(sys, message.source, message.talkgroup);
       break;
 
+    case CALL_ALERT:
+      break;
+
     case INVALID_CC_MESSAGE:
     {
       //Do not count messages that aren't valid TSBK or MBTs.

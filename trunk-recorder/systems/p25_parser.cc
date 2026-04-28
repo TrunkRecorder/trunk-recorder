@@ -702,8 +702,15 @@ std::vector<TrunkMessage> P25Parser::decode_tsbk(boost::dynamic_bitset<> &tsbk, 
     BOOST_LOG_TRIVIAL(debug) << "tsbk1c: Messag Update";
   } else if (opcode == 0x1d) {
     BOOST_LOG_TRIVIAL(debug) << "tsbk1d: Radio Unit Monitor Command";
-  } else if (opcode == 0x1f) {
-    BOOST_LOG_TRIVIAL(debug) << "tsbk1f: Call Alert";
+  } else if (opcode == 0x1f) { // Call Alert
+    unsigned long src = bitset_shift_mask(tsbk, 16, 0xffffff);
+    unsigned long dst = bitset_shift_mask(tsbk, 40, 0xffffff);
+
+    message.message_type = CALL_ALERT;
+    message.source = src;
+    message.talkgroup = dst;
+
+    BOOST_LOG_TRIVIAL(info) << "tsbk1f\tCall Alert\tSource Unit: " << std::dec << src << "\tTarget Unit: " << dst;
   } else if (opcode == 0x20) { // Acknowledge response
     // unsigned long mfrid  = bitset_shift_mask(tsbk,80,0xff);
     unsigned long ga = bitset_shift_mask(tsbk, 40, 0xffff);
