@@ -89,6 +89,9 @@ public:
   virtual std::string get_audio_ffmpeg_filter() = 0;
   virtual void set_audio_ffmpeg_filter(std::string filter) = 0;
 
+  virtual bool get_audio_output_raw_audio() = 0;
+  virtual void set_audio_output_raw_audio(bool enabled) = 0;
+
   virtual std::string get_api_key() = 0;
   virtual void set_api_key(std::string api_key) = 0;
   virtual std::string get_bcfy_api_key() = 0;

@@ -73,6 +73,8 @@ struct Audio_Postprocess_Config {
   double loudnorm_lra = 11.0;
 
   std::string ffmpeg_filter = "";
+
+  bool output_raw_audio = false;
 };
 
 struct Call_Source {
@@ -150,10 +152,10 @@ struct Call_Data_t {
   bool call_log;
   bool compress_wav;
   std::string audio_bitrate = "32k";
-  std::string raw_filename;
   std::string filename;
   std::string status_filename;
   std::string converted;
+  std::string raw_audio_filename;
   int min_transmissions_removed;
 
   int sys_num;
