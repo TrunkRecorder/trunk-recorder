@@ -784,6 +784,7 @@ static int run_upload_script_argv(const Call_Data_t &call_info) {
 
 int create_call_json(Call_Data_t &call_info) {
   nlohmann::ordered_json json_data = {
+      {"call_num",              long(call_info.call_num)},
       {"freq",                  int(call_info.freq)},
       {"freq_error",            int(call_info.freq_error)},
       {"signal",                int(call_info.signal)},
