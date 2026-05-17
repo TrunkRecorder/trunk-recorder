@@ -4,7 +4,58 @@
 #include "../formatter.h"
 #include "../gr_blocks/plugin_wrapper_impl.h"
 #include "../plugin_manager/plugin_manager.h"
+#include <algorithm>
 #include <boost/log/trivial.hpp>
+
+namespace {
+
+// Higher rank wins when aggregating two slot states into one recorder state.
+// This is activity-oriented: RECORDING is most active, followed by IGNORE,
+// then progressively more idle states.
+constexpr int kSlotStateRankUnknown = 0;
+constexpr int kSlotStateRankAvailable = 1;
+constexpr int kSlotStateRankStopped = 2;
+constexpr int kSlotStateRankIdle = 3;
+constexpr int kSlotStateRankIgnore = 4;
+constexpr int kSlotStateRankRecording = 5;
+
+int slot_state_priority(State state) {
+  switch (state) {
+  case RECORDING:
+    return kSlotStateRankRecording;
+  case IGNORE:
+    return kSlotStateRankIgnore;
+  case IDLE:
+    return kSlotStateRankIdle;
+  case STOPPED:
+    return kSlotStateRankStopped;
+  case AVAILABLE:
+    return kSlotStateRankAvailable;
+  default:
+    return kSlotStateRankUnknown;
+  }
+}
+
+double max_slot_length(const gr::blocks::transmission_sink::sptr &slot0,
+                       const gr::blocks::transmission_sink::sptr &slot1) {
+  // Treat dual-slot DMR duration as wall-clock recorder/session duration, not summed audio across slots.
+  return std::max(slot0->total_length_in_seconds(), slot1->total_length_in_seconds());
+}
+
+time_t latest_slot_stop_time(const gr::blocks::transmission_sink::sptr &slot0,
+                             const gr::blocks::transmission_sink::sptr &slot1) {
+  return std::max(slot0->get_stop_time(), slot1->get_stop_time());
+}
+
+State aggregate_slot_state(const gr::blocks::transmission_sink::sptr &slot0,
+                           const gr::blocks::transmission_sink::sptr &slot1) {
+  const State slot0_state = slot0->get_state();
+  const State slot1_state = slot1->get_state();
+
+  return slot_state_priority(slot1_state) > slot_state_priority(slot0_state) ? slot1_state : slot0_state;
+}
+
+} // namespace
 
 dmr_recorder_sptr make_dmr_recorder(Source *src, Recorder_Type type) {
   dmr_recorder *recorder = new dmr_recorder_impl(src, type);
@@ -152,11 +203,11 @@ int dmr_recorder_impl::get_num() {
 
 double dmr_recorder_impl::since_last_write() {
   time_t now = time(NULL);
-  return now - wav_sink_slot0->get_stop_time();
+  return now - latest_slot_stop_time(wav_sink_slot0, wav_sink_slot1);
 }
 
 State dmr_recorder_impl::get_state() {
-  return wav_sink_slot0->get_state();
+  return aggregate_slot_state(wav_sink_slot0, wav_sink_slot1);
 }
 
 bool dmr_recorder_impl::is_active() {
@@ -186,12 +237,6 @@ double dmr_recorder_impl::get_pwr() {
 }
 
 bool dmr_recorder_impl::is_idle() {
-  /*
-    if ((wav_sink_slot0->get_state() == IDLE) || (wav_sink_slot0->get_state() == STOPPED)) {
-      return true;
-    }
-
-    return false;*/
   if (state == ACTIVE) {
     return prefilter->is_squelched();
   }
@@ -207,7 +252,7 @@ int dmr_recorder_impl::get_freq_error() { // get frequency error from FLL and co
 }
 
 double dmr_recorder_impl::get_current_length() {
-  return wav_sink_slot0->total_length_in_seconds();
+  return max_slot_length(wav_sink_slot0, wav_sink_slot1);
 }
 
 int dmr_recorder_impl::lastupdate() {
@@ -253,7 +298,7 @@ std::vector<Transmission> dmr_recorder_impl::get_transmission_list(int slot) {
 void dmr_recorder_impl::stop() {
   if (state == ACTIVE) {
 
-    recording_duration += wav_sink_slot0->total_length_in_seconds();
+    recording_duration += max_slot_length(wav_sink_slot0, wav_sink_slot1);
     
     //std::string loghdr = log_header(this->call->get_short_name(),this->call->get_call_num(),this->call->get_talkgroup_display(),chan_freq);
     // BOOST_LOG_TRIVIAL(info) << loghdr << "Stopping P25 Recorder Num [" << rec_num << "]\tTDMA: " << d_phase2_tdma << "\tSlot: " << tdma_slot;
