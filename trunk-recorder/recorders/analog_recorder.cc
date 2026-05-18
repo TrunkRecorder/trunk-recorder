@@ -339,9 +339,26 @@ void analog_recorder::stop() {
   if (dcs_block) {
     auto v = dcs_block->get_verdict();
     if (v.detected_code != 0 && v.confidence > 0.0f) {
-      char buf[16];
-      snprintf(buf, sizeof(buf), "D%03d%c", v.detected_code, v.detected_inverted ? 'I' : 'N');
-      dcs_det = buf;
+      // In search mode the receiver genuinely can't tell apart cyclic-class
+      // members — e.g. D703I and D565N are literally the same shift-register
+      // pattern at different rotations on the air, so neither is "wrong" and
+      // we report all class members so the operator can see what the
+      // transmission could be. In configured mode the rewrite picked the
+      // configured form so we just print that single name.
+      if (tone_config.mode == TONE_SEARCH && v.aliases.size() > 1) {
+        std::string s;
+        for (const auto &kv : v.aliases) {
+          if (!s.empty()) s += "/";
+          char b[8];
+          snprintf(b, sizeof(b), "D%03d%c", kv.first, kv.second ? 'I' : 'N');
+          s += b;
+        }
+        dcs_det = s;
+      } else {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "D%03d%c", v.detected_code, v.detected_inverted ? 'I' : 'N');
+        dcs_det = buf;
+      }
       dcs_conf = v.confidence;
     }
   }
@@ -357,8 +374,31 @@ void analog_recorder::stop() {
     if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
     else if (!ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
   } else if (tone_config.mode == TONE_SEARCH) {
-    if (ctcss_conf >= dcs_conf && !ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
-    else if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
+    // Search-mode tiebreak: simple max-confidence comparison. With the
+    // phase-diversity DCS confidence now in place, a CTCSS-aliased false
+    // DCS lock scores ~0.05-0.15 while a real DCS lock scores ~0.9-1.0;
+    // a CTCSS detector lock with all four verdict guards passed scores
+    // ~0.85-0.95. So whichever returns the higher confidence is genuinely
+    // the better identification — no need for a CTCSS priority override
+    // (an earlier version had one, which incorrectly forced CTCSS to win
+    // even when a real DCS keyup was correctly identified at conf 1.0).
+    const bool have_ctcss = !ctcss_det.empty();
+    const bool have_dcs   = !dcs_det.empty();
+    if (have_ctcss && have_dcs) {
+      if (ctcss_conf >= dcs_conf) {
+        tone_result.detected   = ctcss_det;
+        tone_result.confidence = ctcss_conf;
+      } else {
+        tone_result.detected   = dcs_det;
+        tone_result.confidence = dcs_conf;
+      }
+    } else if (have_ctcss) {
+      tone_result.detected   = ctcss_det;
+      tone_result.confidence = ctcss_conf;
+    } else if (have_dcs) {
+      tone_result.detected   = dcs_det;
+      tone_result.confidence = dcs_conf;
+    }
   }
   // TONE_OFF leaves tone_result.detected empty.
 

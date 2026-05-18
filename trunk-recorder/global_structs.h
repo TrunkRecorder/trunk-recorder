@@ -28,6 +28,27 @@ struct Tone_Config {
   bool     dcs_inverted = false; // valid only when mode == TONE_DCS
 };
 
+// True iff two Tone_Configs match for routing purposes (same mode + same
+// frequency/code/polarity within tolerance). Used by multi-row freq
+// groups in setup_systems/call_conventional/call_concluder when a single
+// recorder serves multiple logical channels and we need to map a detected
+// tone to the right CSV row.
+inline bool tones_match(const Tone_Config &a, const Tone_Config &b) {
+  if (a.mode != b.mode) return false;
+  switch (a.mode) {
+    case TONE_CTCSS: {
+      const double d = a.ctcss_hz - b.ctcss_hz;
+      return (d > -0.5 && d < 0.5);
+    }
+    case TONE_DCS:
+      return a.dcs_code == b.dcs_code && a.dcs_inverted == b.dcs_inverted;
+    case TONE_OFF:
+    case TONE_SEARCH:
+      return true;
+  }
+  return false;
+}
+
 // Parse a Tone column value into a Tone_Config. Accepted forms:
 //   ""  or  "0"  / "0.0"               -> TONE_OFF
 //   "S" / "s"                          -> TONE_SEARCH
@@ -257,6 +278,14 @@ struct Call_Data_t {
   std::string tone_mode;       // "off" | "ctcss" | "dcs" | "search"
   std::string tone_detected;   // "" | "173.8" | "D023N" | ...
   float       tone_confidence; // 0.0 (no lock) .. 1.0 (fully confident)
+
+  // SKIPPED — set when this call's freq has multiple CSV rows (a freq
+  // group) and the detector's tone verdict doesn't match any configured
+  // row's Tone column (and no catch-all Tone=0 / Tone=S row exists). The
+  // call is concluded (recorder state cleans up) but the wav/m4a/json
+  // are removed and no plugins fire. Mirrors the SUPERSEDED handling
+  // path in Call_Concluder::conclude_call.
+  bool        tone_skipped = false;
 
   Call_Data_Status status;
   time_t process_call_time;

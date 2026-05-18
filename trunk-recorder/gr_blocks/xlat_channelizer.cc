@@ -185,6 +185,18 @@ void xlat_channelizer::set_analog_squelch(bool analog_squelch) {
     squelch->set_alpha(0.01);
     squelch->set_ramp(10);
     squelch->set_gate(false);
+    // FLL is designed for digital symbol-rate carrier tracking; with its
+    // default loop bandwidth (~190 Hz) it actively tracks DCS-rate
+    // frequency deviations (134 baud → ~67 Hz fundamental) and cancels
+    // them out of the demod output. Voice (300-3000 Hz) is too fast for
+    // the loop to track so it's preserved either way, which is why this
+    // never showed up as a regression in conventional voice recording.
+    // For analog mode slow the loop ~1000× so DCS / CTCSS sub-audible
+    // signaling makes it through to the audio chain. Verified by capturing
+    // raw IQ vs the chain output: the same D023N transmission decodes
+    // cleanly off raw IQ but produces no DCS lock from the chain audio
+    // until this fix.
+    fll_band_edge->set_loop_bandwidth(2.0 * M_PI / d_samples_per_symbol / 250000.0);
   } else {
     squelch->set_alpha(0.0001);
     squelch->set_ramp(0);

@@ -1149,6 +1149,34 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
     }
   }
 
+  // Multi-row freq-group routing. When the channel CSV had several rows at
+  // this frequency, the recorder ran in TONE_SEARCH mode and captured
+  // whatever was on air; here we look up which row's metadata to use by
+  // matching the detected tone against each row's tone_config. If a row
+  // matches (including any catch-all Tone=0 / Tone=S row in the group), we
+  // overwrite the call_info metadata with its values. If NOTHING matches,
+  // mark the call SKIPPED so conclude_call() can drop it without firing
+  // plugins (see the discard path that follows).
+  if (Call_conventional *cc = dynamic_cast<Call_conventional *>(call)) {
+    if (cc->has_alternate_channels()) {
+      Talkgroup *matched = cc->find_matching_channel(call_info.tone_detected);
+      if (matched != nullptr) {
+        call_info.talkgroup             = matched->number;
+        call_info.talkgroup_tag         = matched->tag;
+        call_info.talkgroup_alpha_tag   = matched->alpha_tag;
+        call_info.talkgroup_description = matched->description;
+        call_info.talkgroup_group       = matched->group;
+        // Log lines after this point still use call_info.talkgroup_display
+        // (set earlier from the Call's primary display), so the
+        // "Concluding Recorded Call" header may show the primary's TG
+        // even though the JSON metadata is the matched row's. Acceptable
+        // trade for not mutating the live Call object mid-conclude.
+      } else {
+        call_info.tone_skipped = true;
+      }
+    }
+  }
+
   const double min_tx_s = sys->get_min_tx_duration();
 
   call_info.transmission_source_list.reserve(call_info.transmission_list.size());
@@ -1257,6 +1285,23 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
 
   if (call->get_state() == MONITORING && call->get_monitoring_state() == SUPERSEDED) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "Call has been superseded. Removing files.";
+    remove_call_files(call_info);
+    return;
+  }
+
+  // Tone-routing SKIPPED: multi-row freq-group call whose detected tone
+  // didn't match any configured row (and no catch-all Tone=0 / Tone=S row
+  // was present). Concludes the call cleanly — recorder state cleans up
+  // via the standard path — but drops wav/m4a/json without firing plugins.
+  // Mirrors the SUPERSEDED handling above.
+  if (call_info.tone_skipped) {
+    BOOST_LOG_TRIVIAL(info) << loghdr
+        << "\033[0;33mSKIPPED\033[0m — detected tone '"
+        << (call_info.tone_detected.empty() ? "none" : call_info.tone_detected)
+        << "' (mode=" << call_info.tone_mode
+        << " conf=" << std::fixed << std::setprecision(2)
+        << call_info.tone_confidence << ")"
+        << " does not match any configured row at this freq; removing files, no plugins";
     remove_call_files(call_info);
     return;
   }
