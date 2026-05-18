@@ -189,7 +189,7 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
 
   audio_resampler_taps = design_filter(1, (system_channel_rate / wav_sample_rate)); // Calculated to make sample rate changable -- must be an integer
 
-  BOOST_LOG_TRIVIAL(info) << "Audio Resampler Taps: " << audio_resampler_taps.size() << " Decimation: " << (system_channel_rate / wav_sample_rate);
+  BOOST_LOG_TRIVIAL(debug) << "Audio Resampler Taps: " << audio_resampler_taps.size() << " Decimation: " << (system_channel_rate / wav_sample_rate);
   // downsample from 48k to 8k
   decim_audio = gr::filter::fir_filter_fff::make((system_channel_rate / wav_sample_rate), audio_resampler_taps); // Calculated to make sample rate changable
 
@@ -198,14 +198,14 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   wav_sink = gr::blocks::transmission_sink::make(1, wav_sample_rate, 16); //  Configurable
 
   if (use_streaming) {
-    BOOST_LOG_TRIVIAL(info) << "\t Creating plugin sink..." << std::endl;
+    BOOST_LOG_TRIVIAL(debug) << "\t Creating plugin sink..." << std::endl;
     plugin_sink = gr::blocks::plugin_wrapper_impl::make(std::bind(&analog_recorder::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
-    BOOST_LOG_TRIVIAL(info) << "\t Plugin sink created!" << std::endl;
+    BOOST_LOG_TRIVIAL(debug) << "\t Plugin sink created!" << std::endl;
   }
 
-  BOOST_LOG_TRIVIAL(info) << "\t Creating decoder sink..." << std::endl;
+  BOOST_LOG_TRIVIAL(debug) << "\t Creating decoder sink..." << std::endl;
   decoder_sink = gr::blocks::decoder_wrapper_impl::make(wav_sample_rate, std::bind(&analog_recorder::decoder_callback_handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-  BOOST_LOG_TRIVIAL(info) << "\t Decoder sink created!" << std::endl;
+  BOOST_LOG_TRIVIAL(debug) << "\t Decoder sink created!" << std::endl;
 
   // Analog audio band pass from 300 to 3000 Hz
   // can't use gnuradio.filter.firdes.band_pass since we have different transition widths

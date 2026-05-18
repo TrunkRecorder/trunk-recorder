@@ -11,14 +11,14 @@ Call_conventional::Call_conventional(long t, double f, System *s, Config c, doub
   this->squelch_db = squelch_db;
   this->signal_detection = signal_detection;
   this->tone_config = Tone_Config{}; // TONE_OFF default
-  BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tFreq: " << format_freq(f) << "\tSquelch: " << squelch_db << " dB\tSignal Detection: " << signal_detection;
+  BOOST_LOG_TRIVIAL(debug) << "[" << sys->get_short_name() << "]\tFreq: " << format_freq(f) << "\tSquelch: " << squelch_db << " dB\tSignal Detection: " << signal_detection;
 }
 
 Call_conventional::Call_conventional(long t, double f, System *s, Config c, double squelch_db, bool signal_detection, const Tone_Config &tone_config) : Call_impl(t, f, s, c) {
   this->squelch_db = squelch_db;
   this->signal_detection = signal_detection;
   this->tone_config = tone_config;
-  BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tFreq: " << format_freq(f) << "\tSquelch: " << squelch_db << " dB\tSignal Detection: " << signal_detection;
+  BOOST_LOG_TRIVIAL(debug) << "[" << sys->get_short_name() << "]\tFreq: " << format_freq(f) << "\tSquelch: " << squelch_db << " dB\tSignal Detection: " << signal_detection;
 }
 
 void Call_conventional::restart_call() {
@@ -56,7 +56,7 @@ time_t Call_conventional::get_start_time() {
 
 void Call_conventional::set_recorder(Recorder *r) {
   recorder = r;
-  BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\tTG: " << this->get_talkgroup_display() << "\tFreq: " << format_freq(this->get_freq());
+  BOOST_LOG_TRIVIAL(debug) << "[" << sys->get_short_name() << "]\tTG: " << this->get_talkgroup_display() << "\tFreq: " << format_freq(this->get_freq());
 }
 
 void Call_conventional::recording_started() {

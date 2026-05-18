@@ -1118,7 +1118,11 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.min_transmissions_removed = 0;
   call_info.color_code                = -1;
 
-  const std::string loghdr =
+  // Non-const so we can rebuild after the multi-row freq-group routing
+  // override below — log lines that fire AFTER the override (the
+  // per-transmission summaries and the routing line itself) should reflect
+  // the matched row's TG number.
+  std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
   if (const Talkgroup *tg = sys->find_talkgroup(call->get_talkgroup())) {
@@ -1166,11 +1170,32 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
         call_info.talkgroup_alpha_tag   = matched->alpha_tag;
         call_info.talkgroup_description = matched->description;
         call_info.talkgroup_group       = matched->group;
-        // Log lines after this point still use call_info.talkgroup_display
-        // (set earlier from the Call's primary display), so the
-        // "Concluding Recorded Call" header may show the primary's TG
-        // even though the JSON metadata is the matched row's. Acceptable
-        // trade for not mutating the live Call object mid-conclude.
+
+        // Rebuild the formatted display string to reflect the matched row
+        // so subsequent log lines and the JSON's talkgroup_display field
+        // are consistent. (The earlier "Concluding Recorded Call" and
+        // "Tone Result:" log lines fired BEFORE routing was known and
+        // still show the primary's display — that's an unavoidable
+        // timing artifact, the routing decision can't be made until the
+        // tone verdict is available.)
+        {
+          char fmt[64];
+          snprintf(fmt, sizeof(fmt), "%c[35m%10ld%c[0m",
+                   0x1B, matched->number, 0x1B);
+          call_info.talkgroup_display = fmt;
+          loghdr = log_header(call_info.short_name, call_info.call_num,
+                              call_info.talkgroup_display, call_info.freq);
+        }
+
+        // Tell the operator where this call was routed and why. Helps the
+        // log skim test for "did the right row catch this transmission".
+        const std::string detected_for_log =
+            call_info.tone_detected.empty() ? std::string("(none)")
+                                            : call_info.tone_detected;
+        BOOST_LOG_TRIVIAL(info) << loghdr
+            << "\033[0;36mROUTED\033[0m → TG " << matched->number
+            << " (" << (matched->alpha_tag.empty() ? "-" : matched->alpha_tag)
+            << ") by tone '" << detected_for_log << "'";
       } else {
         call_info.tone_skipped = true;
       }

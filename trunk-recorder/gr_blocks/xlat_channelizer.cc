@@ -73,7 +73,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
   channel_lpf = gr::filter::fft_filter_ccf::make(decim, channel_lpf_taps);
 
   // BOOST_LOG_TRIVIAL(info) << "\t Xlating Channelizer single-stage decimator - Decim: " << decimation << " Resampled Rate: " << resampled_rate << " Lowpass Taps: " << if_coeffs.size();
-  BOOST_LOG_TRIVIAL(info) << "\t Xlating Channelizer decimator - freq_xlating taps: " << if_coeffs.size() << " Decim: " << decim << " Resampled Rate: " << resampled_rate << " Lowpass Taps: " << channel_lpf_taps.size();
+  BOOST_LOG_TRIVIAL(debug) << "\t Xlating Channelizer decimator - freq_xlating taps: " << if_coeffs.size() << " Decim: " << decim << " Resampled Rate: " << resampled_rate << " Lowpass Taps: " << channel_lpf_taps.size();
   // ARB Resampler
   double arb_rate = channel_rate / resampled_rate;
 
@@ -103,7 +103,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
 #else
     arb_taps = gr::filter::firdes::low_pass_2(arb_size, arb_size, bw, tb, arb_atten, gr::fft::window::WIN_BLACKMAN_HARRIS);
 #endif
-    BOOST_LOG_TRIVIAL(info) << "\t Channelizer ARB - Symbol Rate: " << channel_rate << " Resampled Rate: " << resampled_rate << " ARB Rate: " << arb_rate << " ARB Taps: " << arb_taps.size() << " BW: " << bw << " TB: " << tb;
+    BOOST_LOG_TRIVIAL(debug) << "\t Channelizer ARB - Symbol Rate: " << channel_rate << " Resampled Rate: " << resampled_rate << " ARB Rate: " << arb_rate << " ARB Taps: " << arb_taps.size() << " BW: " << bw << " TB: " << tb;
     arb_resampler = gr::filter::pfb_arb_resampler_ccf::make(arb_rate, arb_taps);
   } else if (arb_rate > 1) {
     BOOST_LOG_TRIVIAL(error) << "Something is probably wrong! Resampling rate too low";
@@ -125,7 +125,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
   connect(self(), 0, freq_xlat, 0);
   connect(freq_xlat, 0, channel_lpf, 0);
   if (d_use_squelch) {
-    BOOST_LOG_TRIVIAL(info) << "Conventional - with Squelch";
+    BOOST_LOG_TRIVIAL(debug) << "Conventional - with Squelch";
     if (arb_rate == 1.0) {
       connect(channel_lpf, 0, squelch, 0);
     } else {

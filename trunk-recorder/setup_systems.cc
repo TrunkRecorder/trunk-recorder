@@ -138,10 +138,32 @@ bool setup_conventional_channel_group(System *system, const std::vector<Talkgrou
   }
 
   if (group.size() == 1) {
+    char tone_buf[24];
+    switch (primary->tone_config.mode) {
+    case TONE_CTCSS:
+      snprintf(tone_buf, sizeof(tone_buf), "%.1f Hz", primary->tone_config.ctcss_hz);
+      break;
+    case TONE_DCS:
+      snprintf(tone_buf, sizeof(tone_buf), "D%03d%c",
+               primary->tone_config.dcs_code,
+               primary->tone_config.dcs_inverted ? 'I' : 'N');
+      break;
+    case TONE_SEARCH:
+      snprintf(tone_buf, sizeof(tone_buf), "S (search)");
+      break;
+    case TONE_OFF:
+    default:
+      snprintf(tone_buf, sizeof(tone_buf), "0 (off)");
+      break;
+    }
     BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring "
                             << system->get_system_type() << " channel: "
                             << format_freq(frequency)
-                            << " Talkgroup: " << primary->number;
+                            << "  TG " << primary->number
+                            << "  tone=" << tone_buf
+                            << "  \"" << primary->alpha_tag << "\""
+                            << "  Squelch: " << effective_squelch << " dB"
+                            << "  Signal Detection: " << (primary->signal_detection ? "true" : "false");
   } else {
     BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring "
                             << system->get_system_type() << " channel: "
@@ -150,13 +172,26 @@ bool setup_conventional_channel_group(System *system, const std::vector<Talkgrou
                             << primary->number << "); recorder in search mode, "
                             << "metadata routed by detected tone";
     for (Talkgroup *tg : group) {
-      const std::string tone_str =
-          (tg->tone_config.mode == TONE_CTCSS) ? (std::to_string(tg->tone_config.ctcss_hz) + " Hz") :
-          (tg->tone_config.mode == TONE_DCS)   ? (std::string("D") + std::to_string(tg->tone_config.dcs_code) + (tg->tone_config.dcs_inverted ? "I" : "N")) :
-          (tg->tone_config.mode == TONE_SEARCH) ? std::string("S (catch-all)") :
-                                                  std::string("0 (catch-all)");
+      char tone_buf[24];
+      switch (tg->tone_config.mode) {
+      case TONE_CTCSS:
+        snprintf(tone_buf, sizeof(tone_buf), "%.1f Hz", tg->tone_config.ctcss_hz);
+        break;
+      case TONE_DCS:
+        snprintf(tone_buf, sizeof(tone_buf), "D%03d%c",
+                 tg->tone_config.dcs_code,
+                 tg->tone_config.dcs_inverted ? 'I' : 'N');
+        break;
+      case TONE_SEARCH:
+        snprintf(tone_buf, sizeof(tone_buf), "S (catch-all)");
+        break;
+      case TONE_OFF:
+      default:
+        snprintf(tone_buf, sizeof(tone_buf), "0 (catch-all)");
+        break;
+      }
       BOOST_LOG_TRIVIAL(info) << "\t  TG " << tg->number
-                              << "  tone=" << tone_str
+                              << "  tone=" << tone_buf
                               << "  \"" << tg->alpha_tag << "\"";
     }
   }
