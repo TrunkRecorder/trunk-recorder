@@ -45,8 +45,8 @@
 class Source;
 class analog_recorder;
 
-#include "../../new_gr_blocks/ctcss_squelch_ff.h"
-#include "../../new_gr_blocks/dcs_squelch_ff.h"
+#include "../gr_blocks/ctcss_squelch_ff.h"
+#include "../gr_blocks/dcs_squelch_ff.h"
 #include "../gr_blocks/channelizer.h"
 #include "../gr_blocks/decoder_wrapper.h"
 #include "../gr_blocks/freq_xlating_fft_filter.h"
