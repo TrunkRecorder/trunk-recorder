@@ -1171,6 +1171,15 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
         call_info.talkgroup_description = matched->description;
         call_info.talkgroup_group       = matched->group;
 
+        // The transmissions were recorded under the primary row's TG (the
+        // recorder doesn't know the routing target until the tone is
+        // decoded at end-of-call). Push the routed TG into every
+        // transmission so the consistency loop below doesn't see a
+        // Call/Transmission mismatch and clobber our routing.
+        for (Transmission &t : call_info.transmission_list) {
+          t.talkgroup = matched->number;
+        }
+
         // Rebuild the formatted display string to reflect the matched row
         // so subsequent log lines and the JSON's talkgroup_display field
         // are consistent. (The earlier "Concluding Recorded Call" and

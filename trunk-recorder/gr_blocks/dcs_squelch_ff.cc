@@ -386,7 +386,7 @@ void dcs_squelch_ff::try_dcs_match(phase_state &p) {
     // the only place inside the block where "first lock event" is
     // unambiguously detectable (d_locked_code is still zero), and it
     // fires at most once per reset(). Cheap, useful for tuning.
-    BOOST_LOG_TRIVIAL(info)
+    BOOST_LOG_TRIVIAL(debug)
         << "dcs_squelch_ff: first lock on D" << std::setw(3) << std::setfill('0')
         << p.detected_code << (p.detected_inverted ? "I" : "N")
         << " (sync=" << (sync_inverted ? "011/inverted" : "100/normal")
@@ -474,7 +474,7 @@ void dcs_squelch_ff::process_one(float sample, bool &gate_should_open) {
         d_best_phases   = locked_phases;
       }
 
-      BOOST_LOG_TRIVIAL(info)
+      BOOST_LOG_TRIVIAL(debug)
           << "dcs_squelch_ff: stale lock cleared — was D"
           << std::setw(3) << std::setfill('0') << d_locked_code
           << (d_locked_inverted ? "I" : "N")

@@ -413,7 +413,7 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
   const double w_hz = (top_wins_i   >= 0) ? d_bins[top_wins_i].freq   : 0.0;
   const double e_hz = (top_energy_i >= 0) ? d_bins[top_energy_i].freq : 0.0;
   const char *mode  = (d_configured_bin >= 0) ? "verify" : "search";
-  BOOST_LOG_TRIVIAL(info)
+  BOOST_LOG_TRIVIAL(debug)
       << "ctcss_squelch_ff[" << mode << "] verdict@"
       << (v.detected_hz > 0 ? std::to_string(v.detected_hz) : std::string("none"))
       << " | total_ticks=" << d_total_eval_ticks
