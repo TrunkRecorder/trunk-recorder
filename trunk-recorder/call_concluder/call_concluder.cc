@@ -1,5 +1,6 @@
 #include "call_concluder.h"
 #include "../plugin_manager/plugin_manager.h"
+#include "../recorders/analog_recorder.h"
 
 #include <boost/filesystem.hpp>
 #include <filesystem>
@@ -811,7 +812,10 @@ int create_call_json(Call_Data_t &call_info) {
       {"talkgroup_group",       call_info.talkgroup_group},
       {"color_code",            call_info.color_code},
       {"audio_type",            call_info.audio_type},
-      {"short_name",            call_info.short_name}
+      {"short_name",            call_info.short_name},
+      {"tone_mode",             call_info.tone_mode},
+      {"tone_detected",         call_info.tone_detected},
+      {"tone_confidence",       call_info.tone_confidence}
   };
 
   if (call_info.patched_talkgroups.size() > 1) {
@@ -1128,6 +1132,22 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   if (call->get_is_analog())        call_info.audio_type = "analog";
   else if (call->get_phase2_tdma()) call_info.audio_type = "digital tdma";
   else                              call_info.audio_type = "digital";
+
+  // Pull the end-of-call tone verdict off the analog_recorder when present.
+  // Non-analog recorders never run the CTCSS/DCS sub-audible detectors, so
+  // these fields stay empty / "off" for trunked digital and conventional
+  // P25/DMR calls.
+  call_info.tone_mode       = "off";
+  call_info.tone_detected   = "";
+  call_info.tone_confidence = 0.0f;
+  if (Recorder *rec = call->get_recorder()) {
+    if (analog_recorder *arec = dynamic_cast<analog_recorder *>(rec)) {
+      const auto tr = arec->get_tone_result();
+      call_info.tone_mode       = tr.mode;
+      call_info.tone_detected   = tr.detected;
+      call_info.tone_confidence = tr.confidence;
+    }
+  }
 
   const double min_tx_s = sys->get_min_tx_duration();
 

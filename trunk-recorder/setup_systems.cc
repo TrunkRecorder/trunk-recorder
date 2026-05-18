@@ -3,7 +3,7 @@ using namespace std;
 bool setup_conventional_channel(System *system, double frequency, long channel_index, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
   bool channel_added = false;
   Source *source = NULL;
-  float tone_freq = 0.0;
+  Tone_Config tone_config; // defaults to TONE_OFF when no channel file or no Tone column
   for (std::vector<Source *>::iterator src_it = sources.begin(); src_it != sources.end(); src_it++) {
     source = *src_it;
 
@@ -19,15 +19,12 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
       Call_conventional *call = NULL;
       if (system->has_channel_file()) {
         Talkgroup *tg = system->find_talkgroup_by_freq(frequency);
-        tone_freq = tg->tone;
+        tone_config = tg->tone_config;
 
         // If there is a per channel squelch setting, use it, otherwise use the system squelch setting
-        if (tg->squelch_db != DB_UNSET) {
-          call = new Call_conventional(tg->number, tg->freq, system, config, tg->squelch_db, tg->signal_detection);
-        } else {
-          call = new Call_conventional(tg->number, tg->freq, system, config, system->get_squelch_db(), tg->signal_detection);
-        }
-        
+        const double effective_squelch = (tg->squelch_db != DB_UNSET) ? tg->squelch_db : system->get_squelch_db();
+        call = new Call_conventional(tg->number, tg->freq, system, config, effective_squelch, tg->signal_detection, tone_config);
+
         call->set_talkgroup_tag(tg->alpha_tag);
       } else {
         call = new Call_conventional(channel_index, frequency, system, config, system->get_squelch_db(), true);  // signal detection is always true when a channel file is not used
@@ -36,11 +33,7 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
       BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring " << system->get_system_type() << " channel: " << format_freq(frequency) << " Talkgroup: " << channel_index;
       if (system->get_system_type() == "conventional") {
         analog_recorder_sptr rec;
-        if (tone_freq > 0.0) {
-          rec = source->create_conventional_recorder(tb, tone_freq);
-        } else {
-          rec = source->create_conventional_recorder(tb);
-        }
+        rec = source->create_conventional_recorder(tb, tone_config);
         rec->start(call);
         rec->set_tau(system->get_tau()); //set the tau value for the recorder from the system config
         call->set_is_analog(true);
