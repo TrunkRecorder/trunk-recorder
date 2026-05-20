@@ -21,6 +21,7 @@
 
 #include <gnuradio/block.h>
 #include <gnuradio/blocks/copy.h>
+#include <gnuradio/blocks/null_sink.h>
 #if GNURADIO_VERSION < 0x030800
 #include <gnuradio/filter/fir_filter_fff.h>
 
@@ -33,7 +34,6 @@
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/filter/iir_filter_ffd.h>
 
-#include <gnuradio/analog/ctcss_squelch_ff.h>
 #include <gnuradio/analog/pwr_squelch_cc.h>
 #include <gnuradio/analog/pwr_squelch_ff.h>
 #include <gnuradio/analog/quadrature_demod_cf.h>
@@ -45,6 +45,8 @@
 class Source;
 class analog_recorder;
 
+#include "../gr_blocks/ctcss_squelch_ff.h"
+#include "../gr_blocks/dcs_squelch_ff.h"
 #include "../gr_blocks/channelizer.h"
 #include "../gr_blocks/decoder_wrapper.h"
 #include "../gr_blocks/freq_xlating_fft_filter.h"
@@ -66,13 +68,13 @@ typedef std::shared_ptr<analog_recorder> analog_recorder_sptr;
 int plugman_signal(long unitId, const char *signaling_type, gr::blocks::SignalType sig_type, Call *call, System *system, Recorder *recorder);
 
 analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type);
-analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq);
+analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, const Tone_Config &tone_config);
 class analog_recorder : public gr::hier_block2, public Recorder {
   friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type);
-  friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq);
+  friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, const Tone_Config &tone_config);
 
 protected:
-  analog_recorder(Source *src, System *system, Recorder_Type type, float tone_freq);
+  analog_recorder(Source *src, System *system, Recorder_Type type, const Tone_Config &tone_config);
 
 public:
   ~analog_recorder();
@@ -108,11 +110,22 @@ public:
   void set_tau(float tau);
   float get_tau() const;
 
+  // Result of the end-of-call tone identification pass. Populated in stop()
+  // by polling get_verdict() on whichever new ctcss_squelch_ff / dcs_squelch_ff
+  // blocks ran (configured-gate, side-chain, or search mode). Empty when
+  // the channel was Tone=0 / OFF mode and no detector ran.
+  struct Tone_Result {
+    std::string mode;        // "off" | "ctcss" | "dcs" | "search" (configured)
+    std::string detected;    // "" | "173.8" | "D023N" | etc.
+    float       confidence = 0.0f;
+  };
+  Tone_Result get_tone_result() const { return tone_result; }
+
 private:
   double center_freq, chan_freq;
   long talkgroup;
   long input_rate;
-  float tone_freq;
+  Tone_Config tone_config;          // copy of the channel's tone configuration
   double system_channel_rate;
   double initial_rate;
   float quad_gain;
@@ -120,7 +133,7 @@ private:
   double squelch_db;
   time_t timestamp;
   time_t starttime;
-  bool use_tone_squelch;
+  Tone_Result tone_result;
 
   State state;
   std::vector<float> channel_lpf_taps;
@@ -153,7 +166,19 @@ private:
   gr::filter::fir_filter_fff::sptr high_f;
   gr::filter::fir_filter_fff::sptr low_f;
   gr::analog::pwr_squelch_ff::sptr squelch_two;
-  gr::analog::ctcss_squelch_ff::sptr tone_squelch;
+
+  // Sub-audible squelch / identification blocks. At most one acts as a gate
+  // (sits in the audio path between decim_audio and high_f); the other
+  // optionally runs as a side-chain detector terminated in a null_sink.
+  // In SEARCH mode neither gates and both run as side-chains; in OFF mode
+  // none are instantiated. See analog_recorder.cc constructor for the
+  // four-way wiring decision.
+  gr::blocks::ctcss_squelch_ff::sptr ctcss_block;
+  gr::blocks::dcs_squelch_ff::sptr   dcs_block;
+  gr::blocks::null_sink::sptr        ctcss_null_sink;
+  gr::blocks::null_sink::sptr        dcs_null_sink;
+  bool ctcss_block_in_path = false; // true when ctcss_block is the main-path gate
+  bool dcs_block_in_path   = false; // true when dcs_block is the main-path gate
 
   gr::analog::quadrature_demod_cf::sptr demod;
   gr::blocks::float_to_short::sptr converter;

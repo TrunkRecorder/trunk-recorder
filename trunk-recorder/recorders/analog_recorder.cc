@@ -7,6 +7,8 @@
 #include "../plugin_manager/plugin_manager.h"
 #include "../recorder_globals.h"
 
+#include <iomanip>
+
 using namespace std;
 
 bool analog_recorder::logging = false;
@@ -38,11 +40,11 @@ std::vector<float> design_filter(double interpolation, double deci) {
 }
 
 analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type) {
-  return gnuradio::get_initial_sptr(new analog_recorder(src, static_cast<System*>(nullptr), type, -1));
+  return gnuradio::get_initial_sptr(new analog_recorder(src, static_cast<System*>(nullptr), type, Tone_Config{}));
 }
 
-analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq) {
-  return gnuradio::get_initial_sptr(new analog_recorder(src, static_cast<System*>(nullptr), type, tone_freq));
+analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, const Tone_Config &tone_config) {
+  return gnuradio::get_initial_sptr(new analog_recorder(src, static_cast<System*>(nullptr), type, tone_config));
 }
 
 void analog_recorder::set_tau(float tau) {
@@ -83,7 +85,7 @@ void analog_recorder::calculate_iir_taps(float tau) {
   d_fbtaps[1] = -p1;
 }
 
-analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type, float tone_freq)
+analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type, const Tone_Config &tone_config)
     : gr::hier_block2("analog_recorder",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(0, 0, sizeof(float))),
@@ -109,13 +111,7 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
 
   bool use_streaming = false;
 
-  if (tone_freq > 0) {
-    use_tone_squelch = true;
-    this->tone_freq = tone_freq;
-  } else {
-    use_tone_squelch = false;
-    this->tone_freq = 0;
-  }
+  this->tone_config = tone_config;
 
   if (config != NULL) {
     use_streaming = config->enable_audio_streaming;
@@ -141,8 +137,39 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   // recording doesn't contain blank spaces between transmissions
   squelch_two = gr::analog::pwr_squelch_ff::make(-200, 0.01, 0, true);
 
-  if (use_tone_squelch) {
-    tone_squelch = gr::analog::ctcss_squelch_ff::make(system_channel_rate, this->tone_freq, 0.01, 0, 0, false);
+  // Sub-audible tone gating / identification blocks (new design).
+  // The audio chain below taps these in at the wav_sample_rate point (16 kHz)
+  // rather than the system_channel_rate point — CTCSS is 67-254 Hz and DCS
+  // is ~134 baud, both well within 16 kHz Nyquist, and the blocks decimate
+  // internally to ~1 kHz so running them at 16 kHz vs 96 kHz costs only a
+  // few extra taps in the internal anti-alias LPF.
+  switch (tone_config.mode) {
+  case TONE_OFF:
+    // No gate, no detector. Audio passes through unchanged from decim_audio.
+    break;
+  case TONE_CTCSS:
+    // CTCSS gates the audio path; DCS detector runs as a side-chain so we
+    // still spot a wrong-agency DCS keyup at end-of-call.
+    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, static_cast<float>(tone_config.ctcss_hz), true);
+    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
+    ctcss_block_in_path = true;
+    dcs_block_in_path   = false;
+    break;
+  case TONE_DCS:
+    // DCS gates the audio path; CTCSS detector runs as a side-chain.
+    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, tone_config.dcs_code, tone_config.dcs_inverted, true);
+    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
+    ctcss_block_in_path = false;
+    dcs_block_in_path   = true;
+    break;
+  case TONE_SEARCH:
+    // No gating; both detectors run as side-chains so end-of-call can
+    // report whichever scored higher.
+    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
+    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
+    ctcss_block_in_path = false;
+    dcs_block_in_path   = false;
+    break;
   }
   // k = quad_rate/(2*math.pi*max_dev) = 48k / (6.283185*5000) = 1.527
 
@@ -162,7 +189,7 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
 
   audio_resampler_taps = design_filter(1, (system_channel_rate / wav_sample_rate)); // Calculated to make sample rate changable -- must be an integer
 
-  BOOST_LOG_TRIVIAL(info) << "Audio Resampler Taps: " << audio_resampler_taps.size() << " Decimation: " << (system_channel_rate / wav_sample_rate);
+  BOOST_LOG_TRIVIAL(debug) << "Audio Resampler Taps: " << audio_resampler_taps.size() << " Decimation: " << (system_channel_rate / wav_sample_rate);
   // downsample from 48k to 8k
   decim_audio = gr::filter::fir_filter_fff::make((system_channel_rate / wav_sample_rate), audio_resampler_taps); // Calculated to make sample rate changable
 
@@ -171,14 +198,14 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   wav_sink = gr::blocks::transmission_sink::make(1, wav_sample_rate, 16); //  Configurable
 
   if (use_streaming) {
-    BOOST_LOG_TRIVIAL(info) << "\t Creating plugin sink..." << std::endl;
+    BOOST_LOG_TRIVIAL(debug) << "\t Creating plugin sink..." << std::endl;
     plugin_sink = gr::blocks::plugin_wrapper_impl::make(std::bind(&analog_recorder::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
-    BOOST_LOG_TRIVIAL(info) << "\t Plugin sink created!" << std::endl;
+    BOOST_LOG_TRIVIAL(debug) << "\t Plugin sink created!" << std::endl;
   }
 
-  BOOST_LOG_TRIVIAL(info) << "\t Creating decoder sink..." << std::endl;
+  BOOST_LOG_TRIVIAL(debug) << "\t Creating decoder sink..." << std::endl;
   decoder_sink = gr::blocks::decoder_wrapper_impl::make(wav_sample_rate, std::bind(&analog_recorder::decoder_callback_handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
-  BOOST_LOG_TRIVIAL(info) << "\t Decoder sink created!" << std::endl;
+  BOOST_LOG_TRIVIAL(debug) << "\t Decoder sink created!" << std::endl;
 
   // Analog audio band pass from 300 to 3000 Hz
   // can't use gnuradio.filter.firdes.band_pass since we have different transition widths
@@ -196,19 +223,45 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
 
   low_f = gr::filter::fir_filter_fff::make(1, low_f_taps);
 
-  // using squelch
+  // Always: RF → channelized → demod → deemph → decim to 16 kHz audio.
   connect(self(), 0, prefilter, 0);
   connect(prefilter, 0, demod, 0);
   connect(demod, 0, deemph, 0);
-  if (use_tone_squelch) {
-    connect(deemph, 0, tone_squelch, 0); 
-      connect(tone_squelch, 0, decim_audio, 0);
+  connect(deemph, 0, decim_audio, 0);
+
+  // Audio gate. The tone block (if any) sits between decim_audio and the
+  // downstream branches so both the wav writer and the decoder_sink see the
+  // gated signal — matches the prior behaviour where ctcss_squelch_ff sat
+  // before decim_audio. The side-chain detector (if present) taps
+  // decim_audio directly so it can still see ungated audio and identify
+  // wrong-agency keyups even when the configured gate is closed.
+  if (ctcss_block_in_path) {
+    connect(decim_audio, 0, ctcss_block, 0);
+    connect(ctcss_block, 0, decoder_sink, 0);
+    connect(ctcss_block, 0, high_f, 0);
+  } else if (dcs_block_in_path) {
+    connect(decim_audio, 0, dcs_block, 0);
+    connect(dcs_block, 0, decoder_sink, 0);
+    connect(dcs_block, 0, high_f, 0);
   } else {
-    connect(deemph, 0, decim_audio, 0);
+    connect(decim_audio, 0, decoder_sink, 0);
+    connect(decim_audio, 0, high_f, 0);
   }
 
-  connect(decim_audio, 0, decoder_sink, 0);
-  connect(decim_audio, 0, high_f, 0);
+  // Side-chain detect-only blocks. Their output is terminated in a
+  // null_sink so the flow graph is well-formed; only their internal
+  // get_verdict() state is consumed (at end-of-call by stop()).
+  if (ctcss_block && !ctcss_block_in_path) {
+    connect(decim_audio, 0, ctcss_block, 0);
+    ctcss_null_sink = gr::blocks::null_sink::make(sizeof(float));
+    connect(ctcss_block, 0, ctcss_null_sink, 0);
+  }
+  if (dcs_block && !dcs_block_in_path) {
+    connect(decim_audio, 0, dcs_block, 0);
+    dcs_null_sink = gr::blocks::null_sink::make(sizeof(float));
+    connect(dcs_block, 0, dcs_null_sink, 0);
+  }
+
   connect(high_f, 0, low_f, 0);
   connect(low_f, 0, squelch_two, 0);
   connect(squelch_two, 0, levels, 0);
@@ -256,6 +309,114 @@ void analog_recorder::stop() {
   decoder_sink->set_fsync_enabled(false);
   decoder_sink->set_star_enabled(false);
   decoder_sink->set_tps_enabled(false);
+
+  // ----- Tone identification verdict ------------------------------------
+  // Pull verdicts from whichever new sub-audible blocks ran and pick the
+  // higher-confidence one. The configured (gated) block has the strongest
+  // claim when both fire; in TONE_SEARCH the higher confidence wins.
+  tone_result = Tone_Result{};
+  switch (tone_config.mode) {
+  case TONE_OFF:    tone_result.mode = "off";    break;
+  case TONE_CTCSS:  tone_result.mode = "ctcss";  break;
+  case TONE_DCS:    tone_result.mode = "dcs";    break;
+  case TONE_SEARCH: tone_result.mode = "search"; break;
+  }
+
+  float ctcss_conf = 0.0f;
+  float dcs_conf   = 0.0f;
+  std::string ctcss_det, dcs_det;
+
+  if (ctcss_block) {
+    auto v = ctcss_block->get_verdict();
+    if (v.detected_hz > 0.0f && v.confidence > 0.0f) {
+      char buf[16];
+      // One decimal place matches scanner/CHIRP display convention for CTCSS.
+      snprintf(buf, sizeof(buf), "%.1f", v.detected_hz);
+      ctcss_det = buf;
+      ctcss_conf = v.confidence;
+    }
+  }
+  if (dcs_block) {
+    auto v = dcs_block->get_verdict();
+    if (v.detected_code != 0 && v.confidence > 0.0f) {
+      // In search mode the receiver genuinely can't tell apart cyclic-class
+      // members — e.g. D703I and D565N are literally the same shift-register
+      // pattern at different rotations on the air, so neither is "wrong" and
+      // we report all class members so the operator can see what the
+      // transmission could be. In configured mode the rewrite picked the
+      // configured form so we just print that single name.
+      if (tone_config.mode == TONE_SEARCH && v.aliases.size() > 1) {
+        std::string s;
+        for (const auto &kv : v.aliases) {
+          if (!s.empty()) s += "/";
+          char b[8];
+          snprintf(b, sizeof(b), "D%03d%c", kv.first, kv.second ? 'I' : 'N');
+          s += b;
+        }
+        dcs_det = s;
+      } else {
+        char buf[16];
+        snprintf(buf, sizeof(buf), "D%03d%c", v.detected_code, v.detected_inverted ? 'I' : 'N');
+        dcs_det = buf;
+      }
+      dcs_conf = v.confidence;
+    }
+  }
+
+  // Pick the verdict to report. Prefer the configured-gate block when both
+  // fire (operator's expectation: a CTCSS-configured channel should show
+  // CTCSS unless DCS clearly won the call). For SEARCH mode it's purely
+  // higher confidence.
+  if (tone_config.mode == TONE_CTCSS) {
+    if (!ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
+    else if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
+  } else if (tone_config.mode == TONE_DCS) {
+    if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
+    else if (!ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
+  } else if (tone_config.mode == TONE_SEARCH) {
+    // Search-mode tiebreak: simple max-confidence comparison. With the
+    // phase-diversity DCS confidence now in place, a CTCSS-aliased false
+    // DCS lock scores ~0.05-0.15 while a real DCS lock scores ~0.9-1.0;
+    // a CTCSS detector lock with all four verdict guards passed scores
+    // ~0.85-0.95. So whichever returns the higher confidence is genuinely
+    // the better identification — no need for a CTCSS priority override
+    // (an earlier version had one, which incorrectly forced CTCSS to win
+    // even when a real DCS keyup was correctly identified at conf 1.0).
+    const bool have_ctcss = !ctcss_det.empty();
+    const bool have_dcs   = !dcs_det.empty();
+    if (have_ctcss && have_dcs) {
+      if (ctcss_conf >= dcs_conf) {
+        tone_result.detected   = ctcss_det;
+        tone_result.confidence = ctcss_conf;
+      } else {
+        tone_result.detected   = dcs_det;
+        tone_result.confidence = dcs_conf;
+      }
+    } else if (have_ctcss) {
+      tone_result.detected   = ctcss_det;
+      tone_result.confidence = ctcss_conf;
+    } else if (have_dcs) {
+      tone_result.detected   = dcs_det;
+      tone_result.confidence = dcs_conf;
+    }
+  }
+  // TONE_OFF leaves tone_result.detected empty.
+
+  if (tone_config.mode != TONE_OFF) {
+    std::string loghdr;
+    if (call != NULL) {
+      loghdr = log_header(call->get_short_name(), call->get_call_num(), call->get_talkgroup_display(), chan_freq);
+    } else {
+      loghdr = "[?]\t[0m\t";
+    }
+    if (!tone_result.detected.empty()) {
+      BOOST_LOG_TRIVIAL(info) << loghdr << "[36mTone Result:[0m " << tone_result.detected
+                              << " (mode=" << tone_result.mode
+                              << " conf=" << std::fixed << std::setprecision(2) << tone_result.confidence << ")";
+    } else {
+      BOOST_LOG_TRIVIAL(info) << loghdr << "[36mTone Result:[0m none (mode=" << tone_result.mode << ")";
+    }
+  }
 }
 
 void analog_recorder::process_message_queues() {
@@ -283,7 +444,17 @@ void analog_recorder::set_enabled(bool enabled) {
 }
 
 bool analog_recorder::is_squelched() {
-  return prefilter->is_squelched();
+  // Combine the RF power squelch (prefilter) with whichever sub-audible gate
+  // (CTCSS or DCS) is sitting in the audio path. The recorder counts as
+  // "squelched" when either gate is closed — RF gone, OR carrier present but
+  // configured tone not detected. Side-chain detect-only blocks don't gate
+  // audio so they are intentionally ignored here. In TONE_OFF / TONE_SEARCH
+  // neither block is in the path, so behaviour matches the old prefilter-
+  // only semantics.
+  if (prefilter->is_squelched()) return true;
+  if (ctcss_block_in_path && ctcss_block && !ctcss_block->is_unmuted()) return true;
+  if (dcs_block_in_path   && dcs_block   && !dcs_block->is_unmuted())   return true;
+  return false;
 }
 
 double analog_recorder::get_pwr() {
@@ -291,10 +462,18 @@ double analog_recorder::get_pwr() {
 }
 
 bool analog_recorder::is_idle() {
-  if (state == ACTIVE) {
-    return prefilter->is_squelched();
-  }
-  return true;
+  // Same combined semantics as is_squelched: a configured-gate tone block
+  // counts as a closer. Without this, a wrong-tone keyup (RF present, tone
+  // wrong → audio gated to zeros and dropped at squelch_two) would never
+  // increment manage_conventional_call's idle_count and the call would
+  // sit open until RF eventually dropped. Pre-existing behaviour did the
+  // same thing because the stock ctcss_squelch_ff didn't expose its
+  // muted state to the recorder either.
+  if (state != ACTIVE) return true;
+  if (prefilter->is_squelched()) return true;
+  if (ctcss_block_in_path && ctcss_block && !ctcss_block->is_unmuted()) return true;
+  if (dcs_block_in_path   && dcs_block   && !dcs_block->is_unmuted())   return true;
+  return false;
 }
 
 long analog_recorder::get_talkgroup() {
@@ -366,6 +545,14 @@ bool analog_recorder::start(Call *call) {
   this->call = call;
 
   setup_decoders_for_system(call->get_system());
+
+  // Reset sub-audible block state per transmission so the verdict reflects
+  // only this call. Both blocks (when instantiated) maintain cumulative
+  // scoring across the audio they see; without reset() a quiet call after
+  // a confidently-identified earlier one would still report the prior tone.
+  if (ctcss_block) ctcss_block->reset();
+  if (dcs_block)   dcs_block->reset();
+  tone_result = Tone_Result{};
 
   talkgroup = call->get_talkgroup();
   chan_freq = call->get_freq();

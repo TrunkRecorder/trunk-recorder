@@ -2,11 +2,108 @@
 #define GLOBAL_STRUCTS_H
 #include <cstdint>
 #include <ctime>
+#include <cctype>
+#include <cstdlib>
 #include <string>
 #include <vector>
 #include <json.hpp>
 
 const int DB_UNSET = 999;
+
+// Conventional-channel sub-audible squelch / identification mode. Drives
+// what (if any) CTCSS or DCS block sits in the analog_recorder audio path
+// and whether a side-chain detector also runs to identify the actual
+// on-air tone for end-of-call reporting.
+enum ToneMode {
+  TONE_OFF    = 0, // no gating, no detection (legacy "Tone=0" channels)
+  TONE_CTCSS  = 1, // gate on configured ctcss_hz; DCS detector runs side-chain
+  TONE_DCS    = 2, // gate on configured dcs_code/inverted; CTCSS detector runs side-chain
+  TONE_SEARCH = 3  // no gate; both detectors run side-chain to identify on-air tone
+};
+
+struct Tone_Config {
+  ToneMode mode = TONE_OFF;
+  double   ctcss_hz = 0.0;   // valid only when mode == TONE_CTCSS
+  int      dcs_code = 0;     // valid only when mode == TONE_DCS (octal as decimal int)
+  bool     dcs_inverted = false; // valid only when mode == TONE_DCS
+};
+
+// True iff two Tone_Configs match for routing purposes (same mode + same
+// frequency/code/polarity within tolerance). Used by multi-row freq
+// groups in setup_systems/call_conventional/call_concluder when a single
+// recorder serves multiple logical channels and we need to map a detected
+// tone to the right CSV row.
+inline bool tones_match(const Tone_Config &a, const Tone_Config &b) {
+  if (a.mode != b.mode) return false;
+  switch (a.mode) {
+    case TONE_CTCSS: {
+      const double d = a.ctcss_hz - b.ctcss_hz;
+      return (d > -0.5 && d < 0.5);
+    }
+    case TONE_DCS:
+      return a.dcs_code == b.dcs_code && a.dcs_inverted == b.dcs_inverted;
+    case TONE_OFF:
+    case TONE_SEARCH:
+      return true;
+  }
+  return false;
+}
+
+// Parse a Tone column value into a Tone_Config. Accepted forms:
+//   ""  or  "0"  / "0.0"               -> TONE_OFF
+//   "S" / "s"                          -> TONE_SEARCH
+//   strict /D\d{3}[NI]/i               -> TONE_DCS (3-digit octal, polarity required)
+//   any positive numeric (CTCSS Hz)    -> TONE_CTCSS
+// Anything else returns TONE_OFF with no warning here — the caller is
+// expected to detect TONE_OFF when it was unintended and log.
+inline Tone_Config parse_tone_spec(const std::string &raw) {
+  Tone_Config tc; // default OFF
+  if (raw.empty()) return tc;
+
+  // Trim whitespace
+  size_t a = 0;
+  size_t b = raw.size();
+  while (a < b && std::isspace(static_cast<unsigned char>(raw[a]))) ++a;
+  while (b > a && std::isspace(static_cast<unsigned char>(raw[b - 1]))) --b;
+  if (a == b) return tc;
+  const std::string s = raw.substr(a, b - a);
+
+  // Search mode
+  if (s.size() == 1 && (s[0] == 'S' || s[0] == 's')) {
+    tc.mode = TONE_SEARCH;
+    return tc;
+  }
+
+  // DCS: strict "D" + exactly 3 octal digits + 'N'/'n'/'I'/'i'
+  if ((s[0] == 'D' || s[0] == 'd') && s.size() == 5) {
+    bool ok = true;
+    for (int i = 1; i <= 3; ++i) {
+      char c = s[i];
+      if (c < '0' || c > '7') { ok = false; break; }
+    }
+    char pol = s[4];
+    if (ok && (pol == 'N' || pol == 'n' || pol == 'I' || pol == 'i')) {
+      tc.mode = TONE_DCS;
+      tc.dcs_code = ((s[1] - '0') * 100) + ((s[2] - '0') * 10) + (s[3] - '0');
+      tc.dcs_inverted = (pol == 'I' || pol == 'i');
+      return tc;
+    }
+    // Falls through to OFF below if malformed.
+    return tc;
+  }
+
+  // CTCSS: any positive number. strtod tolerates ints and floats.
+  char *endp = nullptr;
+  const double v = std::strtod(s.c_str(), &endp);
+  if (endp != s.c_str() && *endp == '\0' && v > 0.0) {
+    tc.mode = TONE_CTCSS;
+    tc.ctcss_hz = v;
+    return tc;
+  }
+
+  // Unrecognized — leave as OFF (caller can log if surprising).
+  return tc;
+}
 
 struct Transmission {
   long source;
@@ -173,6 +270,22 @@ struct Call_Data_t {
   std::vector<Call_Source> transmission_source_list;
   std::vector<Call_Error> transmission_error_list;
   std::vector<Transmission> transmission_list;
+
+  // Sub-audible squelch / identification verdict for analog conventional
+  // calls. Populated in Call_Concluder::create_call_data() from the
+  // analog_recorder; empty / "off" for digital and trunked calls. See
+  // ToneMode enum above for the configured-mode strings.
+  std::string tone_mode;       // "off" | "ctcss" | "dcs" | "search"
+  std::string tone_detected;   // "" | "173.8" | "D023N" | ...
+  float       tone_confidence; // 0.0 (no lock) .. 1.0 (fully confident)
+
+  // SKIPPED — set when this call's freq has multiple CSV rows (a freq
+  // group) and the detector's tone verdict doesn't match any configured
+  // row's Tone column (and no catch-all Tone=0 / Tone=S row exists). The
+  // call is concluded (recorder state cleans up) but the wav/m4a/json
+  // are removed and no plugins fire. Mirrors the SUPERSEDED handling
+  // path in Call_Concluder::conclude_call.
+  bool        tone_skipped = false;
 
   Call_Data_Status status;
   time_t process_call_time;
