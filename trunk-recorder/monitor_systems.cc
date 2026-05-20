@@ -239,53 +239,115 @@ void print_status(std::vector<Source *> &sources, std::vector<System *> &systems
 
 void manage_conventional_call(Call *call, Config &config) {
 
-  if (call->get_recorder()) {
-    // if any recording has happened
+  if (!call->get_recorder()) return;
+  Recorder *recorder = call->get_recorder();
 
+  // P25 Conventional and DMR Conventional recorders are constructed but not
+  // started during setup_systems (the flow graph has to be unlocked before
+  // their dynamic-modulation assignment can run). For those, the first
+  // tick here lazy-starts the recorder. For analog conventional this is
+  // already done in setup_systems and is_active() is true from the start.
+  if (!recorder->is_active() && call->get_current_length() == 0) {
+    recorder->start(call);
+    call->set_state(RECORDING);
+    plugman_call_start(call);
+    BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name()
+        << "]\t\033[0;34m" << call->get_call_num()
+        << "C\033[0m Starting P25 Conventional Recorder ";
+    return;
+  }
+
+  // Idle tracking.
+  //
+  // Three cases:
+  //   1. Port enabled. Track idle/active normally — drives the
+  //      stuck-open safety net (port enabled, audio never flowed) AND
+  //      the regular call_timeout conclude path (active call wound
+  //      down).
+  //   2. Port disabled BUT current_length > 0. The detector just
+  //      released the port after a real call (Phase C bidirectional
+  //      dispatch). The wav_sink still has the call open; we need
+  //      idle ticks to accumulate so the timeout below concludes
+  //      the call and finalises the wav. We treat this as "always
+  //      idle, count up" — the port can't re-open with new audio
+  //      (the detector won't trip on a closed RF input), so it's
+  //      monotonic toward conclude.
+  //   3. Port disabled AND current_length == 0. Nothing has happened
+  //      yet — no call to conclude, nothing to gate, nothing to
+  //      track. Reset the counter so the next detector-driven open
+  //      starts from a fresh budget (without this, a long disabled
+  //      interval can race with the next enable and fire Stuck-open
+  //      ~70 ms after Enable — observed empirically).
+  if (recorder->is_enabled()) {
+    if (recorder->is_idle()) {
+      call->set_noise(recorder->get_pwr());
+      call->increase_idle_count();
+    } else {
+      call->set_signal(recorder->get_pwr());
+      if (call->get_idle_count() > 0) {
+        call->reset_idle_count();
+      }
+    }
+  } else if (call->get_current_length() > 0) {
+    // Port was open with audio recorded; the detector then closed it
+    // (Phase C bidirectional disable). Continue counting so the
+    // timeout below concludes the call.
+    call->increase_idle_count();
+  } else {
+    // No port, no audio. Hold the counter at zero.
+    if (call->get_idle_count() > 0) {
+      call->reset_idle_count();
+    }
+  }
+
+  BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name()
+      << "]\t\033[0;34m" << call->get_call_num()
+      << "C\033[0m Call Length: " << call->get_current_length()
+      << "s\t Idle: " << recorder->is_idle()
+      << "\t Squelched: " << recorder->is_squelched()
+      << " Idle Count: " << call->get_idle_count();
+
+  // Timeout fired. Two cases:
+  //   • current_length > 0: a real call wound down — conclude + restart
+  //     for the next transmission (existing behaviour).
+  //   • current_length == 0: signal_detector enabled the port but
+  //     nothing materialised in the channel passband. Disable the
+  //     selector port so the DSP chain stops consuming source samples;
+  //     signal_detector will re-enable on the next real trigger.
+  if (call->get_idle_count() > config.call_timeout) {
     if (call->get_current_length() > 0) {
-
-      BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Call Length: " << call->get_current_length() << "s\t Idle: " << call->get_recorder()->is_idle() << "\t Squelched: " << call->get_recorder()->is_squelched() << " Idle Count: " << call->get_idle_count();
-
-      // means that the squelch is on and it has stopped recording
-      if (call->get_recorder()->is_idle()) {
-        // increase the number of periods it has not been recording for
-        call->set_noise(call->get_recorder()->get_pwr());
-        call->increase_idle_count();
-      } else {
-        call->set_signal(call->get_recorder()->get_pwr());
-        if (call->get_idle_count() > 0) {
-          // if it starts recording again, then reset the idle count
-          call->reset_idle_count();
-        }
+      call->conclude_call();
+      call->restart_call();
+      if (recorder != NULL) {
+        plugman_setup_recorder(recorder);
+        plugman_call_start(call);
       }
-
-      // if no additional recording has happened in the past X periods, stop and open new file
-      if (call->get_idle_count() > config.call_timeout) {
-        Recorder *recorder = call->get_recorder();
-        call->conclude_call();
-        call->restart_call();
-        if (recorder != NULL) {
-          plugman_setup_recorder(recorder);
-          plugman_call_start(call);
-        }
-      } else if ((call->get_current_length() > call->get_system()->get_max_duration()) && (call->get_system()->get_max_duration() > 0)) {
-        Recorder *recorder = call->get_recorder();
-        call->conclude_call();
-        call->restart_call();
-        if (recorder != NULL) {
-          plugman_setup_recorder(recorder);
-          plugman_call_start(call);
-        }
-      }
-    } else if (!call->get_recorder()->is_active()) {
-      // P25 Conventional and DMR Recorders need a have the graph unlocked before they can start recording.
-      Recorder *recorder = call->get_recorder();
-      recorder->start(call);
-      call->set_state(RECORDING);
+    } else if (recorder->is_enabled()) {
+      // Stuck-open: enabled by signal_detector but no audio reached
+      // wav_sink. Release the port; signal_detector will re-enable
+      // on the next trigger.
+      BOOST_LOG_TRIVIAL(info) << "[" << call->get_short_name()
+          << "]\t\033[0;34m" << call->get_call_num()
+          << "C\033[0m [33mStuck-open[0m recorder on "
+          << format_freq(call->get_freq())
+          << " disabled after " << call->get_idle_count()
+          << " idle ticks with no audio";
+      recorder->set_enabled(false);
+      call->reset_idle_count();
+    } else {
+      // Idle counter ran past timeout on a recorder that was already
+      // disabled. Just hold the counter so it doesn't grow unbounded.
+      call->reset_idle_count();
+    }
+  } else if (call->get_current_length() > 0
+             && call->get_system()->get_max_duration() > 0
+             && call->get_current_length() > call->get_system()->get_max_duration()) {
+    // Max-duration cap reached during a long running call.
+    call->conclude_call();
+    call->restart_call();
+    if (recorder != NULL) {
+      plugman_setup_recorder(recorder);
       plugman_call_start(call);
-      BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Starting P25 Convetional Recorder ";
-
-      // plugman_setup_recorder((Recorder *)recorder->get());
     }
   }
 }
