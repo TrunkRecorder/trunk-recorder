@@ -318,6 +318,15 @@ void manage_conventional_call(Call *call, Config &config) {
     if (call->get_current_length() > 0) {
       call->conclude_call();
       call->restart_call();
+      // restart_call() -> recorder->start() re-closes the selector port on
+      // signal-detection channels; signal_detector re-trips for the next
+      // transmission. Companion to the "Signal Detector Opened" line.
+      if (!recorder->is_enabled()) {
+        BOOST_LOG_TRIVIAL(info) << "\t[ " << recorder->get_num() << " ] "
+            << recorder->get_type_string()
+            << "\tSignal Detector Closed - Freq: " << format_freq(recorder->get_freq())
+            << "\tSignal Ended";
+      }
       if (recorder != NULL) {
         plugman_setup_recorder(recorder);
         plugman_call_start(call);
@@ -326,12 +335,10 @@ void manage_conventional_call(Call *call, Config &config) {
       // Stuck-open: enabled by signal_detector but no audio reached
       // wav_sink. Release the port; signal_detector will re-enable
       // on the next trigger.
-      BOOST_LOG_TRIVIAL(info) << "[" << call->get_short_name()
-          << "]\t\033[0;34m" << call->get_call_num()
-          << "C\033[0m [33mStuck-open[0m recorder on "
-          << format_freq(call->get_freq())
-          << " disabled after " << call->get_idle_count()
-          << " idle ticks with no audio";
+      BOOST_LOG_TRIVIAL(info) << "\t[ " << recorder->get_num() << " ] "
+          << recorder->get_type_string()
+          << "\tSignal Detector Closed - Freq: " << format_freq(recorder->get_freq())
+          << "\tTimed Out - No Audio";
       recorder->set_enabled(false);
       call->reset_idle_count();
     } else {
