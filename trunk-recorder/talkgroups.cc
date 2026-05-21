@@ -1,4 +1,5 @@
 #include "talkgroups.h"
+#include "tone_manager.h"
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>

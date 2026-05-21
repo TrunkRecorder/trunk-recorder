@@ -3,6 +3,7 @@
 #include "formatter.h"
 #include "recorders/recorder.h"
 #include "talkgroup.h"
+#include "tone_manager.h"
 #include <boost/algorithm/string.hpp>
 #include <chrono>
 #include <sstream>

@@ -256,6 +256,7 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/formatter.cc
   trunk-recorder/source.cc
   trunk-recorder/call_conventional.cc
+  trunk-recorder/tone_manager.cc
   trunk-recorder/systems/p25_trunking.cc
   trunk-recorder/systems/p25_parser.cc
   trunk-recorder/systems/smartnet_parser.cc
