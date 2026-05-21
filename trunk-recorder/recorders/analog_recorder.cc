@@ -150,23 +150,23 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   case TONE_CTCSS:
     // CTCSS gates the audio path; DCS detector runs as a side-chain so we
     // still spot a wrong-agency DCS keyup at end-of-call.
-    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, static_cast<float>(tone_config.ctcss_hz), true);
-    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
+    ctcss_block = gr::trunkrecorder::ctcss_squelch_ff::make(wav_sample_rate, static_cast<float>(tone_config.ctcss_hz), true);
+    dcs_block   = gr::trunkrecorder::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
     ctcss_block_in_path = true;
     dcs_block_in_path   = false;
     break;
   case TONE_DCS:
     // DCS gates the audio path; CTCSS detector runs as a side-chain.
-    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, tone_config.dcs_code, tone_config.dcs_inverted, true);
-    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
+    dcs_block   = gr::trunkrecorder::dcs_squelch_ff::make(wav_sample_rate, tone_config.dcs_code, tone_config.dcs_inverted, true);
+    ctcss_block = gr::trunkrecorder::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
     ctcss_block_in_path = false;
     dcs_block_in_path   = true;
     break;
   case TONE_SEARCH:
     // No gating; both detectors run as side-chains so end-of-call can
     // report whichever scored higher.
-    ctcss_block = gr::blocks::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
-    dcs_block   = gr::blocks::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
+    ctcss_block = gr::trunkrecorder::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
+    dcs_block   = gr::trunkrecorder::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
     ctcss_block_in_path = false;
     dcs_block_in_path   = false;
     break;

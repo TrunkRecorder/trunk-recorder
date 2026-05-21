@@ -45,7 +45,7 @@
 #include <vector>
 
 namespace gr {
-namespace blocks {
+namespace trunkrecorder {
 
 struct ctcss_squelch_verdict {
   // 0.0 if no confident lock during the call, else the detected CTCSS
@@ -197,7 +197,7 @@ private:
   mutable boost::mutex d_mutex;
 };
 
-} // namespace blocks
+} // namespace trunkrecorder
 } // namespace gr
 
 #endif // INCLUDED_CTCSS_SQUELCH_FF_H

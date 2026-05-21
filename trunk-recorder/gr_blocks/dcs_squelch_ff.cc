@@ -16,7 +16,7 @@
 #include <iomanip>
 
 namespace gr {
-namespace blocks {
+namespace trunkrecorder {
 
 namespace {
 
@@ -719,5 +719,5 @@ dcs_squelch_verdict dcs_squelch_ff::get_verdict() const {
   return v;
 }
 
-} /* namespace blocks */
+} /* namespace trunkrecorder */
 } /* namespace gr */

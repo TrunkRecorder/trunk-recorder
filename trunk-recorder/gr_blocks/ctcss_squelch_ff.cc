@@ -31,7 +31,7 @@
 #include <numeric>
 
 namespace gr {
-namespace blocks {
+namespace trunkrecorder {
 
 namespace {
 
@@ -638,5 +638,5 @@ int ctcss_squelch_ff::work(int noutput_items,
   return noutput_items;
 }
 
-} // namespace blocks
+} // namespace trunkrecorder
 } // namespace gr

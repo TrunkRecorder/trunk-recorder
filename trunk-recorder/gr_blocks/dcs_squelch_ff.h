@@ -33,7 +33,7 @@
 #include <vector>
 
 namespace gr {
-namespace blocks {
+namespace trunkrecorder {
 
 // DCS_CONFIDENCE_FULL_MATCHES: how many post-lock re-confirmations to call
 // a DCS detection "fully confident" (verdict.confidence = 1.0). At ~134
@@ -257,7 +257,7 @@ private:
   void process_one(float sample, bool &gate_should_open);
 };
 
-} /* namespace blocks */
+} /* namespace trunkrecorder */
 } /* namespace gr */
 
 #endif /* INCLUDED_DCS_SQUELCH_FF_H */

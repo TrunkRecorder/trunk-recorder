@@ -173,10 +173,10 @@ private:
   // In SEARCH mode neither gates and both run as side-chains; in OFF mode
   // none are instantiated. See analog_recorder.cc constructor for the
   // four-way wiring decision.
-  gr::blocks::ctcss_squelch_ff::sptr ctcss_block;
-  gr::blocks::dcs_squelch_ff::sptr   dcs_block;
-  gr::blocks::null_sink::sptr        ctcss_null_sink;
-  gr::blocks::null_sink::sptr        dcs_null_sink;
+  gr::trunkrecorder::ctcss_squelch_ff::sptr ctcss_block;
+  gr::trunkrecorder::dcs_squelch_ff::sptr   dcs_block;
+  gr::blocks::null_sink::sptr               ctcss_null_sink;
+  gr::blocks::null_sink::sptr               dcs_null_sink;
   bool ctcss_block_in_path = false; // true when ctcss_block is the main-path gate
   bool dcs_block_in_path   = false; // true when dcs_block is the main-path gate
 
