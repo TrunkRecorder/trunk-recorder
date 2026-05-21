@@ -23,6 +23,7 @@
 #ifndef INCLUDED_DCS_SQUELCH_FF_H
 #define INCLUDED_DCS_SQUELCH_FF_H
 
+#include <atomic>
 #include <boost/log/trivial.hpp>
 #include <boost/thread/mutex.hpp>
 #include <gnuradio/blocks/api.h>
@@ -242,7 +243,9 @@ private:
   double d_gate;             // current gate value
   double d_gate_attack;      // per-sample EMA alpha (rising)
   double d_gate_decay;       // per-sample EMA alpha (falling)
-  bool   d_open;             // logical open/closed (drives target gate)
+  // Written by work(); read by is_unmuted() from the control thread.
+  // Atomic so is_unmuted() needs no lock.
+  std::atomic<bool> d_open;  // logical open/closed (drives target gate)
   long   d_samples_since_match;
   long   d_hold_samples;
 

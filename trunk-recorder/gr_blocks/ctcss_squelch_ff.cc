@@ -209,30 +209,25 @@ void ctcss_squelch_ff::reset() {
 }
 
 void ctcss_squelch_ff::set_open_threshold_db(float db) {
-  boost::mutex::scoped_lock lock(d_mutex);
   d_open_threshold_db = db;
 }
 
 void ctcss_squelch_ff::set_close_threshold_db(float db) {
-  boost::mutex::scoped_lock lock(d_mutex);
   d_close_threshold_db = db;
 }
 
 void ctcss_squelch_ff::set_open_hangtime_ms(int ms) {
-  boost::mutex::scoped_lock lock(d_mutex);
   const double decim_rate = d_sample_rate / d_decim_factor;
   d_open_hangtime_ticks = std::max(1, static_cast<int>(std::round(ms / 1000.0 * decim_rate / d_eval_tick_samples)));
 }
 
 void ctcss_squelch_ff::set_close_hangtime_ms(int ms) {
-  boost::mutex::scoped_lock lock(d_mutex);
   const double decim_rate = d_sample_rate / d_decim_factor;
   d_close_hangtime_ticks = std::max(1, static_cast<int>(std::round(ms / 1000.0 * decim_rate / d_eval_tick_samples)));
 }
 
 bool ctcss_squelch_ff::is_unmuted() const {
-  boost::mutex::scoped_lock lock(d_mutex);
-  return d_unmuted;
+  return d_unmuted.load(std::memory_order_acquire);
 }
 
 ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
@@ -568,7 +563,6 @@ int ctcss_squelch_ff::work(int noutput_items,
   const float *in  = static_cast<const float *>(input_items[0]);
   float       *out = static_cast<float *>(output_items[0]);
 
-  boost::mutex::scoped_lock lock(d_mutex);
 
   for (int i = 0; i < noutput_items; ++i) {
     // Step 1: feed the decimating LPF.

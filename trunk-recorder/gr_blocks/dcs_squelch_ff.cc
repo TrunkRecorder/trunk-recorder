@@ -599,7 +599,6 @@ int dcs_squelch_ff::work(int noutput_items,
   const float *in  = static_cast<const float *>(input_items[0]);
   float       *out = static_cast<float *>(output_items[0]);
 
-  boost::mutex::scoped_lock lock(d_mutex);
 
   for (int i = 0; i < noutput_items; ++i) {
     bool gate_should_open = false;
@@ -633,8 +632,7 @@ int dcs_squelch_ff::work(int noutput_items,
 }
 
 bool dcs_squelch_ff::is_unmuted() {
-  boost::mutex::scoped_lock lock(d_mutex);
-  return d_open;
+  return d_open.load(std::memory_order_acquire);
 }
 
 dcs_squelch_verdict dcs_squelch_ff::get_verdict() const {

@@ -37,6 +37,7 @@
 #ifndef INCLUDED_CTCSS_SQUELCH_FF_H
 #define INCLUDED_CTCSS_SQUELCH_FF_H
 
+#include <atomic>
 #include <boost/log/trivial.hpp>
 #include <boost/thread/mutex.hpp>
 #include <gnuradio/blocks/api.h>
@@ -159,15 +160,22 @@ private:
   long               d_total_eval_ticks;
 
   // Squelch hysteresis state.
-  float              d_open_threshold_db;
-  float              d_close_threshold_db;
-  int                d_open_hangtime_ticks;   // # of evals above open thresh required
-  int                d_close_hangtime_ticks;  // # of evals below close thresh required
+  // Threshold / hangtime fields are written by setters (control thread) and
+  // read by work() (scheduler thread). Declared atomic so work() can read
+  // them without holding d_mutex — which in turn lets us drop the wide mutex
+  // lock that previously spanned the entire sample loop.
+  std::atomic<float> d_open_threshold_db;
+  std::atomic<float> d_close_threshold_db;
+  std::atomic<int>   d_open_hangtime_ticks;   // # of evals above open thresh required
+  std::atomic<int>   d_close_hangtime_ticks;  // # of evals below close thresh required
   int                d_open_streak;
   int                d_close_streak;
-  bool               d_unmuted;
+  // Written by work() via update_squelch_state(); read by is_unmuted() and
+  // get_verdict() from the control thread. Atomic so is_unmuted() needs no lock.
+  std::atomic<bool>  d_unmuted;
 
-  // Synchronization for cross-thread accessor reads.
+  // Serializes reset() against get_verdict() on the control thread.
+  // NOT held by work() — see update_squelch_state() and the field comments above.
   mutable boost::mutex d_mutex;
 };
 
