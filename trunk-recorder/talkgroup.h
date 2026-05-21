@@ -23,10 +23,13 @@ public:
 
   // For Conventional
   double freq;
-  double tone;
+  double tone;          // legacy: CTCSS Hz, kept for backwards compatibility / display.
+                        // tone_config below is the authoritative source for the analog
+                        // recorder's gating + detection wiring.
+  Tone_Config tone_config;
 
   Talkgroup(int sys_num, long num, std::string mode, std::string alpha_tag, std::string description, std::string tag, std::string group, int priority, unsigned long preferredNAC);
-  Talkgroup(int sys_num, long num, double freq, double tone, std::string alpha_tag, std::string description, std::string tag, std::string group, double squelch_db, bool signal_detection);
+  Talkgroup(int sys_num, long num, double freq, const Tone_Config &tone_config, std::string alpha_tag, std::string description, std::string tag, std::string group, double squelch_db, bool signal_detection);
 
   bool is_active();
   int get_priority();

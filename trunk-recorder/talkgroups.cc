@@ -1,4 +1,5 @@
 #include "talkgroups.h"
+#include "tone_manager.h"
 
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
@@ -158,7 +159,8 @@ void Talkgroups::load_channels(int sys_num, std::string filename) {
     double squelch_db = DB_UNSET;
     bool signal_detector = true;
     double freq = 0;
-    double tone = 0;
+    Tone_Config tone_config; // defaults to TONE_OFF
+    std::string tone_raw;
     bool enable = true;
 
     if ((reader.index_of("TG Number") >= 0) && !row["TG Number"].is_null() && row["TG Number"].is_int()) {
@@ -184,8 +186,18 @@ void Talkgroups::load_channels(int sys_num, std::string filename) {
       group = row["Category"].get<std::string>();
     }
 
-    if ((reader.index_of("Tone") >= 0) && row["Tone"].is_float()) {
-      tone = row["Tone"].get<double>();
+    if (reader.index_of("Tone") >= 0) {
+      // Tone is parsed as a string so we can accept CTCSS Hz (e.g. "188.8"),
+      // DCS codes (e.g. "D023N" / "D032I"), the search sentinel ("S"), or
+      // legacy 0 / empty. parse_tone_spec() handles all forms; a malformed
+      // value falls through to TONE_OFF and we log so the operator notices.
+      tone_raw = row["Tone"].get<std::string>();
+      tone_config = parse_tone_spec(tone_raw);
+      if (tone_config.mode == TONE_OFF && !tone_raw.empty() && tone_raw != "0" && tone_raw != "0.0") {
+        BOOST_LOG_TRIVIAL(warning) << "Unrecognized Tone value '" << tone_raw
+                                    << "' for TG " << tg_number
+                                    << " — treating as Tone=0 (no gate, no detection)";
+      }
     }
 
     if ((reader.index_of("Frequency") >= 0) && row["Frequency"].is_num()) {
@@ -213,7 +225,7 @@ void Talkgroups::load_channels(int sys_num, std::string filename) {
       }
     }
     if (enable) {
-      tg = new Talkgroup(sys_num, tg_number, freq, tone, alpha_tag, description, tag, group, squelch_db, signal_detector);
+      tg = new Talkgroup(sys_num, tg_number, freq, tone_config, alpha_tag, description, tag, group, squelch_db, signal_detector);
       talkgroups.push_back(tg);
       lines_pushed++;
     }
