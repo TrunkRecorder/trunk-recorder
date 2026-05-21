@@ -89,6 +89,8 @@ public:
   //   ungated).
   static sptr make(double sample_rate, float configured_pl_freq = 0.0f, bool gate_audio = true);
 
+  static constexpr int N_CTCSS = 50;
+
   ctcss_squelch_ff(double sample_rate, float configured_pl_freq, bool gate_audio);
   ~ctcss_squelch_ff();
 
@@ -126,7 +128,6 @@ private:
   bool    d_gate_audio;         // true: zero output when muted; false: passthrough
 
   // Pre-built immutable tables.
-  static constexpr int N_CTCSS = 50;
   struct bin_state {
     double freq;        // standard CTCSS Hz
     double coeff;       // 2 * cos(2*pi*f/decim_rate)
@@ -151,33 +152,6 @@ private:
   std::vector<float> d_window;           // ring buffer
   int                d_window_write_idx; // 0..window_samples-1
   bool               d_window_filled;
-
-  // ---- Notched-reference path (verify mode only) ----
-  // OpenAudio-style detector: pass the same decimated audio through a
-  // 4-stage cascaded biquad notch centered on the configured tone (Q=60,
-  // staggered ±0.18%/±0.45% per stage → ~2 Hz total null width). The
-  // post-notch signal contains everything in the sub-audible band EXCEPT
-  // the configured tone, so its power is a "voice / noise reference."
-  // Per evaluation tick: target_pwr / notched_band_pwr >= NOTCH_REL_THRESH
-  // is required in addition to the SNR-vs-median test for the gate to
-  // open and the bin to score. A real sine survives the notch chain
-  // (target_pwr stays high, notched_pwr collapses → ratio huge); voice
-  // fundamentals at the configured frequency raise BOTH target_pwr and
-  // notched_pwr (because voice has broad spectral spread inside the
-  // 67-254 Hz band) so the ratio stays small.
-  //
-  // d_notch_chain is sized 4 (cascaded biquads) when d_configured_pl_freq>0
-  // and is empty otherwise — search mode bypasses the notch path entirely
-  // since "which tone" decisions can't share a single notch.
-  struct biquad_state {
-    double b0, b1, b2;   // numerator (feed-forward)
-    double a1, a2;       // denominator (feedback), pre-negated form:
-                         //   y = b0*x + b1*x1 + b2*x2 + a1*y1 + a2*y2
-    double x1, x2;       // input delay line
-    double y1, y2;       // output delay line
-  };
-  std::vector<biquad_state> d_notch_chain;
-  std::vector<float>        d_notched_window;  // parallel ring buffer, same indexing as d_window
 
   // Evaluation cadence: every ~50 ms of decimated samples.
   int                d_eval_tick_samples;  // e.g. 50 at 1 kHz

@@ -1,7 +1,7 @@
 /*
  * CTCSS detector + audio gate implementation.
  *
- * Algorithm summary (see CTCSS_DETECTOR_V2.md for the full design rationale):
+ * Algorithm summary:
  *   1. Internal anti-alias LPF + decimation from full audio rate (e.g. 16 kHz)
  *      to ~1 kHz sub-audible band rate.
  *   2. Sliding rectangular 200 ms Goertzel window per CTCSS standard frequency
@@ -27,7 +27,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <numeric>
 
 namespace gr {
@@ -39,8 +38,7 @@ namespace {
 // tone_detector_block.cc — kept here as a self-contained copy so this
 // block doesn't depend on tone_detector_block (we want them
 // independently buildable / testable).
-constexpr int N_CTCSS = 50;
-constexpr double CTCSS_FREQS[N_CTCSS] = {
+constexpr double CTCSS_FREQS[ctcss_squelch_ff::N_CTCSS] = {
     67.0,  69.3,  71.9,  74.4,  77.0,  79.7,  82.5,  85.4,  88.5,  91.5,
     94.8,  97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
    131.8, 136.5, 141.3, 146.2, 151.4, 156.7, 159.8, 162.2, 165.5, 167.9,
@@ -82,26 +80,6 @@ constexpr float DEFAULT_OPEN_THRESH_DB  = 8.0f;
 constexpr float DEFAULT_CLOSE_THRESH_DB = 4.0f;
 constexpr int   DEFAULT_OPEN_HANG_MS    = 100;
 constexpr int   DEFAULT_CLOSE_HANG_MS   = 150;  // TIA-603 reverse-burst spec
-
-// Notched-reference threshold (verify mode only). Target-bin power must
-// exceed this multiple of the post-notch band power for the gate to open
-// and the tick to be scored. OpenAudio's default is threshRel=1.0; our
-// 3.0 is tighter because (a) we have a 16-bit SDR with good SNR, (b)
-// short bench calls don't tolerate transient false matches well, and
-// (c) the 4-stage Q=60 notch gives a deeper null than OpenAudio's
-// Teensy version. A real CTCSS sine yields target/notched ratios of
-// 30-100×; sustained voice fundamentals on the configured bin yield
-// 1-3× because the notch only nulls one specific frequency, leaving
-// the broadband voice spectrum to fill the reference.
-constexpr double NOTCH_REL_THRESH       = 3.0;
-
-// Calibration factor that makes a pure sine input of the same amplitude
-// produce equal target and notched-reference powers in the absence of
-// the notch. Matches the 2.04 factor in OpenAudio analyze_CTCSS_F32.cpp
-// (line 98). Without this, a 1.0-amplitude sine would read powerTone=0.5
-// (Goertzel) vs powerSum=0.5 (time-domain mean square) before the notch
-// design's 2× scaling — the factor reconciles units.
-constexpr double NOTCH_REF_CAL          = 2.04;
 
 // Designs a small Hann-windowed low-pass FIR for the internal decimation
 // stage. We keep this self-contained so the block has no external filter
@@ -197,13 +175,6 @@ ctcss_squelch_ff::ctcss_squelch_ff(double sample_rate, float configured_pl_freq,
   d_samples_since_eval = 0;
   d_total_eval_ticks   = 0;
 
-  // Notched-reference path (4-cascade Q=60 biquad notch + post-notch power)
-  // was prototyped here and removed. See evaluate_goertzels() comment for
-  // why the technique works in OpenAudio's full-audio-band setup but not
-  // in ours (where the upstream chain already LPFs to 300 Hz). Leaving
-  // the d_notch_chain / d_notched_window vectors empty keeps the work()
-  // hot path branch-predictor friendly.
-
   BOOST_LOG_TRIVIAL(debug)
       << "ctcss_squelch_ff: configured_pl=" << d_configured_pl_freq << " Hz"
       << " (bin=" << d_configured_bin << ")"
@@ -226,12 +197,6 @@ void ctcss_squelch_ff::reset() {
   }
   std::fill(d_window.begin(), d_window.end(), 0.0f);
   std::fill(d_decim_state.begin(), d_decim_state.end(), 0.0f);
-  if (!d_notched_window.empty()) {
-    std::fill(d_notched_window.begin(), d_notched_window.end(), 0.0f);
-  }
-  for (auto &b : d_notch_chain) {
-    b.x1 = b.x2 = b.y1 = b.y2 = 0.0;
-  }
   d_window_write_idx   = 0;
   d_window_filled      = false;
   d_decim_state_idx    = 0;
@@ -398,9 +363,7 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
   const bool energy_dominant = (top_energy_i >= 0 &&
                                 top_energy > second_energy * 1.5 &&
                                 top_energy > median_energy * 5.0);             // ≥5×
-  const bool consistent      = enough_wins; // legacy name kept for the diag log
-
-  if (agree && consistent && win_dominant && energy_dominant && concentrated) {
+  if (agree && enough_wins && win_dominant && energy_dominant && concentrated) {
     v.detected_hz     = static_cast<float>(d_bins[top_wins_i].freq);
     v.confidence      = static_cast<float>(top_wins) / static_cast<float>(d_total_eval_ticks);
     v.dominant_snr_db = static_cast<float>(d_bins[top_wins_i].cum_score / d_bins[top_wins_i].win_ticks);
@@ -416,6 +379,7 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
   BOOST_LOG_TRIVIAL(debug)
       << "ctcss_squelch_ff[" << mode << "] verdict@"
       << (v.detected_hz > 0 ? std::to_string(v.detected_hz) : std::string("none"))
+      << " dom_snr=" << v.dominant_snr_db << "dB"
       << " | total_ticks=" << d_total_eval_ticks
       << " win_winner=" << w_hz << "Hz (" << top_wins << " wins, 2nd=" << second_wins << ")"
       << " energy_winner=" << e_hz << "Hz"
@@ -425,7 +389,18 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
       << " energy_dom(>=5x)=" << energy_dominant
       << " concentrated(>=0.10)=" << concentrated
       << " (e_top=" << top_energy << " e_2nd=" << second_energy
-      << " e_med=" << median_energy << " concentration=" << concentration << ")";
+      << " e_med=" << median_energy << " concentration=" << concentration << ")"
+      << " top3:["
+      << [&]() {
+           std::string s;
+           for (size_t i = 0; i < v.top_three.size(); ++i) {
+             if (i) s += ", ";
+             s += std::to_string(v.top_three[i].first) + "Hz/"
+                  + std::to_string(v.top_three[i].second) + "dB";
+           }
+           return s;
+         }()
+      << "]";
   return v;
 }
 
