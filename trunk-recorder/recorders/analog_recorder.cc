@@ -148,18 +148,11 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
     // No gate, no detector. Audio passes through unchanged from decim_audio.
     break;
   case TONE_CTCSS:
-    // CTCSS gates the audio path; DCS detector runs as a side-chain so we
-    // still spot a wrong-agency DCS keyup at end-of-call.
     ctcss_block = gr::trunkrecorder::ctcss_squelch_ff::make(wav_sample_rate, static_cast<float>(tone_config.ctcss_hz), true);
-    dcs_block   = gr::trunkrecorder::dcs_squelch_ff::make(wav_sample_rate, 0, false, false);
     ctcss_block_in_path = true;
-    dcs_block_in_path   = false;
     break;
   case TONE_DCS:
-    // DCS gates the audio path; CTCSS detector runs as a side-chain.
     dcs_block   = gr::trunkrecorder::dcs_squelch_ff::make(wav_sample_rate, tone_config.dcs_code, tone_config.dcs_inverted, true);
-    ctcss_block = gr::trunkrecorder::ctcss_squelch_ff::make(wav_sample_rate, 0.0f, false);
-    ctcss_block_in_path = false;
     dcs_block_in_path   = true;
     break;
   case TONE_SEARCH:
@@ -231,10 +224,7 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
 
   // Audio gate. The tone block (if any) sits between decim_audio and the
   // downstream branches so both the wav writer and the decoder_sink see the
-  // gated signal — matches the prior behaviour where ctcss_squelch_ff sat
-  // before decim_audio. The side-chain detector (if present) taps
-  // decim_audio directly so it can still see ungated audio and identify
-  // wrong-agency keyups even when the configured gate is closed.
+  // gated signal.
   if (ctcss_block_in_path) {
     connect(decim_audio, 0, ctcss_block, 0);
     connect(ctcss_block, 0, decoder_sink, 0);
@@ -363,16 +353,13 @@ void analog_recorder::stop() {
     }
   }
 
-  // Pick the verdict to report. Prefer the configured-gate block when both
-  // fire (operator's expectation: a CTCSS-configured channel should show
-  // CTCSS unless DCS clearly won the call). For SEARCH mode it's purely
-  // higher confidence.
+  // Pick the verdict to report. CTCSS and DCS configured modes each have
+  // only one block so there is nothing to arbitrate. SEARCH mode runs both
+  // and picks by higher confidence.
   if (tone_config.mode == TONE_CTCSS) {
     if (!ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
-    else if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
   } else if (tone_config.mode == TONE_DCS) {
     if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
-    else if (!ctcss_det.empty()) { tone_result.detected = ctcss_det; tone_result.confidence = ctcss_conf; }
   } else if (tone_config.mode == TONE_SEARCH) {
     // Search-mode tiebreak: simple max-confidence comparison. With the
     // phase-diversity DCS confidence now in place, a CTCSS-aliased false

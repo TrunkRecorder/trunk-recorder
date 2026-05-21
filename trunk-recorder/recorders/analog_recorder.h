@@ -167,12 +167,14 @@ private:
   gr::filter::fir_filter_fff::sptr low_f;
   gr::analog::pwr_squelch_ff::sptr squelch_two;
 
-  // Sub-audible squelch / identification blocks. At most one acts as a gate
-  // (sits in the audio path between decim_audio and high_f); the other
-  // optionally runs as a side-chain detector terminated in a null_sink.
-  // In SEARCH mode neither gates and both run as side-chains; in OFF mode
-  // none are instantiated. See analog_recorder.cc constructor for the
-  // four-way wiring decision.
+  // Sub-audible squelch / identification blocks.
+  // CTCSS: only ctcss_block, wired as the main-path gate.
+  // DCS:   only dcs_block, wired as the main-path gate.
+  // SEARCH: both blocks, neither gating — each taps decim_audio and drains
+  //         into its own null_sink; get_verdict() is called at end-of-call
+  //         and the higher-confidence result wins.
+  // OFF:   neither instantiated.
+  // See analog_recorder.cc constructor for the wiring.
   gr::trunkrecorder::ctcss_squelch_ff::sptr ctcss_block;
   gr::trunkrecorder::dcs_squelch_ff::sptr   dcs_block;
   gr::blocks::null_sink::sptr               ctcss_null_sink;
