@@ -1,8 +1,8 @@
 #include "xlat_channelizer.h"
 
-xlat_channelizer::sptr xlat_channelizer::make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw) {
+xlat_channelizer::sptr xlat_channelizer::make(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw, bool use_fll) {
 
-  return gnuradio::get_initial_sptr(new xlat_channelizer(input_rate, samples_per_symbol, symbol_rate, bandwidth, center_freq, use_squelch, excess_bw));
+  return gnuradio::get_initial_sptr(new xlat_channelizer(input_rate, samples_per_symbol, symbol_rate, bandwidth, center_freq, use_squelch, excess_bw, use_fll));
 }
 
 const int xlat_channelizer::smartnet_samples_per_symbol;
@@ -40,7 +40,7 @@ xlat_channelizer::DecimSettings xlat_channelizer::get_decim(long speed) {
   return decim_settings;
 }
 
-xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw=0.2)
+xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, double symbol_rate, double bandwidth, double center_freq, bool use_squelch, double excess_bw, bool use_fll)
     : gr::hier_block2("xlat_channelizer_ccf",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(1, 1, sizeof(gr_complex))),
@@ -49,7 +49,8 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
       d_bandwidth(bandwidth),
       d_samples_per_symbol(samples_per_symbol),
       d_symbol_rate(symbol_rate),
-      d_use_squelch(use_squelch) {
+      d_use_squelch(use_squelch),
+      d_use_fll(use_fll) {
 
   long channel_rate = d_symbol_rate * d_samples_per_symbol;
   // long if_rate = 12500;
@@ -120,7 +121,9 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
   squelch = gr::analog::pwr_squelch_cc::make(squelch_db, 0.0001, 0, true);
 
   rms_agc = gr::blocks::rms_agc::make(0.45, 0.85);
-  fll_band_edge = gr::digital::fll_band_edge_cc::make(d_samples_per_symbol, excess_bw, 2 * d_samples_per_symbol + 1, (2.0 * pi) / d_samples_per_symbol / 250); // OP25 has this set to 350 instead of 250
+  if (d_use_fll) {
+    fll_band_edge = gr::digital::fll_band_edge_cc::make(d_samples_per_symbol, excess_bw, 2 * d_samples_per_symbol + 1, (2.0 * pi) / d_samples_per_symbol / 250); // OP25 has this set to 350 instead of 250
+  }
 
   connect(self(), 0, freq_xlat, 0);
   connect(freq_xlat, 0, channel_lpf, 0);
@@ -142,11 +145,21 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
     }
   }
 
-  connect(rms_agc, 0, fll_band_edge, 0);
-  connect(fll_band_edge, 0, self(), 0);
+  if (d_use_fll) {
+    connect(rms_agc, 0, fll_band_edge, 0);
+    connect(fll_band_edge, 0, self(), 0);
+  } else {
+    // Band-edge FLL is matched to shaped (RRC) signals like P25; for SmartNet
+    // NRZ FSK it doesn't lock cleanly. Callers opting out get the AGC output
+    // directly and are expected to track the carrier downstream.
+    connect(rms_agc, 0, self(), 0);
+  }
 }
 
 int xlat_channelizer::get_freq_error() { // get frequency error from FLL and convert to Hz
+  if (!fll_band_edge) {
+    return 0;
+  }
   const float pi = M_PI;
   long if_rate = 24000;
   return int((fll_band_edge->get_frequency() / (2 * pi)) * if_rate);
