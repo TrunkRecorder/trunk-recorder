@@ -461,13 +461,23 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 			if (d_soft_vocoder) {
 				d_software_decoder[slot_id].decode(samp_buf, fullrate_cw);
 			} else {
-				int16_t frame_vector[8];
-
-                for (int i=0; i < 8; i++) {
-                    frame_vector[i] = u[i];
-                }
-                frame_vector[7] >>= 1;
-                d_imbe_vocoder[slot_id].imbe_decode(frame_vector, samp_buf);
+				// YSF fullrate IMBE on the fixed-point path: float decoder
+				// mutes internally; mirror that here so bit errors don't
+				// produce loud artifacts. Per TIA-102.BABA-A §7.7-7.8.
+				d_ysf_imbe_er[slot_id] = (0.95f * d_ysf_imbe_er[slot_id]) + (0.000365f * (float)ET);
+				int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
+				if (d_ysf_imbe_er[slot_id] > 0.0875f ||
+				    b0 > 207 || E0 >= 2 ||
+				    ET >= (uint32_t)(10.0f + 40.0f * d_ysf_imbe_er[slot_id])) {
+					do_silence = true;
+				} else {
+					int16_t frame_vector[8];
+					for (int i = 0; i < 8; i++) {
+						frame_vector[i] = u[i];
+					}
+					frame_vector[7] >>= 1;
+					d_imbe_vocoder[slot_id].imbe_decode(frame_vector, samp_buf);
+				}
 			}
 		} else {	/* halfrate */
 			if (!do_silence) {

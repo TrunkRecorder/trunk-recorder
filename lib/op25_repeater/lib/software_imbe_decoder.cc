@@ -760,7 +760,16 @@ software_imbe_decoder::software_imbe_decoder()
 
 uint32_t
 software_imbe_decoder::next_u(uint32_t u) {
-   return (u * 171 + 11213) % 53125;
+   // Original LCG (171*u + 11213) mod 53125 has a period under 53125 samples
+   // (~6.6 s of unvoiced excitation), which is audible as repeating noise on
+   // long sibilants/fricatives. Drive an xorshift32 step and fold to the same
+   // 0..53124 output range so downstream scaling is unchanged. The xorshift
+   // state seed of 0 is degenerate, so guard against it.
+   if (u == 0) u = 0xC0FFEE;
+   u ^= u << 13;
+   u ^= u >> 17;
+   u ^= u << 5;
+   return u % 53125;
 }
 
 software_imbe_decoder::~software_imbe_decoder()
@@ -1382,7 +1391,11 @@ software_imbe_decoder::rearrange(uint32_t u0, uint32_t u1, uint32_t u2, uint32_t
 
    w0 = 4 * M_PI /(bee[0] + 39.5);
 
-   L =(int)(.9254 * floorf((M_PI / w0) + .25)); if(L < 9 || L > 56) exit(2);
+   L =(int)(.9254 * floorf((M_PI / w0) + .25));
+   // Bit errors in bee[0] can produce out-of-spec L. Clamp instead of exit():
+   // a clamped frame is wrong but the caller's repeat/mute logic absorbs it.
+   if(L < 9) L = 9;
+   if(L > 56) L = 56;
 
    if( L > 36) {
       K = 12;
@@ -1594,8 +1607,13 @@ software_imbe_decoder::synth_voiced()
       phi[ell][ New] = psi1 * ell;
    }
 
+   // TIA-102.BABA-A eq. 142: high-order voiced harmonics receive random phase
+   // scaled by the unvoiced fraction. Without this, sustained vowels and
+   // repeated voiced frames sound mechanical.
+   float rho = (L > 0) ? (M_PI * (float)Luv / (float)L) : 0.0f;
    for(; ell <= MaxL; ell++) {
-      phi[ell][ New] = psi1 * ell /* + Tmp * PhzNz[ell] */;
+      int pidx = (ell < 57) ? ell : 56;
+      phi[ell][ New] = psi1 * ell + rho * PhzNz[pidx];
    }
 
    for(en = 0; en <= 159; en++) {

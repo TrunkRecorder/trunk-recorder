@@ -60,6 +60,9 @@ namespace gr {
 	imbe_vocoder vocoder;
 	software_imbe_decoder software_decoder;
 	bool d_software_imbe_decoder;
+	float d_er;
+	int d_rpt_ctr;
+	int16_t d_last_snd[160];
         const op25_audio& op25audio;
 
 	std::deque<int16_t> &output_queue;
