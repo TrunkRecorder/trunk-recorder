@@ -36,7 +36,10 @@ void smartnet_impl::initialize(double freq, double center, long s, gr::msg_queue
   this->sys_num = sys_num;
 
 
-  prefilter = xlat_channelizer::make(input_rate, xlat_channelizer::smartnet_samples_per_symbol, xlat_channelizer::smartnet_symbol_rate, xlat_channelizer::channel_bandwidth, center_freq, false, xlat_channelizer::smartnet_excess_bw);
+  // use_fll=false: band-edge FLL is matched to RRC-shaped signals and doesn't
+  // lock cleanly on SmartNet's NRZ 2FSK. The PLL inside smartnet_fsk2_demod
+  // (pll_freqdet_cf) handles carrier tracking instead.
+  prefilter = xlat_channelizer::make(input_rate, xlat_channelizer::smartnet_samples_per_symbol, xlat_channelizer::smartnet_symbol_rate, xlat_channelizer::channel_bandwidth, center_freq, false, xlat_channelizer::smartnet_excess_bw, false);
 
   double offset_amount = (center_freq - chan_freq);
   prefilter->tune_offset(offset_amount);

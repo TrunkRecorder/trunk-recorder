@@ -19,9 +19,13 @@ smartnet_fsk2_demod::~smartnet_fsk2_demod() {
 }
 
 void smartnet_fsk2_demod::reset() {
-  // Clear stale tracking state (symbol clock, symbol spread, fine/coarse
-  // frequency correction) so reacquisition on a new control channel doesn't
-  // start from whatever state the loop ended up in while staring at noise.
+  // Clear stale tracking state on the carrier PLL and the symbol-tracking
+  // loops so reacquisition on a new control channel doesn't start from
+  // whatever state things converged to while staring at noise.
+  if (pll_demod) {
+    pll_demod->set_phase(0);
+    pll_demod->set_frequency(0);
+  }
   if (fsk4_demod) {
     fsk4_demod->reset();
   }
@@ -52,20 +56,25 @@ void smartnet_fsk2_demod::initialize() {
   // Binary slicer
   slicer = gr::digital::binary_slicer_fb::make();
 
-  // FM demod gain based on deviation
-  // SmartNet uses ±1.2kHz deviation for FSK
-  const double deviation = 1200.0;
-  float fm_demod_gain = channel_rate / (2 * pi * deviation);
-  fm_demod = gr::analog::quadrature_demod_cf::make(fm_demod_gain);
+  // Carrier-tracking PLL used as the FM frequency detector. Same
+  // configuration as the pre-#1085 SmartNet chain: a fast loop (2/sps) wide
+  // enough to track the FSK modulation, with the lock range set to ±pi/sps —
+  // ~±1800 Hz at the 18 kHz channel rate, enough headroom for the ±1.2 kHz
+  // FSK deviation plus typical receiver oscillator drift. Replaces the
+  // open-loop quadrature_demod_cf so any residual carrier offset gets pulled
+  // in rather than appearing as a DC bias on the slicer input.
+  const float loop_bw = 2.0f / samples_per_symbol;
+  const float max_freq = (float)(pi / samples_per_symbol);
+  pll_demod = gr::analog::pll_freqdet_cf::make(loop_bw, max_freq, -max_freq);
 
   // Frame assembler and null sinks
   framer = gr::op25_repeater::frame_assembler::make("smartnet", 1, 1, rx_queue, false);
   null_sink1 = gr::blocks::null_sink::make(sizeof(uint16_t));
   null_sink2 = gr::blocks::null_sink::make(sizeof(uint16_t));
 
-  // Signal flow: Input -> FM Demod -> Baseband AGC -> Symbol Filter -> FSK4 Demod -> Slicer -> Framer
-  connect(self(), 0, fm_demod, 0);
-  connect(fm_demod, 0, baseband_amp, 0);
+  // Signal flow: Input -> PLL Freq Det -> Baseband AGC -> Symbol Filter -> FSK4 Demod -> Slicer -> Framer
+  connect(self(), 0, pll_demod, 0);
+  connect(pll_demod, 0, baseband_amp, 0);
   connect(baseband_amp, 0, sym_filter, 0);
   connect(sym_filter, 0, fsk4_demod, 0);
   connect(fsk4_demod, 0, slicer, 0);
