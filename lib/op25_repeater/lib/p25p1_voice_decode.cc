@@ -53,14 +53,17 @@ static void clear_bits(bit_vector& v) {
 p25p1_voice_decode::p25p1_voice_decode(bool verbose_flag, const op25_audio& udp, std::deque<int16_t> &_output_queue) :
 	write_bufp(0),
 	rxbufp(0),
+	d_er(0.0f),
+	d_rpt_ctr(0),
 	op25audio(udp),
 	output_queue(_output_queue),
 	opt_verbose(verbose_flag)
     {
+	memset(d_last_snd, 0, sizeof(d_last_snd));
 	const char *p = getenv("IMBE");
 	if (p && strcasecmp(p, "soft") == 0)
 		d_software_imbe_decoder = true;
-	else 
+	else
 		d_software_imbe_decoder = false;
     }
 
@@ -73,23 +76,51 @@ p25p1_voice_decode::p25p1_voice_decode(bool verbose_flag, const op25_audio& udp,
 
 void p25p1_voice_decode::clear() {
   vocoder.clear();
+  d_er = 0.0f;
+  d_rpt_ctr = 0;
+  memset(d_last_snd, 0, sizeof(d_last_snd));
 }
 // more-optimized version of rxframe() used by p25p1_fdma
 void p25p1_voice_decode::rxframe(const voice_codeword& cw)
 {
 	int16_t snd[FRAME];
-	if (d_software_imbe_decoder) {
-		software_decoder.decode(snd, cw);
-	} else { // non-default decoder, do we still need to support it?
-		uint32_t u[8], E0, ET;
-		int16_t frame_vector[8];
-		imbe_header_decode(cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
+	uint32_t u[8], E0, ET;
+	imbe_header_decode(cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
 
-		for (int i=0; i < 8; i++) { // Ugh. For compatibility convert imbe params from uint32_t to int16_t
+	// TIA-102.BABA-A §7.7-7.8 muting and frame-repeat policy, applied uniformly
+	// to both the fixed-point and float decoders. The float decoder repeats the
+	// same logic internally; gating here keeps the fixed-point path honest.
+	d_er = (0.95f * d_er) + (0.000365f * (float)ET);
+	int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
+	bool muted = false;
+	bool repeated = false;
+	if (d_er > 0.0875f) {
+		muted = true;
+	} else if (b0 > 207 || E0 >= 2 || ET >= (int)(10.0f + 40.0f * d_er)) {
+		if (++d_rpt_ctr >= 4) {
+			muted = true;
+		} else {
+			repeated = true;
+		}
+	} else {
+		d_rpt_ctr = 0;
+	}
+
+	if (muted) {
+		memset(snd, 0, sizeof(snd));
+	} else if (repeated) {
+		memcpy(snd, d_last_snd, sizeof(snd));
+	} else if (d_software_imbe_decoder) {
+		software_decoder.decode(snd, cw);
+		memcpy(d_last_snd, snd, sizeof(snd));
+	} else {
+		int16_t frame_vector[8];
+		for (int i = 0; i < 8; i++) {
 			frame_vector[i] = u[i];
 		}
 		frame_vector[7] >>= 1;
 		vocoder.imbe_decode(frame_vector, snd);
+		memcpy(d_last_snd, snd, sizeof(snd));
 	}
 
 	if (op25audio.enabled()) {

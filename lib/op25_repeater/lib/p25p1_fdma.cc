@@ -907,17 +907,41 @@ namespace gr {
                             if (d_soft_vocoder) {
                                 // This is vocoder that is for half-rate
                                 software_decoder.decode_fullrate(snd, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
+                                memcpy(d_imbe_last, snd, sizeof(snd));
                             } else {
-
-                                // This is the older, fullrate vocoder
-                                // it was copied from p25p1_voice_decode.cc
-                                int16_t frame_vector[8];
-
-                                for (int i=0; i < 8; i++) { // Ugh. For compatibility convert imbe params from uint32_t to int16_t
-                                    frame_vector[i] = u[i] & 0xFFFF;
+                                // TIA-102.BABA-A §7.7-7.8: gate the fixed-point decoder on
+                                // smoothed ER and repeat-counter the same way the float
+                                // path does internally. Without this, LSM/simulcast bit
+                                // errors emit screeching audio instead of muting.
+                                d_imbe_er = (0.95f * d_imbe_er) + (0.000365f * (float)ET);
+                                int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
+                                bool muted = false, repeated = false;
+                                if (d_imbe_er > 0.0875f) {
+                                    muted = true;
+                                } else if (b0 > 207 || E0 >= 2 || ET >= (uint32_t)(10.0f + 40.0f * d_imbe_er)) {
+                                    if (++d_imbe_rpt_ctr >= 4)
+                                        muted = true;
+                                    else
+                                        repeated = true;
+                                } else {
+                                    d_imbe_rpt_ctr = 0;
                                 }
-                                frame_vector[7] >>= 1;
-                                vocoder.imbe_decode(frame_vector, snd);
+
+                                if (muted) {
+                                    memset(snd, 0, sizeof(snd));
+                                } else if (repeated) {
+                                    memcpy(snd, d_imbe_last, sizeof(snd));
+                                } else {
+                                    // This is the older, fullrate vocoder
+                                    // it was copied from p25p1_voice_decode.cc
+                                    int16_t frame_vector[8];
+                                    for (int i=0; i < 8; i++) {
+                                        frame_vector[i] = u[i] & 0xFFFF;
+                                    }
+                                    frame_vector[7] >>= 1;
+                                    vocoder.imbe_decode(frame_vector, snd);
+                                    memcpy(d_imbe_last, snd, sizeof(snd));
+                                }
                             }
 
                             if (op25audio.enabled()) {      // decoded audio goes out via UDP (normal code path)

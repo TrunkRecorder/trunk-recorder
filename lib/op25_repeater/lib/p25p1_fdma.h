@@ -117,6 +117,10 @@ namespace gr {
                 uint16_t vf_tgid;
 
                 imbe_vocoder vocoder; // for original full rate vocoder
+                // TIA-102.BABA-A §7.7-7.8 mute/repeat state for the fixed-point path
+                float d_imbe_er = 0.0f;
+                int   d_imbe_rpt_ctr = 0;
+                int16_t d_imbe_last[SND_FRAME] = {0};
 
                 typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
                 voice_codec_cb_t voice_codec_cb_;
