@@ -730,6 +730,10 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
+          // Release the old hier_block2 before constructing the new one so its
+          // sub-blocks (prefilter, fsk2_demod, framer) are torn down deterministically
+          // instead of overlapping with the replacement.
+          system->smartnet_trunking.reset();
           system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
           tb->unlock();

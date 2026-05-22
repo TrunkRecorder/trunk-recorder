@@ -163,6 +163,13 @@ namespace gr {
         }
         for (int slot_id = 0; slot_id < 2; slot_id++) {
           int16_t *out = (int16_t *)output_items[slot_id];
+          // Skip tag emission when no items are produced on this slot. SmartNet uses the
+          // msg_queue path and never populates output_queue, so without this guard tags
+          // (e.g. cc=-1 from the rx_base default) would accumulate indefinitely on a
+          // stalled stream.
+          if (output_queue[slot_id].empty()) {
+            continue;
+          }
           int src_id = d_sync->get_src_id(slot_id);
           int dst_id = d_sync->get_dst_id(slot_id);
           int cc = d_sync->get_cc(slot_id);
@@ -175,7 +182,7 @@ namespace gr {
             BOOST_LOG_TRIVIAL(debug) << "DMR Frame Assembler - sending dst: " << dst_id;
             add_item_tag(slot_id, nitems_written(slot_id), pmt::intern("grp_id"), pmt::from_long(dst_id), pmt::intern(name()));
           }
-          if (cc != 0) {
+          if ((cc != -1) && (cc != 0)) {
             BOOST_LOG_TRIVIAL(debug) << "DMR Frame Assembler - sending cc: " << cc;
             add_item_tag(slot_id, nitems_written(slot_id), pmt::intern("cc"), pmt::from_long(cc), pmt::intern(name()));
           }

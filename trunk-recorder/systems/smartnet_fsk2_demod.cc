@@ -25,6 +25,10 @@ void smartnet_fsk2_demod::initialize() {
   const double channel_rate = symbol_rate * samples_per_symbol;
   const double pi = M_PI;
 
+  // Bounded queue for fsk4_demod's AFC messages — nothing drains it, so cap it
+  // small to let fsk4_demod drop on full instead of growing without bound.
+  tune_queue = gr::msg_queue::make(2);
+
   // Baseband AGC
   baseband_amp = gr::op25_repeater::rmsagc_ff::make(0.01, 1.00);
 
