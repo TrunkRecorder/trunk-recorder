@@ -22,6 +22,12 @@ smartnet_impl::~smartnet_impl() {
 
 }
 
+void smartnet_impl::reset() {
+  if (fsk2_demod) {
+    fsk2_demod->reset();
+  }
+}
+
 void smartnet_impl::initialize(double freq, double center, long s, gr::msg_queue::sptr queue, int sys_num) {
   chan_freq = freq;
   center_freq = center;

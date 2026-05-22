@@ -19,6 +19,12 @@ smartnet_fsk2_demod::~smartnet_fsk2_demod() {
 }
 
 void smartnet_fsk2_demod::reset() {
+  // Clear stale tracking state (symbol clock, symbol spread, fine/coarse
+  // frequency correction) so reacquisition on a new control channel doesn't
+  // start from whatever state the loop ended up in while staring at noise.
+  if (fsk4_demod) {
+    fsk4_demod->reset();
+  }
 }
 
 void smartnet_fsk2_demod::initialize() {
@@ -39,8 +45,9 @@ void smartnet_fsk2_demod::initialize() {
   }
   sym_filter = gr::filter::fir_filter_fff::make(1, sym_taps);
 
-  // FSK4 demodulator
-  fsk4_demod = gr::op25_repeater::fsk4_demod_ff::make(tune_queue, channel_rate, symbol_rate);
+  // FSK4 demodulator — SmartNet is 2FSK, so enable the bfsk path so the
+  // symbol tracking loop expects two levels instead of four.
+  fsk4_demod = gr::op25_repeater::fsk4_demod_ff::make(tune_queue, channel_rate, symbol_rate, true);
 
   // Binary slicer
   slicer = gr::digital::binary_slicer_fb::make();
