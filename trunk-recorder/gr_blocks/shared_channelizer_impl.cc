@@ -65,7 +65,15 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
       d_num_outputs(0),
       d_input_sample_counter(0),
       d_diagnostic_interval(0),
-      d_diagnostic_block_count(0) {
+      d_diagnostic_block_count(0),
+      d_phase_rotation_mode(1) {
+  // Allow overriding the phase-rotation mode at startup via env var, for
+  // bisecting math/sign bugs without recompiling.
+  if (const char *env = std::getenv("TR_CHANNELIZER_ROT")) {
+    d_phase_rotation_mode = std::atoi(env);
+    BOOST_LOG_TRIVIAL(info) << "shared_channelizer: phase_rotation_mode="
+                            << d_phase_rotation_mode.load() << " (from TR_CHANNELIZER_ROT)";
+  }
   if (max_channels == 0) {
     throw std::invalid_argument("shared_channelizer: max_channels must be > 0");
   }
@@ -246,10 +254,17 @@ int shared_channelizer_impl::general_work(int noutput_items,
       // — a discontinuity that prevents downstream FLLs from locking and
       // injects spurs at the block rate. Applying exp(-2πi · ...) un-does
       // it so consecutive blocks concatenate into a phase-coherent stream.
-      double phase = -2.0 * M_PI * static_cast<double>(center_bin) *
-                     static_cast<double>(t_b) / static_cast<double>(N);
-      gr_complex rotor(static_cast<float>(std::cos(phase)),
-                       static_cast<float>(std::sin(phase)));
+      // Mode 0/1/2 picks no-rotation / negative-sign / positive-sign for
+      // debugging.
+      int rot_mode = d_phase_rotation_mode.load(std::memory_order_relaxed);
+      gr_complex rotor(1.0f, 0.0f);
+      if (rot_mode != 0) {
+        double base = 2.0 * M_PI * static_cast<double>(center_bin) *
+                      static_cast<double>(t_b) / static_cast<double>(N);
+        double phase = (rot_mode == 2) ? +base : -base;
+        rotor = gr_complex(static_cast<float>(std::cos(phase)),
+                           static_cast<float>(std::sin(phase)));
+      }
 
       // Discard the first d_overlap_out samples (corrupted by circular
       // convolution wraparound) and emit the rest, rotated.

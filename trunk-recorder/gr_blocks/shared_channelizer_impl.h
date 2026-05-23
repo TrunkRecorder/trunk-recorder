@@ -29,6 +29,7 @@ public:
   void set_channel_enabled(unsigned int port, bool enabled) override;
   bool is_channel_enabled(unsigned int port) const override;
   void set_diagnostic_interval(uint64_t interval) override { d_diagnostic_interval = interval; }
+  void set_phase_rotation_mode(int mode) override { d_phase_rotation_mode = mode; }
 
   void forecast(int noutput_items, gr_vector_int &ninput_items_required) override;
   bool check_topology(int ninputs, int noutputs) override;
@@ -80,6 +81,10 @@ private:
   // Set with set_diagnostic_interval(); read in general_work().
   uint64_t d_diagnostic_interval;
   uint64_t d_diagnostic_block_count;
+
+  // Runtime-switchable phase rotation mode. Lets us bisect bugs without
+  // recompiling: env var TR_CHANNELIZER_ROT={0,1,2} at process start.
+  std::atomic<int> d_phase_rotation_mode;
 
   static int choose_fft_size(int decim);
   void design_channel_filter();

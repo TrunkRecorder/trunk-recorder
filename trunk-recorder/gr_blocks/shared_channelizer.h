@@ -71,6 +71,12 @@ public:
 
   // Diagnostic: log per-port FFT bin power every `interval` blocks. 0 = off.
   virtual void set_diagnostic_interval(uint64_t interval) = 0;
+
+  // Phase rotation mode for the per-block phase correction.
+  // 0 = disabled (no rotation; output has block-discontinuities)
+  // 1 = -2π·k·t/N (current derivation; this is what theory says)
+  // 2 = +2π·k·t/N (sign-flipped)
+  virtual void set_phase_rotation_mode(int mode) = 0;
 };
 
 } // namespace blocks
