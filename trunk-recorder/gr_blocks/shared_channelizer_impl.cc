@@ -63,7 +63,9 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
       d_channel_bandwidth(channel_bandwidth),
       d_max_channels(max_channels),
       d_num_outputs(0),
-      d_input_sample_counter(0) {
+      d_input_sample_counter(0),
+      d_diagnostic_interval(0),
+      d_diagnostic_block_count(0) {
   if (max_channels == 0) {
     throw std::invalid_argument("shared_channelizer: max_channels must be > 0");
   }
@@ -257,12 +259,53 @@ int shared_channelizer_impl::general_work(int noutput_items,
       for (int m = 0; m < d_step_out; m++) {
         dst_ptr[m] = src_ptr[m] * rotor;
       }
+
+      // Optional per-port diagnostic: log magnitude at the tuned bin and the
+      // peak magnitude of the K-bin window. Helps verify the channelizer is
+      // actually picking up signal energy at the configured frequency.
+      if (d_diagnostic_interval > 0 &&
+          (d_diagnostic_block_count + b) % d_diagnostic_interval == 0) {
+        gr_complex tuned = fwd_out[center_bin];
+        float tuned_mag2 = tuned.real() * tuned.real() + tuned.imag() * tuned.imag();
+        float window_peak_mag2 = 0.0f;
+        int peak_bin_in_window = 0;
+        for (int k = 0; k < K; k++) {
+          int src = start_bin + k;
+          if (src >= N) src -= N;
+          gr_complex v = fwd_out[src];
+          float m2 = v.real() * v.real() + v.imag() * v.imag();
+          if (m2 > window_peak_mag2) {
+            window_peak_mag2 = m2;
+            peak_bin_in_window = k;
+          }
+        }
+        // Magnitudes are pre-scaling (raw FFT output). Divide by N to get
+        // back to input-amplitude units.
+        float tuned_mag = std::sqrt(tuned_mag2) / d_fft_size;
+        float peak_mag = std::sqrt(window_peak_mag2) / d_fft_size;
+        // Output amplitude: RMS of the K-M_K samples we just emitted.
+        double out_sum2 = 0.0;
+        for (int m = 0; m < d_step_out; m++) {
+          gr_complex v = dst_ptr[m];
+          out_sum2 += v.real() * v.real() + v.imag() * v.imag();
+        }
+        float out_rms = std::sqrt(out_sum2 / d_step_out);
+
+        BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
+                                 << " tuned_bin=" << center_bin
+                                 << " tuned_amp=" << tuned_mag
+                                 << " window_peak_amp=" << peak_mag
+                                 << " peak_offset_from_tuned=" << (peak_bin_in_window - half_K) << " bins"
+                                 << " output_rms=" << out_rms
+                                 << " block_count=" << (d_diagnostic_block_count + b);
+      }
     }
   }
 
   d_input_sample_counter = (d_input_sample_counter +
                             static_cast<uint64_t>(nblocks) * d_step_in) %
                            static_cast<uint64_t>(N);
+  d_diagnostic_block_count += nblocks;
 
   const int produced_per_port = nblocks * d_step_out;
   for (unsigned int port = 0; port < d_num_outputs; port++) {

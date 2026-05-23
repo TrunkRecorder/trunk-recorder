@@ -28,6 +28,7 @@ public:
   void set_channel_offset(unsigned int port, double offset_hz) override;
   void set_channel_enabled(unsigned int port, bool enabled) override;
   bool is_channel_enabled(unsigned int port) const override;
+  void set_diagnostic_interval(uint64_t interval) override { d_diagnostic_interval = interval; }
 
   void forecast(int noutput_items, gr_vector_int &ninput_items_required) override;
   bool check_topology(int ninputs, int noutputs) override;
@@ -74,6 +75,11 @@ private:
   // taken mod d_fft_size. Used to compute the per-block phase correction
   // that keeps the channelized output coherent across FFT blocks.
   uint64_t d_input_sample_counter;
+
+  // Diagnostic: how often (in FFT blocks) to log per-port bin power. 0 = off.
+  // Set with set_diagnostic_interval(); read in general_work().
+  uint64_t d_diagnostic_interval;
+  uint64_t d_diagnostic_block_count;
 
   static int choose_fft_size(int decim);
   void design_channel_filter();

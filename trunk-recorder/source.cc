@@ -266,6 +266,10 @@ void Source::attach_channelizer(gr::top_block_sptr tb) {
     recorder_channelizer = gr::blocks::shared_channelizer::make(
         rate, target_output_rate, max_channels, 12500.0);
     intermediate_rate = recorder_channelizer->get_output_rate();
+    // Roughly every 2 seconds of input at 8 MHz / 3984 step_in ≈ 4000 blocks.
+    // This is plenty quiet at info-suppressed level and very useful for
+    // confirming the channelizer is hitting the configured frequencies.
+    recorder_channelizer->set_diagnostic_interval(4000);
     tb->connect(source_block, 0, recorder_channelizer, 0);
   }
 }

@@ -68,6 +68,9 @@ public:
   virtual void set_channel_offset(unsigned int port, double offset_hz) = 0;
   virtual void set_channel_enabled(unsigned int port, bool enabled) = 0;
   virtual bool is_channel_enabled(unsigned int port) const = 0;
+
+  // Diagnostic: log per-port FFT bin power every `interval` blocks. 0 = off.
+  virtual void set_diagnostic_interval(uint64_t interval) = 0;
 };
 
 } // namespace blocks
