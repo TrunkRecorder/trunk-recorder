@@ -110,9 +110,13 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
   // we allocate as raw arrays; std::vector won't work here.
   d_channel_bin_offset.reset(new std::atomic<int>[d_max_channels]);
   d_channel_enabled.reset(new std::atomic<bool>[d_max_channels]);
+  d_channel_residual_phase_inc.reset(new std::atomic<double>[d_max_channels]);
+  d_channel_residual_rotor.assign(d_max_channels, gr_complex(1.0f, 0.0f));
+  d_channel_renorm_counter.assign(d_max_channels, 0);
   for (unsigned int i = 0; i < d_max_channels; i++) {
     d_channel_bin_offset[i].store(0, std::memory_order_relaxed);
     d_channel_enabled[i].store(false, std::memory_order_relaxed);
+    d_channel_residual_phase_inc[i].store(0.0, std::memory_order_relaxed);
   }
 
   design_channel_filter();
@@ -144,19 +148,26 @@ void shared_channelizer_impl::set_channel_offset(unsigned int port, double offse
                              << " >= max_channels " << d_max_channels;
     return;
   }
-  // Map Hz offset to integer FFT bin number, modulo d_fft_size, with negative
-  // frequencies wrapping to the upper half of the spectrum. Sub-bin tuning
-  // is left to the recorder's downstream resampler/squelch chain.
+  // Decompose the requested offset into an integer-bin part (handled by FFT
+  // bin selection) and a sub-bin residual (handled by per-output-sample
+  // continuous rotation, matching the old freq_xlating_fft_filter behavior).
   double bin_spacing = d_input_rate / static_cast<double>(d_fft_size);
   int signed_bin = static_cast<int>(std::lround(offset_hz / bin_spacing));
   int bin = ((signed_bin % d_fft_size) + d_fft_size) % d_fft_size;
+  double bin_freq = signed_bin * bin_spacing;
+  double residual_hz = offset_hz - bin_freq;
+  // Per-sample rotation phase: -2π · residual_hz / output_rate
+  double phase_inc = -2.0 * M_PI * residual_hz / d_output_rate;
   d_channel_bin_offset[port].store(bin, std::memory_order_relaxed);
+  d_channel_residual_phase_inc[port].store(phase_inc, std::memory_order_relaxed);
   BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
                            << " offset_hz=" << offset_hz
                            << " bin_spacing=" << bin_spacing
                            << " signed_bin=" << signed_bin
                            << " stored_bin=" << bin
-                           << " (effective_hz=" << (signed_bin * bin_spacing) << ")";
+                           << " (effective_hz=" << bin_freq << ")"
+                           << " residual_hz=" << residual_hz
+                           << " phase_inc=" << phase_inc << " rad/sample";
 }
 
 void shared_channelizer_impl::set_channel_enabled(unsigned int port, bool enabled) {
@@ -267,12 +278,36 @@ int shared_channelizer_impl::general_work(int noutput_items,
       }
 
       // Discard the first d_overlap_out samples (corrupted by circular
-      // convolution wraparound) and emit the rest, rotated.
+      // convolution wraparound) and emit the rest, with two combined
+      // rotations:
+      //   1) bin_rotor — per-block constant that aligns block-to-block
+      //      phases for the bin-quantized translation
+      //   2) residual_rotor — per-sample continuous rotation that handles
+      //      the sub-bin residual offset, putting the signal at exact DC
+      //      regardless of where the requested frequency landed between bins
       gr_complex *out_port = reinterpret_cast<gr_complex *>(output_items[port]);
       gr_complex *dst_ptr = out_port + b * d_step_out;
       const gr_complex *src_ptr = inv_out + d_overlap_out;
+      double phase_inc = d_channel_residual_phase_inc[port].load(std::memory_order_relaxed);
+      gr_complex one_step(static_cast<float>(std::cos(phase_inc)),
+                          static_cast<float>(std::sin(phase_inc)));
+      gr_complex residual_rotor = d_channel_residual_rotor[port];
+      gr_complex combined_block = rotor;  // bin_rotor; constant within block
       for (int m = 0; m < d_step_out; m++) {
-        dst_ptr[m] = src_ptr[m] * rotor;
+        dst_ptr[m] = src_ptr[m] * combined_block * residual_rotor;
+        residual_rotor *= one_step;
+      }
+      d_channel_residual_rotor[port] = residual_rotor;
+      // Periodic renormalization of the accumulating rotor to keep |r| = 1
+      // (drifts slowly due to single-precision FP).
+      if (++d_channel_renorm_counter[port] >= 256) {
+        d_channel_renorm_counter[port] = 0;
+        float mag = std::abs(d_channel_residual_rotor[port]);
+        if (mag > 1e-6f) {
+          d_channel_residual_rotor[port] /= mag;
+        } else {
+          d_channel_residual_rotor[port] = gr_complex(1.0f, 0.0f);
+        }
       }
 
       // Optional per-port diagnostic: log magnitude at the tuned bin and the

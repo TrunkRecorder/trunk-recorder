@@ -10,7 +10,9 @@
       "Bash(/Users/luke/Projects/TrunkRecorder/trunk-recorder/build/trunk-recorder --help)",
       "Bash(ls -la /Users/luke/Projects/TrunkRecorder/trunk-recorder/channelizer_tap.cf32 /Users/luke/Projects/TrunkRecorder/trunk-recorder/*.cf32 /Users/luke/Downloads/channelizer_tap.cf32 2>&1 | head; find /Users/luke -name \"channelizer_tap.cf32\" 2>/dev/null | head -5)",
       "Read(//Users/luke/Downloads/**)",
-      "Read(//Users/luke/**)"
+      "Read(//Users/luke/**)",
+      "Bash(ls -la /Users/luke/Projects/TrunkRecorder/trunk-recorder/*.cf32 /tmp/*.cf32 2>/dev/null)",
+      "Read(//private/tmp/**)"
     ]
   }
 }

@@ -34,3 +34,4 @@ debug_recorder.py
 .gitmodules
 user_plugins/*/
 channelizer_tap.cf32
+postfilter_tap.cf32

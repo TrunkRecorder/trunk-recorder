@@ -72,6 +72,19 @@ private:
   std::unique_ptr<std::atomic<int>[]> d_channel_bin_offset;
   std::unique_ptr<std::atomic<bool>[]> d_channel_enabled;
 
+  // Per-port residual (sub-bin) rotation. When a recorder requests an offset
+  // that doesn't land exactly on an FFT bin, the bin-selection puts the
+  // signal at residual_hz away from DC in the K-rate output. Applying a
+  // continuous-frequency rotator at the output rate brings the signal to
+  // exact DC — analogous to the rotator the old freq_xlating_fft_filter had
+  // after its FIR. Increment is computed from residual_hz in
+  // set_channel_offset; the accumulator advances in work().
+  std::unique_ptr<std::atomic<double>[]> d_channel_residual_phase_inc;
+  // Running rotor per port (not atomic — only touched from work()).
+  std::vector<gr_complex> d_channel_residual_rotor;
+  // Counter to occasionally renormalize the rotor magnitude back to 1.0.
+  std::vector<int> d_channel_renorm_counter;
+
   // Running count of total input samples consumed across all work() calls,
   // taken mod d_fft_size. Used to compute the per-block phase correction
   // that keeps the channelized output coherent across FFT blocks.
