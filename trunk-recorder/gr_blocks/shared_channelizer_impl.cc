@@ -107,19 +107,21 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
 shared_channelizer_impl::~shared_channelizer_impl() = default;
 
 void shared_channelizer_impl::design_prototype_filter() {
-  // Design a real low-pass at baseband with cutoff ~channel_bandwidth/2 and
-  // a transition band wider than that. We'll FFT it to N bins; per-port
-  // filters are this prototype circularly shifted to the port's carrier
-  // bin. Real-domain filter is fine because we apply the carrier shift
-  // separately.
+  // Design a real low-pass at baseband. The wide pre-filter here is
+  // intentionally generous — the recorder's downstream channel_lpf does the
+  // tight selection. We just need to suppress aliasing into the decimated
+  // output band, and we MUST keep the tap count below d_overlap_in (the
+  // overlap region) for clean overlap-save with no wraparound corruption.
   //
-  // The wide pre-filter here (channel_bandwidth) is intentionally generous —
-  // the recorder's downstream channel_lpf does the tight selection. We just
-  // need to suppress out-of-band aliases before decimation.
+  // The old freq_xlating_fft_filter used the same parameters as below
+  // (10 dB attenuation, ±24 kHz passband, 12 kHz transition) and got ~300
+  // taps. Adjacent-channel rejection ultimately comes from the channel_lpf
+  // in xlat_channelizer, not from this filter.
   double cutoff = std::max(d_channel_bandwidth, 24000.0);  // ≥ 24 kHz
   double transition = std::max(d_channel_bandwidth * 0.5, 12000.0);
+  double attenuation = 10.0;  // dB; matches old freq_xlating's design
   std::vector<float> taps = gr::filter::firdes::low_pass_2(
-      1.0, d_input_rate, cutoff, transition, 60.0
+      1.0, d_input_rate, cutoff, transition, attenuation
 #if GNURADIO_VERSION >= 0x030900
       , gr::fft::window::WIN_HAMMING
 #else
@@ -127,10 +129,20 @@ void shared_channelizer_impl::design_prototype_filter() {
 #endif
       );
 
+  // For overlap-save to be clean we MUST have M >= taps.size() - 1.
+  // If the filter came back larger than overlap, the IFFT output has block
+  // wraparound corruption in the kept region — catastrophic for decode.
+  if (static_cast<int>(taps.size()) - 1 > d_overlap_in) {
+    BOOST_LOG_TRIVIAL(error) << "shared_channelizer: filter taps (" << taps.size()
+                             << ") exceed overlap M=" << d_overlap_in
+                             << "; overlap-save would be corrupt. Reduce filter "
+                             << "attenuation or widen transition.";
+    throw std::runtime_error("shared_channelizer: overlap too small for filter length");
+  }
   if (static_cast<int>(taps.size()) >= d_fft_size) {
-    BOOST_LOG_TRIVIAL(warning) << "shared_channelizer: filter taps (" << taps.size()
-                               << ") >= FFT size (" << d_fft_size << "); truncating";
-    taps.resize(d_fft_size - 1);
+    BOOST_LOG_TRIVIAL(error) << "shared_channelizer: filter taps (" << taps.size()
+                             << ") >= FFT size (" << d_fft_size << ")";
+    throw std::runtime_error("shared_channelizer: FFT size too small for filter");
   }
 
   // Zero-pad taps to N and FFT to get the prototype's frequency-domain
