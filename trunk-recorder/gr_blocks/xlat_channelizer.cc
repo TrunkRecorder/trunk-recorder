@@ -35,6 +35,18 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
   std::vector<float> channel_lpf_taps = gr::filter::firdes::low_pass_2(1.0, d_input_rate, d_bandwidth / 2, d_bandwidth / 4, 60);
   channel_lpf = gr::filter::fft_filter_ccf::make(decim, channel_lpf_taps);
 
+  // The shared channelizer puts the tuned bin at DC of its K-rate output.
+  // Any signal energy at exactly the carrier (residual transmitter carrier,
+  // a constant-amplitude artifact, or USRP DC bias when tuned near IF DC)
+  // lands in the IFFT's DC bin and shows up as a strong tone at 0 Hz of the
+  // baseband stream — right where the FLL needs to lock. The old
+  // freq_xlating_fft_filter avoided this by translating to a continuous
+  // (non-bin-quantized) frequency, but we don't have that luxury here.
+  // A delay-line DC blocker punches a narrow notch at DC with minimal
+  // effect on the in-band signal. D=32 gives a ~3 kHz notch at 96 kHz
+  // and group delay ~62 samples, fine for 4800-baud P25.
+  dc_blocker = gr::filter::dc_blocker_cc::make(32, true);
+
   double arb_rate = channel_rate / resampled_rate;
   double arb_size = 32;
   double arb_atten = 30;
@@ -75,7 +87,8 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
 #endif
   }
 
-  connect(self(), 0, channel_lpf, 0);
+  connect(self(), 0, dc_blocker, 0);
+  connect(dc_blocker, 0, channel_lpf, 0);
   if (arb_rate == 1.0) {
     if (d_use_squelch) {
       connect(channel_lpf, 0, squelch, 0);
