@@ -38,6 +38,8 @@ private:
   unsigned int d_fft_len;
   unsigned int d_tmpbuflen;
   float d_threshold, d_sensitivity, d_average, d_quantization, d_min_bw, d_max_bw;
+  float d_threshold_smoothed;
+  bool d_threshold_initialized;
   float *d_pxx, *d_tmp_pxx, *d_pxx_out, *d_tmpbuf;
   double d_samp_rate;
 

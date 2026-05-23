@@ -95,6 +95,8 @@ signal_detector_cvf_impl::signal_detector_cvf_impl(double samp_rate,
   d_min_bw = min_bw;
   d_max_bw = max_bw;
   d_filename = filename;
+  d_threshold_smoothed = threshold;
+  d_threshold_initialized = false;
   d_detected_signals = std::vector<Detected_Signal>();
   last_conventional_channel_detection_check = time_since_epoch_millisec();
 
@@ -223,47 +225,45 @@ void signal_detector_cvf_impl::build_window() {
 #endif
 }
 
-// set auto threshold by searching for jumps between bins
+// Robust auto-threshold:
+//   noise_floor  = 40th percentile of sorted PSD (resistant to up to ~60% occupancy)
+//   noise_spread = IQR = P75 - P25 (robust noise-spread estimate; does not collapse
+//                  to ~0 on a quiet band the way max-min does)
+//   raw          = noise_floor + max(MIN_SNR_DB, k * noise_spread)
+//                  where k is derived from d_sensitivity (higher sensitivity -> lower k)
+//   d_threshold  = IIR-smoothed raw, to stop frame-to-frame flapping
 void signal_detector_cvf_impl::build_threshold() {
-  // copy array to work with
+  // Hard minimum margin above the noise floor estimate, in dB. Prevents the threshold
+  // from collapsing to a few dB above the median on quiet spectrum.
+  const float MIN_SNR_DB = 6.0f;
+  // IIR smoothing factor for the threshold itself (0..1). Smaller = smoother.
+  const float THRESH_ALPHA = 0.15f;
+
   memcpy(d_tmp_pxx, d_pxx_out, sizeof(float) * d_fft_len);
-  // sort bins
-  d_threshold = 500;
-  
   std::sort(d_tmp_pxx, d_tmp_pxx + d_fft_len);
-  
 
-  float range = d_tmp_pxx[d_fft_len - 1] - d_tmp_pxx[0];
-  // float median = d_tmp_pxx[int(d_fft_len/2)];
-  // float mean = 0;
-  // for (unsigned int i = d_fft_len/4; i < d_fft_len*.75; i++) {
-  //   mean += d_tmp_pxx[i];
-  // }
-  // mean = mean / (d_fft_len/2);
-  
+  const unsigned int p25_idx = d_fft_len / 4;
+  const unsigned int p40_idx = (d_fft_len * 2) / 5;
+  const unsigned int p75_idx = (d_fft_len * 3) / 4;
 
+  const float noise_floor  = d_tmp_pxx[p40_idx];
+  const float noise_spread = std::max(0.0f, d_tmp_pxx[p75_idx] - d_tmp_pxx[p25_idx]);
 
-  // search specified normalized jump
-  // since we are looking one ahead we want to stop before the end.
-  // start at the middle of the array since the threshold can't be below the median
-  for (unsigned int i = d_fft_len/2; i < d_fft_len-1; i++) {
-      
-    if ((d_tmp_pxx[i + 1] - d_tmp_pxx[i]) / range > 1 - d_sensitivity) {
-      d_threshold = d_tmp_pxx[i];
-      // BOOST_LOG_TRIVIAL(error) << "RSSI[" << d_tmp_pxx[i] << "] change: " << (d_tmp_pxx[i + 1] - d_tmp_pxx[i]) / range ;
-      break;
-    }
+  // Map d_sensitivity (0..1, higher = more sensitive) to a noise-spread multiplier.
+  // sensitivity=0.0 -> k=6 (very conservative); sensitivity=1.0 -> k=1 (aggressive).
+  const float k = 1.0f + 5.0f * (1.0f - d_sensitivity);
+  const float spread_margin = k * noise_spread;
+  const float margin = std::max(MIN_SNR_DB, spread_margin);
+
+  const float raw_threshold = noise_floor + margin;
+
+  if (!d_threshold_initialized) {
+    d_threshold_smoothed = raw_threshold;
+    d_threshold_initialized = true;
+  } else {
+    d_threshold_smoothed = THRESH_ALPHA * raw_threshold + (1.0f - THRESH_ALPHA) * d_threshold_smoothed;
   }
-  
-  if (d_threshold == 500) {
-    //float median = d_tmp_pxx[d_fft_len / 2];
-    // BOOST_LOG_TRIVIAL(error) << "Could not find threshold - range: " << range << " d_sensitivity: " << d_sensitivity << " Max RSSI: " << d_tmp_pxx[d_fft_len - 1] << " Min RSSI: " << d_tmp_pxx[0];
-    // for (unsigned int i =0; i < 5; i++) {
-    //   BOOST_LOG_TRIVIAL(error) << "RSSI[" << d_tmp_pxx[d_fft_len - 1 - i] << "] change: " << (d_tmp_pxx[d_fft_len - 1 - i] - d_tmp_pxx[d_fft_len - 2 - i]) / range;
-    // }
-    d_threshold = d_tmp_pxx[d_fft_len - 1];
-  }
-  //BOOST_LOG_TRIVIAL(info) << "Median: " << median << " Means: " << mean << " Range: " << range << " Max RSSI: " << d_tmp_pxx[d_fft_len - 1] << " Min RSSI: " << d_tmp_pxx[0] << " Threshold: " << d_threshold;  
+  d_threshold = d_threshold_smoothed;
 }
 
 // find bins above threshold and adjacent bins for each signal
