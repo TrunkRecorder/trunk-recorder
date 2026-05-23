@@ -8,7 +8,6 @@
 #include "./pwr_squelch_cc.h"
 #include <gnuradio/blocks/copy.h>
 #include <gnuradio/digital/fll_band_edge_cc.h>
-#include <gnuradio/filter/dc_blocker_cc.h>
 #include <gnuradio/filter/fft_filter_ccf.h>
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/filter/pfb_arb_resampler_ccf.h>
@@ -73,7 +72,6 @@ private:
   gr::digital::fll_band_edge_cc::sptr fll_band_edge;
   gr::blocks::rms_agc::sptr rms_agc;
 
-  gr::filter::dc_blocker_cc::sptr dc_blocker;
   gr::filter::fft_filter_ccf::sptr channel_lpf;
   gr::filter::pfb_arb_resampler_ccf::sptr arb_resampler;
 };

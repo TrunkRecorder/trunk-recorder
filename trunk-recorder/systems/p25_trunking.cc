@@ -2,6 +2,7 @@
 #include "p25_trunking.h"
 #include "../source.h"
 #include <boost/log/trivial.hpp>
+#include <gnuradio/blocks/file_sink.h>
 
 p25_trunking_sptr make_p25_trunking(Source *src, unsigned int port, double freq, gr::msg_queue::sptr queue, bool qpsk, int sys_num) {
   return gnuradio::get_initial_sptr(new p25_trunking(src, port, freq, queue, qpsk, sys_num));
@@ -144,6 +145,17 @@ p25_trunking::p25_trunking(Source *src, unsigned int port, double f, gr::msg_que
   } else {
     initialize_qpsk();
   }
+
+  // Optional debug tap of the post-filter output (after dc_blocker/lpf/arb/agc/fll
+  // — whatever xlat_channelizer is doing). Format: complex float at the
+  // recorder's channel rate (24 kHz for P25 phase 1).
+  if (std::getenv("TR_POSTFILTER_TAP")) {
+    auto tap = gr::blocks::file_sink::make(sizeof(gr_complex), "/tmp/postfilter_tap.cf32");
+    connect(prefilter, 0, tap, 0);
+    BOOST_LOG_TRIVIAL(info) << "p25_trunking: tapping post-filter to /tmp/postfilter_tap.cf32"
+                            << " (rate=" << (phase1_symbol_rate * phase1_samples_per_symbol) << " Hz)";
+  }
+
   tune_freq(chan_freq);
 }
 
