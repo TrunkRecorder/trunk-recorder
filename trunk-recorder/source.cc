@@ -270,6 +270,23 @@ void Source::attach_channelizer(gr::top_block_sptr tb) {
     // This is plenty quiet at info-suppressed level and very useful for
     // confirming the channelizer is hitting the configured frequencies.
     recorder_channelizer->set_diagnostic_interval(4000);
+
+    // The channelizer's input buffer (= source_block's output buffer) must be
+    // big enough to hold one full FFT block plus history, otherwise GR's
+    // scheduler can never satisfy our forecast() and work() is never called.
+    // For an 8 MHz SDR with N=5312 we need >~5.5k items; the default 4096 is
+    // too small. Size to ~8x the FFT for comfortable headroom across rates.
+    int fft_size = recorder_channelizer->get_fft_size();
+    int needed_buffer = std::max(64 * 1024, fft_size * 8);
+    auto upstream_block = std::dynamic_pointer_cast<gr::block>(source_block);
+    if (upstream_block) {
+      upstream_block->set_min_output_buffer(needed_buffer);
+      BOOST_LOG_TRIVIAL(info) << "shared_channelizer: set upstream min_output_buffer="
+                              << needed_buffer << " items (fft_size=" << fft_size << ")";
+    } else {
+      BOOST_LOG_TRIVIAL(warning) << "shared_channelizer: could not cast source_block to gr::block; "
+                                    "input buffer may be undersized";
+    }
     tb->connect(source_block, 0, recorder_channelizer, 0);
   }
 }
