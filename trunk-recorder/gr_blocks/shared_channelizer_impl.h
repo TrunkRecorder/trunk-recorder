@@ -70,6 +70,11 @@ private:
   std::unique_ptr<std::atomic<int>[]> d_channel_bin_offset;
   std::unique_ptr<std::atomic<bool>[]> d_channel_enabled;
 
+  // Running count of total input samples consumed across all work() calls,
+  // taken mod d_fft_size. Used to compute the per-block phase correction
+  // that keeps the channelized output coherent across FFT blocks.
+  uint64_t d_input_sample_counter;
+
   static int choose_fft_size(int decim);
   void design_channel_filter();
 };

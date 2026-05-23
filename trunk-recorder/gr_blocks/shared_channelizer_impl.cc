@@ -62,7 +62,8 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
       d_target_output_rate(target_output_rate),
       d_channel_bandwidth(channel_bandwidth),
       d_max_channels(max_channels),
-      d_num_outputs(0) {
+      d_num_outputs(0),
+      d_input_sample_counter(0) {
   if (max_channels == 0) {
     throw std::invalid_argument("shared_channelizer: max_channels must be > 0");
   }
@@ -137,9 +138,15 @@ void shared_channelizer_impl::set_channel_offset(unsigned int port, double offse
   // frequencies wrapping to the upper half of the spectrum. Sub-bin tuning
   // is left to the recorder's downstream resampler/squelch chain.
   double bin_spacing = d_input_rate / static_cast<double>(d_fft_size);
-  int bin = static_cast<int>(std::lround(offset_hz / bin_spacing));
-  bin = ((bin % d_fft_size) + d_fft_size) % d_fft_size;
+  int signed_bin = static_cast<int>(std::lround(offset_hz / bin_spacing));
+  int bin = ((signed_bin % d_fft_size) + d_fft_size) % d_fft_size;
   d_channel_bin_offset[port].store(bin, std::memory_order_relaxed);
+  BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
+                           << " offset_hz=" << offset_hz
+                           << " bin_spacing=" << bin_spacing
+                           << " signed_bin=" << signed_bin
+                           << " stored_bin=" << bin
+                           << " (effective_hz=" << (signed_bin * bin_spacing) << ")";
 }
 
 void shared_channelizer_impl::set_channel_enabled(unsigned int port, bool enabled) {
@@ -201,6 +208,11 @@ int shared_channelizer_impl::general_work(int noutput_items,
     std::memcpy(fwd_in, in + b * d_step_in, N * sizeof(gr_complex));
     d_fwd_fft->execute();
 
+    // Global time index (in input samples, mod N) at the start of this
+    // block. The mod-N is what we need for the per-block phase correction
+    // and keeps the math in a range where double precision is exact.
+    uint64_t t_b = (d_input_sample_counter + static_cast<uint64_t>(b) * d_step_in) % static_cast<uint64_t>(N);
+
     for (unsigned int port = 0; port < d_num_outputs; port++) {
       if (!d_channel_enabled[port].load(std::memory_order_relaxed)) {
         continue;
@@ -227,14 +239,30 @@ int shared_channelizer_impl::general_work(int noutput_items,
       }
       d_inv_fft->execute();
 
+      // Per-block phase correction. Without this, each IFFT output block
+      // is rotated by exp(2πi · center_bin · t_b / N) relative to block 0
+      // — a discontinuity that prevents downstream FLLs from locking and
+      // injects spurs at the block rate. Applying exp(-2πi · ...) un-does
+      // it so consecutive blocks concatenate into a phase-coherent stream.
+      double phase = -2.0 * M_PI * static_cast<double>(center_bin) *
+                     static_cast<double>(t_b) / static_cast<double>(N);
+      gr_complex rotor(static_cast<float>(std::cos(phase)),
+                       static_cast<float>(std::sin(phase)));
+
       // Discard the first d_overlap_out samples (corrupted by circular
-      // convolution wraparound) and emit the rest.
+      // convolution wraparound) and emit the rest, rotated.
       gr_complex *out_port = reinterpret_cast<gr_complex *>(output_items[port]);
-      std::memcpy(out_port + b * d_step_out,
-                  inv_out + d_overlap_out,
-                  d_step_out * sizeof(gr_complex));
+      gr_complex *dst_ptr = out_port + b * d_step_out;
+      const gr_complex *src_ptr = inv_out + d_overlap_out;
+      for (int m = 0; m < d_step_out; m++) {
+        dst_ptr[m] = src_ptr[m] * rotor;
+      }
     }
   }
+
+  d_input_sample_counter = (d_input_sample_counter +
+                            static_cast<uint64_t>(nblocks) * d_step_in) %
+                           static_cast<uint64_t>(N);
 
   const int produced_per_port = nblocks * d_step_out;
   for (unsigned int port = 0; port < d_num_outputs; port++) {
