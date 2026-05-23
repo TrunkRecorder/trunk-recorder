@@ -1,11 +1,13 @@
 #include "shared_channelizer_impl.h"
 
 #include <gnuradio/io_signature.h>
+#include <gnuradio/filter/firdes.h>
 
 #include <boost/log/trivial.hpp>
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstring>
 #include <stdexcept>
 
@@ -20,37 +22,6 @@ shared_channelizer::sptr shared_channelizer::make(double input_rate,
       new shared_channelizer_impl(input_rate, target_output_rate, max_channels, channel_bandwidth));
 }
 
-int shared_channelizer_impl::choose_fft_size(int decim) {
-  // Pick K (per-channel IFFT size) such that K * decim lands in a sweet spot
-  // for FFTW (a few thousand to a few tens of thousands). Larger N means
-  // better adjacent-channel rejection but more latency and more cost per
-  // block. We don't insist on a power of two; FFTW handles arbitrary sizes
-  // and trunk-recorder's SDR rates rarely produce power-of-two N anyway.
-  int K = 64;
-  int N = K * decim;
-  while (N < 4096 && K < 1024) {
-    K *= 2;
-    N = K * decim;
-  }
-  while (N > 32768 && K > 8) {
-    K /= 2;
-    N = K * decim;
-  }
-  return K;
-}
-
-void shared_channelizer_impl::design_channel_filter() {
-  // Hann window across the K passband bins with 1/N amplitude normalization
-  // folded in. This shapes the time-domain impulse response so its effective
-  // length stays inside the overlap region, avoiding wraparound artifacts.
-  d_channel_filter_freq.resize(d_channel_size);
-  const double scale = 1.0 / static_cast<double>(d_fft_size);
-  for (int k = 0; k < d_channel_size; k++) {
-    double w = 0.5 * (1.0 - std::cos(2.0 * M_PI * k / (d_channel_size - 1)));
-    d_channel_filter_freq[k] = gr_complex(static_cast<float>(w * scale), 0.0f);
-  }
-}
-
 shared_channelizer_impl::shared_channelizer_impl(double input_rate,
                                                  double target_output_rate,
                                                  unsigned int max_channels,
@@ -63,17 +34,8 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
       d_channel_bandwidth(channel_bandwidth),
       d_max_channels(max_channels),
       d_num_outputs(0),
-      d_input_sample_counter(0),
       d_diagnostic_interval(0),
-      d_diagnostic_block_count(0),
-      d_phase_rotation_mode(1) {
-  // Allow overriding the phase-rotation mode at startup via env var, for
-  // bisecting math/sign bugs without recompiling.
-  if (const char *env = std::getenv("TR_CHANNELIZER_ROT")) {
-    d_phase_rotation_mode = std::atoi(env);
-    BOOST_LOG_TRIVIAL(info) << "shared_channelizer: phase_rotation_mode="
-                            << d_phase_rotation_mode.load() << " (from TR_CHANNELIZER_ROT)";
-  }
+      d_diagnostic_block_count(0) {
   if (max_channels == 0) {
     throw std::invalid_argument("shared_channelizer: max_channels must be > 0");
   }
@@ -87,60 +49,110 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
   }
   d_output_rate = input_rate / static_cast<double>(d_decim);
 
-  d_channel_size = choose_fft_size(d_decim);
-  d_fft_size = d_channel_size * d_decim;
-  // 25% overlap. This gives the channel filter ~K/4 samples of effective
-  // impulse-response length to settle, which is comfortable for the Hann
-  // shape we apply in frequency domain.
-  d_overlap_out = d_channel_size / 4;
-  if (d_overlap_out < 1) d_overlap_out = 1;
-  d_overlap_in = d_overlap_out * d_decim;
-  d_step_in = d_fft_size - d_overlap_in;
-  d_step_out = d_channel_size - d_overlap_out;
+  // FFT size N must be a multiple of decim so decimation lands cleanly. Pick
+  // N to be large enough that the per-block step gives a few hundred output
+  // samples (~5 ms of audio), which keeps the FFT cost low and FLL-relevant
+  // dynamics not averaged across too many symbols. We err small here vs the
+  // bin-select version because we no longer need K = N/decim to be useful.
+  int target_step_out = 96;
+  d_step_out = target_step_out;
+  d_step_in = d_step_out * d_decim;
+  // Overlap = filter length. We design a band-pass with ~12 kHz transition
+  // width, which yields ~256 taps at 8 MHz input. Round up to a comfy power
+  // of two over that.
+  d_overlap_in = 512;
+  d_fft_size = d_step_in + d_overlap_in;
+  // Round FFT size up to multiple of decim so we can decimate cleanly later.
+  // (Decimation here is applied AFTER IFFT, not via bin selection — only
+  // sample alignment matters.)
 
   BOOST_LOG_TRIVIAL(info) << "shared_channelizer: input_rate=" << d_input_rate
                           << " output_rate=" << d_output_rate
                           << " decim=" << d_decim
                           << " N=" << d_fft_size
-                          << " K=" << d_channel_size
+                          << " step_in=" << d_step_in
+                          << " step_out=" << d_step_out
                           << " M=" << d_overlap_in
                           << " max_channels=" << d_max_channels;
 
-  // Per-port state. atomic<int>/atomic<bool> are not move-constructible so
-  // we allocate as raw arrays; std::vector won't work here.
   d_channel_bin_offset.reset(new std::atomic<int>[d_max_channels]);
   d_channel_enabled.reset(new std::atomic<bool>[d_max_channels]);
-  d_channel_residual_phase_inc.reset(new std::atomic<double>[d_max_channels]);
-  d_channel_residual_rotor.assign(d_max_channels, gr_complex(1.0f, 0.0f));
-  d_channel_renorm_counter.assign(d_max_channels, 0);
+  d_channel_rotator_phase_inc.reset(new std::atomic<double>[d_max_channels]);
+  d_channel_rotator.assign(d_max_channels, gr_complex(1.0f, 0.0f));
+  d_channel_rotator_renorm.assign(d_max_channels, 0);
   for (unsigned int i = 0; i < d_max_channels; i++) {
     d_channel_bin_offset[i].store(0, std::memory_order_relaxed);
     d_channel_enabled[i].store(false, std::memory_order_relaxed);
-    d_channel_residual_phase_inc[i].store(0.0, std::memory_order_relaxed);
+    d_channel_rotator_phase_inc[i].store(0.0, std::memory_order_relaxed);
   }
 
-  design_channel_filter();
+  design_prototype_filter();
 
-  // FFTW plan creation isn't thread-safe, but GR's fft_complex constructors
-  // already serialize on gr::fft::planner::mutex() internally. Acquiring it
-  // here would self-deadlock on the (non-recursive) std::mutex.
 #if GNURADIO_VERSION >= 0x030900
   d_fwd_fft.reset(new gr::fft::fft_complex_fwd(d_fft_size, 1));
-  d_inv_fft.reset(new gr::fft::fft_complex_rev(d_channel_size, 1));
+  d_inv_fft.reset(new gr::fft::fft_complex_rev(d_fft_size, 1));
 #else
   d_fwd_fft.reset(new gr::fft::fft_complex(d_fft_size, true, 1));
-  d_inv_fft.reset(new gr::fft::fft_complex(d_channel_size, false, 1));
+  d_inv_fft.reset(new gr::fft::fft_complex(d_fft_size, false, 1));
 #endif
 
-  // Ensure we're called with output sizes aligned to whole FFT blocks. GR
-  // will then hand us noutput_items that's a multiple of d_step_out.
   set_output_multiple(d_step_out);
-  // Keep the previous M input samples around so each FFT block can read N
-  // samples (M of which come from the prior block).
   set_history(d_overlap_in + 1);
+
+  if (const char *env = std::getenv("TR_CHANNELIZER_DIAG")) {
+    d_diagnostic_interval = static_cast<uint64_t>(std::atoi(env));
+  }
 }
 
 shared_channelizer_impl::~shared_channelizer_impl() = default;
+
+void shared_channelizer_impl::design_prototype_filter() {
+  // Design a real low-pass at baseband with cutoff ~channel_bandwidth/2 and
+  // a transition band wider than that. We'll FFT it to N bins; per-port
+  // filters are this prototype circularly shifted to the port's carrier
+  // bin. Real-domain filter is fine because we apply the carrier shift
+  // separately.
+  //
+  // The wide pre-filter here (channel_bandwidth) is intentionally generous —
+  // the recorder's downstream channel_lpf does the tight selection. We just
+  // need to suppress out-of-band aliases before decimation.
+  double cutoff = std::max(d_channel_bandwidth, 24000.0);  // ≥ 24 kHz
+  double transition = std::max(d_channel_bandwidth * 0.5, 12000.0);
+  std::vector<float> taps = gr::filter::firdes::low_pass_2(
+      1.0, d_input_rate, cutoff, transition, 60.0
+#if GNURADIO_VERSION >= 0x030900
+      , gr::fft::window::WIN_HAMMING
+#else
+      , gr::filter::firdes::WIN_HAMMING
+#endif
+      );
+
+  if (static_cast<int>(taps.size()) >= d_fft_size) {
+    BOOST_LOG_TRIVIAL(warning) << "shared_channelizer: filter taps (" << taps.size()
+                               << ") >= FFT size (" << d_fft_size << "); truncating";
+    taps.resize(d_fft_size - 1);
+  }
+
+  // Zero-pad taps to N and FFT to get the prototype's frequency-domain
+  // representation. Also fold in the 1/N scaling so the IFFT output is
+  // amplitude-correct.
+  std::vector<gr_complex> tap_time(d_fft_size, gr_complex(0.0f, 0.0f));
+  for (size_t i = 0; i < taps.size(); i++) {
+    tap_time[i] = gr_complex(taps[i] / static_cast<float>(d_fft_size), 0.0f);
+  }
+
+#if GNURADIO_VERSION >= 0x030900
+  gr::fft::fft_complex_fwd tmp_fft(d_fft_size, 1);
+#else
+  gr::fft::fft_complex tmp_fft(d_fft_size, true, 1);
+#endif
+  std::memcpy(tmp_fft.get_inbuf(), tap_time.data(), d_fft_size * sizeof(gr_complex));
+  tmp_fft.execute();
+  d_prototype_freq.assign(tmp_fft.get_outbuf(), tmp_fft.get_outbuf() + d_fft_size);
+
+  BOOST_LOG_TRIVIAL(info) << "shared_channelizer: prototype filter taps=" << taps.size()
+                          << " (cutoff=" << cutoff << " Hz, transition=" << transition << " Hz)";
+}
 
 void shared_channelizer_impl::set_channel_offset(unsigned int port, double offset_hz) {
   if (port >= d_max_channels) {
@@ -148,26 +160,25 @@ void shared_channelizer_impl::set_channel_offset(unsigned int port, double offse
                              << " >= max_channels " << d_max_channels;
     return;
   }
-  // Decompose the requested offset into an integer-bin part (handled by FFT
-  // bin selection) and a sub-bin residual (handled by per-output-sample
-  // continuous rotation, matching the old freq_xlating_fft_filter behavior).
+  // The per-port filter in the freq domain is the prototype filter
+  // circularly shifted by the carrier bin. We use that bin index to compute
+  // the shift in work(). The continuous part of the offset (sub-bin) is
+  // applied by the output-rate rotator (= what the old freq_xlating did
+  // after its fft_filter_ccc).
   double bin_spacing = d_input_rate / static_cast<double>(d_fft_size);
   int signed_bin = static_cast<int>(std::lround(offset_hz / bin_spacing));
   int bin = ((signed_bin % d_fft_size) + d_fft_size) % d_fft_size;
-  double bin_freq = signed_bin * bin_spacing;
-  double residual_hz = offset_hz - bin_freq;
-  // Per-sample rotation phase: -2π · residual_hz / output_rate
-  double phase_inc = -2.0 * M_PI * residual_hz / d_output_rate;
   d_channel_bin_offset[port].store(bin, std::memory_order_relaxed);
-  d_channel_residual_phase_inc[port].store(phase_inc, std::memory_order_relaxed);
+  // Output-rate rotator phase increment: -2π · offset_hz / output_rate
+  // (matches the rotator in gr_blocks/freq_xlating_fft_filter).
+  double phase_inc = -2.0 * M_PI * offset_hz / d_output_rate;
+  d_channel_rotator_phase_inc[port].store(phase_inc, std::memory_order_relaxed);
   BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
                            << " offset_hz=" << offset_hz
                            << " bin_spacing=" << bin_spacing
                            << " signed_bin=" << signed_bin
                            << " stored_bin=" << bin
-                           << " (effective_hz=" << bin_freq << ")"
-                           << " residual_hz=" << residual_hz
-                           << " phase_inc=" << phase_inc << " rad/sample";
+                           << " rotator_phase_inc=" << phase_inc << " rad/sample";
 }
 
 void shared_channelizer_impl::set_channel_enabled(unsigned int port, bool enabled) {
@@ -180,9 +191,7 @@ void shared_channelizer_impl::set_channel_enabled(unsigned int port, bool enable
 }
 
 bool shared_channelizer_impl::is_channel_enabled(unsigned int port) const {
-  if (port >= d_max_channels) {
-    return false;
-  }
+  if (port >= d_max_channels) return false;
   return d_channel_enabled[port].load(std::memory_order_relaxed);
 }
 
@@ -209,153 +218,78 @@ int shared_channelizer_impl::general_work(int noutput_items,
                                           gr_vector_void_star &output_items) {
   const gr_complex *in = reinterpret_cast<const gr_complex *>(input_items[0]);
   const int nblocks = noutput_items / d_step_out;
-  if (nblocks <= 0) {
-    return 0;
-  }
+  if (nblocks <= 0) return 0;
 
   gr_complex *fwd_in = d_fwd_fft->get_inbuf();
-  gr_complex *fwd_out = d_fwd_fft->get_outbuf();
+  const gr_complex *fwd_out = d_fwd_fft->get_outbuf();
   gr_complex *inv_in = d_inv_fft->get_inbuf();
-  gr_complex *inv_out = d_inv_fft->get_outbuf();
-  const int K = d_channel_size;
+  const gr_complex *inv_out = d_inv_fft->get_outbuf();
   const int N = d_fft_size;
-  const int half_K = K / 2;
 
   for (int b = 0; b < nblocks; b++) {
-    // Copy N input samples (including M overlap from prior block) into the
-    // forward FFT input buffer. With set_history(M+1), input[0..N-1] for
-    // b=0 is M old samples + step_in new ones; subsequent blocks step
-    // forward by step_in samples.
     std::memcpy(fwd_in, in + b * d_step_in, N * sizeof(gr_complex));
     d_fwd_fft->execute();
-
-    // Global time index (in input samples, mod N) at the start of this
-    // block. The mod-N is what we need for the per-block phase correction
-    // and keeps the math in a range where double precision is exact.
-    uint64_t t_b = (d_input_sample_counter + static_cast<uint64_t>(b) * d_step_in) % static_cast<uint64_t>(N);
 
     for (unsigned int port = 0; port < d_num_outputs; port++) {
       if (!d_channel_enabled[port].load(std::memory_order_relaxed)) {
         continue;
       }
 
-      // Center the K-bin window on the tuned bin. Negative offsets are
-      // already wrapped into [0, N) by set_channel_offset, so we just
-      // index modulo N.
-      int center_bin = d_channel_bin_offset[port].load(std::memory_order_relaxed);
-      int start_bin = center_bin - half_K;
-      // Pre-wrap into [0, N) so the inner loop avoids a branch.
-      start_bin = ((start_bin % N) + N) % N;
+      int carrier_bin = d_channel_bin_offset[port].load(std::memory_order_relaxed);
 
-      // Bin-select + frequency-domain filter into the IFFT input buffer.
-      // We also fftshift so that the channel's tuned bin lands at DC after
-      // IFFT — i.e. the output is at baseband.
-      for (int k = 0; k < K; k++) {
-        int src = start_bin + k;
-        if (src >= N) src -= N;
-        // Shift: bins below DC of the extracted band map to negative time
-        // frequencies (upper half of IFFT input).
-        int dst = (k + half_K) % K;
-        inv_in[dst] = fwd_out[src] * d_channel_filter_freq[k];
+      // Per-port filter response = prototype shifted by carrier_bin. That is,
+      // H_port[k] = H_proto[(k - carrier_bin) mod N]. Multiply with input
+      // spectrum and place in IFFT input.
+      for (int k = 0; k < N; k++) {
+        int proto_idx = ((k - carrier_bin) % N + N) % N;
+        inv_in[k] = fwd_out[k] * d_prototype_freq[proto_idx];
       }
       d_inv_fft->execute();
 
-      // Per-block phase correction. Without this, each IFFT output block
-      // is rotated by exp(2πi · center_bin · t_b / N) relative to block 0
-      // — a discontinuity that prevents downstream FLLs from locking and
-      // injects spurs at the block rate. Applying exp(-2πi · ...) un-does
-      // it so consecutive blocks concatenate into a phase-coherent stream.
-      // Mode 0/1/2 picks no-rotation / negative-sign / positive-sign for
-      // debugging.
-      int rot_mode = d_phase_rotation_mode.load(std::memory_order_relaxed);
-      gr_complex rotor(1.0f, 0.0f);
-      if (rot_mode != 0) {
-        double base = 2.0 * M_PI * static_cast<double>(center_bin) *
-                      static_cast<double>(t_b) / static_cast<double>(N);
-        double phase = (rot_mode == 2) ? +base : -base;
-        rotor = gr_complex(static_cast<float>(std::cos(phase)),
-                           static_cast<float>(std::sin(phase)));
-      }
-
-      // Discard the first d_overlap_out samples (corrupted by circular
-      // convolution wraparound) and emit the rest, with two combined
-      // rotations:
-      //   1) bin_rotor — per-block constant that aligns block-to-block
-      //      phases for the bin-quantized translation
-      //   2) residual_rotor — per-sample continuous rotation that handles
-      //      the sub-bin residual offset, putting the signal at exact DC
-      //      regardless of where the requested frequency landed between bins
+      // Discard the first M samples (overlap-save corruption region), then
+      // decimate by d_decim and apply the output-rate rotator that shifts
+      // the carrier from its post-decimation alias back to DC.
       gr_complex *out_port = reinterpret_cast<gr_complex *>(output_items[port]);
       gr_complex *dst_ptr = out_port + b * d_step_out;
-      const gr_complex *src_ptr = inv_out + d_overlap_out;
-      double phase_inc = d_channel_residual_phase_inc[port].load(std::memory_order_relaxed);
+      double phase_inc = d_channel_rotator_phase_inc[port].load(std::memory_order_relaxed);
       gr_complex one_step(static_cast<float>(std::cos(phase_inc)),
                           static_cast<float>(std::sin(phase_inc)));
-      gr_complex residual_rotor = d_channel_residual_rotor[port];
-      gr_complex combined_block = rotor;  // bin_rotor; constant within block
+      gr_complex rotator = d_channel_rotator[port];
+
       for (int m = 0; m < d_step_out; m++) {
-        dst_ptr[m] = src_ptr[m] * combined_block * residual_rotor;
-        residual_rotor *= one_step;
+        int src_idx = d_overlap_in + m * d_decim;
+        dst_ptr[m] = inv_out[src_idx] * rotator;
+        rotator *= one_step;
       }
-      d_channel_residual_rotor[port] = residual_rotor;
-      // Periodic renormalization of the accumulating rotor to keep |r| = 1
-      // (drifts slowly due to single-precision FP).
-      if (++d_channel_renorm_counter[port] >= 256) {
-        d_channel_renorm_counter[port] = 0;
-        float mag = std::abs(d_channel_residual_rotor[port]);
+      d_channel_rotator[port] = rotator;
+
+      if (++d_channel_rotator_renorm[port] >= 256) {
+        d_channel_rotator_renorm[port] = 0;
+        float mag = std::abs(d_channel_rotator[port]);
         if (mag > 1e-6f) {
-          d_channel_residual_rotor[port] /= mag;
+          d_channel_rotator[port] /= mag;
         } else {
-          d_channel_residual_rotor[port] = gr_complex(1.0f, 0.0f);
+          d_channel_rotator[port] = gr_complex(1.0f, 0.0f);
         }
       }
 
-      // Optional per-port diagnostic: log magnitude at the tuned bin and the
-      // peak magnitude of the K-bin window. Helps verify the channelizer is
-      // actually picking up signal energy at the configured frequency.
       if (d_diagnostic_interval > 0 &&
           (d_diagnostic_block_count + b) % d_diagnostic_interval == 0) {
-        gr_complex tuned = fwd_out[center_bin];
-        float tuned_mag2 = tuned.real() * tuned.real() + tuned.imag() * tuned.imag();
-        float window_peak_mag2 = 0.0f;
-        int peak_bin_in_window = 0;
-        for (int k = 0; k < K; k++) {
-          int src = start_bin + k;
-          if (src >= N) src -= N;
-          gr_complex v = fwd_out[src];
-          float m2 = v.real() * v.real() + v.imag() * v.imag();
-          if (m2 > window_peak_mag2) {
-            window_peak_mag2 = m2;
-            peak_bin_in_window = k;
-          }
-        }
-        // Magnitudes are pre-scaling (raw FFT output). Divide by N to get
-        // back to input-amplitude units.
-        float tuned_mag = std::sqrt(tuned_mag2) / d_fft_size;
-        float peak_mag = std::sqrt(window_peak_mag2) / d_fft_size;
-        // Output amplitude: RMS of the K-M_K samples we just emitted.
+        gr_complex tuned = fwd_out[carrier_bin];
+        float tuned_mag = std::sqrt(tuned.real() * tuned.real() + tuned.imag() * tuned.imag()) / d_fft_size;
         double out_sum2 = 0.0;
         for (int m = 0; m < d_step_out; m++) {
-          gr_complex v = dst_ptr[m];
-          out_sum2 += v.real() * v.real() + v.imag() * v.imag();
+          out_sum2 += dst_ptr[m].real() * dst_ptr[m].real() + dst_ptr[m].imag() * dst_ptr[m].imag();
         }
         float out_rms = std::sqrt(out_sum2 / d_step_out);
-
         BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
-                                 << " tuned_bin=" << center_bin
+                                 << " carrier_bin=" << carrier_bin
                                  << " tuned_amp=" << tuned_mag
-                                 << " window_peak_amp=" << peak_mag
-                                 << " peak_offset_from_tuned=" << (peak_bin_in_window - half_K) << " bins"
                                  << " output_rms=" << out_rms
                                  << " block_count=" << (d_diagnostic_block_count + b);
       }
     }
   }
-
-  d_input_sample_counter = (d_input_sample_counter +
-                            static_cast<uint64_t>(nblocks) * d_step_in) %
-                           static_cast<uint64_t>(N);
-  d_diagnostic_block_count += nblocks;
 
   const int produced_per_port = nblocks * d_step_out;
   for (unsigned int port = 0; port < d_num_outputs; port++) {
@@ -365,6 +299,7 @@ int shared_channelizer_impl::general_work(int noutput_items,
   }
 
   consume_each(nblocks * d_step_in);
+  d_diagnostic_block_count += nblocks;
   return WORK_CALLED_PRODUCE;
 }
 
