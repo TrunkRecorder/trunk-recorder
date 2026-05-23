@@ -106,17 +106,16 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
 
   design_channel_filter();
 
-  {
-    // FFTW plan creation isn't thread-safe; serialize via GR's planner mutex.
-    std::lock_guard<std::mutex> lock(gr::fft::planner::mutex());
+  // FFTW plan creation isn't thread-safe, but GR's fft_complex constructors
+  // already serialize on gr::fft::planner::mutex() internally. Acquiring it
+  // here would self-deadlock on the (non-recursive) std::mutex.
 #if GNURADIO_VERSION >= 0x030900
-    d_fwd_fft.reset(new gr::fft::fft_complex_fwd(d_fft_size, 1));
-    d_inv_fft.reset(new gr::fft::fft_complex_rev(d_channel_size, 1));
+  d_fwd_fft.reset(new gr::fft::fft_complex_fwd(d_fft_size, 1));
+  d_inv_fft.reset(new gr::fft::fft_complex_rev(d_channel_size, 1));
 #else
-    d_fwd_fft.reset(new gr::fft::fft_complex(d_fft_size, true, 1));
-    d_inv_fft.reset(new gr::fft::fft_complex(d_channel_size, false, 1));
+  d_fwd_fft.reset(new gr::fft::fft_complex(d_fft_size, true, 1));
+  d_inv_fft.reset(new gr::fft::fft_complex(d_channel_size, false, 1));
 #endif
-  }
 
   // Ensure we're called with output sizes aligned to whole FFT blocks. GR
   // will then hand us noutput_items that's a multiple of d_step_out.
