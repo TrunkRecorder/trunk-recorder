@@ -70,9 +70,11 @@ typedef boost::shared_ptr<p25_trunking> p25_trunking_sptr;
 typedef std::shared_ptr<p25_trunking> p25_trunking_sptr;
 #endif
 
-p25_trunking_sptr make_p25_trunking(double f,
-                                    double c,
-                                    long s,
+class Source;
+
+p25_trunking_sptr make_p25_trunking(Source *src,
+                                    unsigned int port,
+                                    double f,
                                     gr::msg_queue::sptr queue,
                                     bool qpsk,
                                     int sys_num);
@@ -82,17 +84,17 @@ class p25_trunking : public gr::hier_block2 {
     long decim;
     long decim2;
   };
-  friend p25_trunking_sptr make_p25_trunking(double f,
-                                             double c,
-                                             long s,
+  friend p25_trunking_sptr make_p25_trunking(Source *src,
+                                             unsigned int port,
+                                             double f,
                                              gr::msg_queue::sptr queue,
                                              bool qpsk,
                                              int sys_num);
 
 protected:
-  p25_trunking(double f,
-               double c,
-               long s,
+  p25_trunking(Source *src,
+               unsigned int port,
+               double f,
                gr::msg_queue::sptr queue,
                bool qpsk,
                int sys_num);
@@ -104,6 +106,7 @@ public:
   void set_rate(long s);
   void tune_freq(double f);
   double get_freq();
+  unsigned int get_channelizer_port() const { return channelizer_port; }
   void enable();
   int get_freq_error();
   void finetune_control_freq(double f);
@@ -123,6 +126,8 @@ private:
   double samples_per_symbol;
   double symbol_rate;
   double resampled_rate;
+  Source *source;
+  unsigned int channelizer_port;
   double center_freq, chan_freq;
   long input_rate;
   long decim;

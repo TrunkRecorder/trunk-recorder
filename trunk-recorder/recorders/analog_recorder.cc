@@ -95,7 +95,7 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   chan_freq = source->get_center();
   center_freq = source->get_center();
   config = source->get_config();
-  input_rate = source->get_rate();
+  input_rate = source->get_intermediate_rate();
   squelch_db = 0;
   talkgroup = 0;
   recording_count = 0;
@@ -336,8 +336,7 @@ double analog_recorder::get_current_length() {
 void analog_recorder::tune_freq(double f) {
   chan_freq = f;
   int offset_amount = (center_freq - f);
-
-  prefilter->tune_offset(offset_amount);
+  source->set_recorder_port_offset(selector_port, offset_amount);
 }
 
 void analog_recorder::decoder_callback_handler(long unitId, const char *signaling_type, gr::blocks::SignalType signal) {
@@ -380,7 +379,7 @@ bool analog_recorder::start(Call *call) {
   quad_gain = system_channel_rate / (2.0 * M_PI * (d_max_dev + 1000));
   demod->set_gain(quad_gain);
   int offset_amount = (center_freq - chan_freq);
-  prefilter->tune_offset(offset_amount);
+  source->set_recorder_port_offset(selector_port, offset_amount);
 
   wav_sink->start_recording(call);
 

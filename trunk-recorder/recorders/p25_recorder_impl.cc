@@ -29,7 +29,7 @@ void p25_recorder_impl::initialize(Source *src) {
   center_freq = source->get_center();
   config = source->get_config();
   d_soft_vocoder = config->soft_vocoder;
-  input_rate = source->get_rate();
+  input_rate = source->get_intermediate_rate();
   qpsk_mod = true;
   silence_frames = source->get_silence_frames();
   squelch_db = 0;
@@ -242,8 +242,7 @@ long p25_recorder_impl::elapsed() {
 
 void p25_recorder_impl::tune_freq(double f) {
   chan_freq = f;
-  float freq = (center_freq - f);
-  prefilter->tune_offset(freq);
+  source->set_recorder_port_offset(selector_port, center_freq - f);
 }
 
 void p25_recorder_impl::set_source(long src) {
@@ -344,7 +343,7 @@ bool p25_recorder_impl::start(Call *call) {
 
     int offset_amount = (center_freq - chan_freq + autotune_offset);
 
-    prefilter->tune_offset(offset_amount);
+    source->set_recorder_port_offset(selector_port, offset_amount);
 
     if (qpsk_mod) {
       modulation_selector->set_output_index(1);

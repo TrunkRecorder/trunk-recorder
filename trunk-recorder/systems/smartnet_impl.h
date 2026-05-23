@@ -27,6 +27,7 @@
 #include "../gr_blocks/xlat_channelizer.h"
 #include "smartnet_fsk2_demod.h"
 
+class Source;
 class smartnet_impl;
 
 
@@ -38,15 +39,15 @@ class smartnet_impl : public gr::hier_block2 {
     #else
     typedef std::shared_ptr<smartnet_impl> sptr;
     #endif
-    
-    static sptr make(double f,
-                                        double c,
-                                        long s,
-                                        gr::msg_queue::sptr queue,
-                                        int sys_num);
-  smartnet_impl(double f,
-               double c,
-               long s,
+
+    static sptr make(Source *src,
+                     unsigned int port,
+                     double f,
+                     gr::msg_queue::sptr queue,
+                     int sys_num);
+  smartnet_impl(Source *src,
+               unsigned int port,
+               double f,
                gr::msg_queue::sptr queue,
                int sys_num);
 
@@ -59,6 +60,7 @@ class smartnet_impl : public gr::hier_block2 {
   void reset();
   double get_pwr();
   double get_freq();
+  unsigned int get_channelizer_port() const { return channelizer_port; }
   void enable();
   int get_freq_error();
   void finetune_control_freq(double f);
@@ -67,8 +69,10 @@ class smartnet_impl : public gr::hier_block2 {
   gr::msg_queue::sptr rx_queue;
 
 private:
-  void initialize(double freq, double center, long s, gr::msg_queue::sptr queue, int sys_num);
+  void initialize(double freq, gr::msg_queue::sptr queue, int sys_num);
 
+  Source *source;
+  unsigned int channelizer_port;
   double center_freq, chan_freq;
   long input_rate;
   int sys_num;

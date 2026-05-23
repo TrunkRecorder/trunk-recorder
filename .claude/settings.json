@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git commit -m ' *)",
+      "Bash(find /opt/homebrew/include/gnuradio/fft /usr/include/gnuradio/fft /usr/local/include/gnuradio/fft -maxdepth 1 -name \"*.h\" 2>/dev/null | head)",
+      "Read(//usr/include/gnuradio/**)",
+      "Bash(make -j8)",
+      "Bash(make)",
+      "Bash(file build/trunk-recorder*)",
+      "Bash(/Users/luke/Projects/TrunkRecorder/trunk-recorder/build/trunk-recorder --help)"
+    ]
+  }
+}

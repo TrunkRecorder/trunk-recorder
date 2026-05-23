@@ -731,13 +731,18 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
-          tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
+          unsigned int old_port = system->smartnet_trunking->get_channelizer_port();
+          tb->disconnect(current_source->get_recorder_channelizer(), old_port, system->smartnet_trunking, 0);
           // Release the old hier_block2 before constructing the new one so its
           // sub-blocks (prefilter, fsk2_demod, framer) are torn down deterministically
           // instead of overlapping with the replacement.
           system->smartnet_trunking.reset();
-          system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
-          tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
+          source->attach_channelizer(tb);
+          unsigned int new_port = source->allocate_recorder_port();
+          system->smartnet_trunking = smartnet_impl::make(source, new_port, control_channel_freq, system->get_msg_queue(), system->get_sys_num());
+          tb->connect(source->get_recorder_channelizer(), new_port, system->smartnet_trunking, 0);
+          source->set_recorder_port_offset(new_port, source->get_center() - control_channel_freq);
+          source->set_selector_port_enabled(new_port, true);
           tb->unlock();
         } else if (system->get_system_type() == "p25") {
           system->set_source(source);
@@ -746,9 +751,14 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           //   If there are unexplained issues around control channel tuning, we should look at alternet
           //   approaches. See PR #1090 )
           tb->lock();
-          tb->disconnect(current_source->get_src_block(), 0, system->p25_trunking, 0);
-          system->p25_trunking = make_p25_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_qpsk_mod(), system->get_sys_num());
-          tb->connect(source->get_src_block(), 0, system->p25_trunking, 0);
+          unsigned int old_port = system->p25_trunking->get_channelizer_port();
+          tb->disconnect(current_source->get_recorder_channelizer(), old_port, system->p25_trunking, 0);
+          source->attach_channelizer(tb);
+          unsigned int new_port = source->allocate_recorder_port();
+          system->p25_trunking = make_p25_trunking(source, new_port, control_channel_freq, system->get_msg_queue(), system->get_qpsk_mod(), system->get_sys_num());
+          tb->connect(source->get_recorder_channelizer(), new_port, system->p25_trunking, 0);
+          source->set_recorder_port_offset(new_port, source->get_center() - control_channel_freq);
+          source->set_selector_port_enabled(new_port, true);
           tb->unlock();
         } else {
           BOOST_LOG_TRIVIAL(error) << "\t - Unkown system type for Retune";

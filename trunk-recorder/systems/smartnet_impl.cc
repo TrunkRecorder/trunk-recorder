@@ -1,21 +1,26 @@
 
 #include "smartnet_impl.h"
 #include "../formatter.h"
+#include "../source.h"
 #include "smartnet_fsk2_demod.h"
 #include <boost/log/trivial.hpp>
 
-smartnet_impl::sptr smartnet_impl::make(double freq, double center, long s, gr::msg_queue::sptr queue, int sys_num) {
-  smartnet_impl *smartnet = new smartnet_impl(freq, center, s, queue, sys_num);
+smartnet_impl::sptr smartnet_impl::make(Source *src, unsigned int port, double freq, gr::msg_queue::sptr queue, int sys_num) {
+  smartnet_impl *smartnet = new smartnet_impl(src, port, freq, queue, sys_num);
 
   return gnuradio::get_initial_sptr(smartnet);
 }
 
-smartnet_impl::smartnet_impl(double freq, double center, long s, gr::msg_queue::sptr queue, int sys_num)
+smartnet_impl::smartnet_impl(Source *src, unsigned int port, double freq, gr::msg_queue::sptr queue, int sys_num)
     : gr::hier_block2("smartnet_impl",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(0, 0, sizeof(float)))
 {
-  initialize(freq, center, s, queue, sys_num);
+  source = src;
+  channelizer_port = port;
+  center_freq = src->get_center();
+  input_rate = src->get_intermediate_rate();
+  initialize(freq, queue, sys_num);
 }
 
 smartnet_impl::~smartnet_impl() {
@@ -28,10 +33,8 @@ void smartnet_impl::reset() {
   }
 }
 
-void smartnet_impl::initialize(double freq, double center, long s, gr::msg_queue::sptr queue, int sys_num) {
+void smartnet_impl::initialize(double freq, gr::msg_queue::sptr queue, int sys_num) {
   chan_freq = freq;
-  center_freq = center;
-  input_rate = s;
   rx_queue = queue;
   this->sys_num = sys_num;
 
@@ -42,9 +45,7 @@ void smartnet_impl::initialize(double freq, double center, long s, gr::msg_queue
   prefilter = xlat_channelizer::make(input_rate, xlat_channelizer::smartnet_samples_per_symbol, xlat_channelizer::smartnet_symbol_rate, xlat_channelizer::channel_bandwidth, center_freq, false, xlat_channelizer::smartnet_excess_bw, false);
 
   double offset_amount = (center_freq - chan_freq);
-  prefilter->tune_offset(offset_amount);
-  // initialize_prefilter();
-  //  initialize_p25();
+  source->set_recorder_port_offset(channelizer_port, offset_amount);
 
   fsk2_demod = smartnet_fsk2_demod::make(rx_queue);
 
@@ -72,14 +73,12 @@ double smartnet_impl::get_freq() {
 
 void smartnet_impl::tune_freq(double f) {
   chan_freq = f;
-  float freq = (center_freq - f);
-  prefilter->tune_offset(freq);
+  source->set_recorder_port_offset(channelizer_port, center_freq - f);
 }
 
 void smartnet_impl::set_center(double c) {
   center_freq = c;
-  double offset_amount = (center_freq - chan_freq);
-  prefilter->tune_offset(offset_amount);
+  source->set_recorder_port_offset(channelizer_port, center_freq - chan_freq);
 }
 
 void smartnet_impl::set_rate(long s) {

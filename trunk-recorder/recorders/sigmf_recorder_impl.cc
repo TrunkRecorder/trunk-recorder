@@ -33,7 +33,7 @@ sigmf_recorder_impl::sigmf_recorder_impl(Source *src, Recorder_Type type)
   config = source->get_config();
   silence_frames = source->get_silence_frames();
   squelch_db = 0;
-  input_rate = source->get_rate();
+  input_rate = source->get_intermediate_rate();
   talkgroup = 0;
   recording_count = 0;
   recording_duration = 0;
@@ -137,7 +137,7 @@ bool sigmf_recorder_impl::start(Call *call) {
     freq = call->get_freq();
     
     int offset_amount = (center - freq);
-    prefilter->tune_offset(offset_amount);
+    source->set_recorder_port_offset(selector_port, offset_amount);
     
     //freq_xlat->set_center_freq(-offset_amount);
     std::string loghdr = log_header(this->call->get_short_name(),this->call->get_call_num(),this->call->get_talkgroup_display(),freq);

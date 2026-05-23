@@ -1,9 +1,10 @@
 
 #include "p25_trunking.h"
+#include "../source.h"
 #include <boost/log/trivial.hpp>
 
-p25_trunking_sptr make_p25_trunking(double freq, double center, long s, gr::msg_queue::sptr queue, bool qpsk, int sys_num) {
-  return gnuradio::get_initial_sptr(new p25_trunking(freq, center, s, queue, qpsk, sys_num));
+p25_trunking_sptr make_p25_trunking(Source *src, unsigned int port, double freq, gr::msg_queue::sptr queue, bool qpsk, int sys_num) {
+  return gnuradio::get_initial_sptr(new p25_trunking(src, port, freq, queue, qpsk, sys_num));
 }
 
 void p25_trunking::initialize_fsk4() {
@@ -119,15 +120,17 @@ void p25_trunking::initialize_p25() {
   connect(slicer, 0, op25_frame_assembler, 0);
 }
 
-p25_trunking::p25_trunking(double f, double c, long s, gr::msg_queue::sptr queue, bool qpsk, int sys_num)
+p25_trunking::p25_trunking(Source *src, unsigned int port, double f, gr::msg_queue::sptr queue, bool qpsk, int sys_num)
     : gr::hier_block2("p25_trunking",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(0, 0, sizeof(float))) {
 
   this->sys_num = sys_num;
+  source = src;
+  channelizer_port = port;
   chan_freq = f;
-  center_freq = c;
-  input_rate = s;
+  center_freq = src->get_center();
+  input_rate = src->get_intermediate_rate();
   rx_queue = queue;
   qpsk_mod = qpsk;
 
@@ -163,7 +166,7 @@ void p25_trunking::tune_freq(double f) {
   autotune_offset = 0;
   chan_freq = f;
   int offset_amount = (center_freq - f);
-  prefilter->tune_offset(offset_amount);
+  source->set_recorder_port_offset(channelizer_port, offset_amount);
   if (qpsk_mod) {
     costas->set_phase(0);
     costas->set_frequency(0);
@@ -181,5 +184,5 @@ void p25_trunking::finetune_control_freq(double f) {
   // Minor tuning adjustment without resetting costas or phase
   chan_freq = f;
   int offset_amount = (center_freq - f);
-  prefilter->tune_offset(offset_amount);
+  source->set_recorder_port_offset(channelizer_port, offset_amount);
 }

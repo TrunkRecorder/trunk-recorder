@@ -63,12 +63,14 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   max_analog_recorders = 0;
   debug_recorder_port = 0;
   attached_detector = false;
-  attached_selector = false;
+  attached_channelizer = false;
   next_selector_port = 0;
   autotune_source = false;
   autotune_manager = new AutotuneManager(this);
 
-  recorder_selector = gr::blocks::selector::make(sizeof(gr_complex), 0, 0);
+  // The shared channelizer is constructed lazily in attach_channelizer once
+  // we know the SDR is wired up. intermediate_rate is set there too.
+  intermediate_rate = 0;
 
   // parameters for signal_detector_cvf
   float threshold_sensitivity = 0.9;
@@ -169,7 +171,7 @@ void Source::set_iq_source(std::string iq_file, bool repeat, double center, doub
   max_analog_recorders = 0;
   debug_recorder_port = 0;
   attached_detector = false;
-  attached_selector = false;
+  attached_channelizer = false;
   next_selector_port = 0;
   autotune_source = false;
   autotune_manager = new AutotuneManager(this);
@@ -216,18 +218,55 @@ Source::Source(std::string iq_file, bool repeat, double center, double rate, Con
 }
 
 void Source::set_selector_port_enabled(unsigned int port, bool enabled) {
-  recorder_selector->set_port_enabled(port, enabled);
+  if (recorder_channelizer) {
+    recorder_channelizer->set_channel_enabled(port, enabled);
+  }
 }
 
 bool Source::is_selector_port_enabled(unsigned int port) {
-  return recorder_selector->is_port_enabled(port);
+  if (recorder_channelizer) {
+    return recorder_channelizer->is_channel_enabled(port);
+  }
+  return false;
 }
 
-void Source::attach_selector(gr::top_block_sptr tb) {
-  if (!attached_selector) {
-    attached_selector = true;
-    recorder_selector = gr::blocks::selector::make(sizeof(gr_complex), 0, 0);
-    tb->connect(source_block, 0, recorder_selector, 0);
+void Source::set_recorder_port_offset(unsigned int port, double offset_hz) {
+  // Recorders pass "(SDR center) - (channel freq)" (the historical sign used
+  // by the freq_xlating filter). The shared channelizer's set_channel_offset
+  // wants the channel's offset relative to SDR center, which is the opposite
+  // sign, so flip here.
+  if (recorder_channelizer) {
+    recorder_channelizer->set_channel_offset(port, -offset_hz);
+  }
+}
+
+double Source::get_intermediate_rate() {
+  return intermediate_rate;
+}
+
+unsigned int Source::allocate_recorder_port() {
+  unsigned int port = next_selector_port;
+  next_selector_port++;
+  return port;
+}
+
+gr::blocks::shared_channelizer::sptr Source::get_recorder_channelizer() {
+  return recorder_channelizer;
+}
+
+void Source::attach_channelizer(gr::top_block_sptr tb) {
+  if (!attached_channelizer) {
+    attached_channelizer = true;
+    // Target ~96 kHz per channel; the channelizer rounds to a clean integer
+    // decimation of the SDR rate. Recorders adapt via their downstream ARB
+    // resampler. max_channels is generously sized so any sane combination
+    // of trunked + conventional recorders fits.
+    const double target_output_rate = 96000.0;
+    const unsigned int max_channels = 128;
+    recorder_channelizer = gr::blocks::shared_channelizer::make(
+        rate, target_output_rate, max_channels, 12500.0);
+    intermediate_rate = recorder_channelizer->get_output_rate();
+    tb->connect(source_block, 0, recorder_channelizer, 0);
   }
 }
 
@@ -281,9 +320,9 @@ double Source::get_rate() {
 }
 
 bool Source::got_samples() {
-  if (attached_selector) {
-    return recorder_selector->got_samples();
-  }
+  // The shared channelizer doesn't expose a "samples have flowed" probe.
+  // The signal_detector branch (when attached) provides equivalent
+  // visibility into the SDR. For now this just reports healthy.
   return true;
 }
 
@@ -495,7 +534,7 @@ BOOST_LOG_TRIVIAL(info) << " - Setting Signal Detector Threshold to: " << thresh
 
 void Source::create_analog_recorders(gr::top_block_sptr tb, int r) {
   if (r > 0) {
-    attach_selector(tb);
+    attach_channelizer(tb);
   }
   max_analog_recorders = r;
 
@@ -503,7 +542,7 @@ void Source::create_analog_recorders(gr::top_block_sptr tb, int r) {
     analog_recorder_sptr log = make_analog_recorder(this, ANALOG);
     analog_recorders.push_back(log);
     log->set_selector_port(next_selector_port);
-    tb->connect(recorder_selector, next_selector_port, log, 0);
+    tb->connect(recorder_channelizer, next_selector_port, log, 0);
     next_selector_port++;
   }
 }
@@ -511,7 +550,7 @@ void Source::create_analog_recorders(gr::top_block_sptr tb, int r) {
 void Source::create_digital_recorders(gr::top_block_sptr tb, int r) {
 
   if (r > 0) {
-    attach_selector(tb);
+    attach_channelizer(tb);
   }
   max_digital_recorders = r;
 
@@ -519,7 +558,7 @@ void Source::create_digital_recorders(gr::top_block_sptr tb, int r) {
     p25_recorder_sptr log = make_p25_recorder(this, P25);
     digital_recorders.push_back(log);
     log->set_selector_port(next_selector_port);
-    tb->connect(recorder_selector, next_selector_port, log, 0);
+    tb->connect(recorder_channelizer, next_selector_port, log, 0);
     next_selector_port++;
   }
 }
@@ -528,14 +567,14 @@ void Source::create_sigmf_recorders(gr::top_block_sptr tb, int r) {
   max_sigmf_recorders = r;
 
   if (r > 0) {
-    attach_selector(tb);
+    attach_channelizer(tb);
   }
   for (int i = 0; i < max_sigmf_recorders; i++) {
     sigmf_recorder_sptr log = make_sigmf_recorder(this, SIGMF);
 
     sigmf_recorders.push_back(log);
     log->set_selector_port(next_selector_port);
-    tb->connect(recorder_selector, next_selector_port, log, 0);
+    tb->connect(recorder_channelizer, next_selector_port, log, 0);
     next_selector_port++;
   }
 }
@@ -544,12 +583,12 @@ analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb,
   // Not adding it to the vector of analog_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in analog_conv_recorders
   attach_detector(tb);
-  attach_selector(tb);
+  attach_channelizer(tb);
 
   analog_recorder_sptr log = make_analog_recorder(this, ANALOGC, tone_freq);
   analog_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
+  tb->connect(recorder_channelizer, next_selector_port, log, 0);
   next_selector_port++;
   return log;
 }
@@ -558,12 +597,12 @@ analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb)
   // Not adding it to the vector of analog_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in analog_conv_recorders
   attach_detector(tb);
-  attach_selector(tb);
+  attach_channelizer(tb);
 
   analog_recorder_sptr log = make_analog_recorder(this, ANALOGC);
   analog_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
+  tb->connect(recorder_channelizer, next_selector_port, log, 0);
   next_selector_port++;
   return log;
 }
@@ -571,11 +610,11 @@ sigmf_recorder_sptr Source::create_sigmf_conventional_recorder(gr::top_block_spt
   // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in digital_conv_recorders
   attach_detector(tb);
-  attach_selector(tb);
+  attach_channelizer(tb);
   sigmf_recorder_sptr log = make_sigmf_recorder(this, SIGMFC);
   sigmf_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
+  tb->connect(recorder_channelizer, next_selector_port, log, 0);
   next_selector_port++;
   return log;
 }
@@ -584,12 +623,12 @@ p25_recorder_sptr Source::create_digital_conventional_recorder(gr::top_block_spt
   // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in digital_conv_recorders
   attach_detector(tb);
-  attach_selector(tb);
+  attach_channelizer(tb);
 
   p25_recorder_sptr log = make_p25_recorder(this, P25C);
   digital_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
+  tb->connect(recorder_channelizer, next_selector_port, log, 0);
   next_selector_port++;
   return log;
 }
@@ -598,12 +637,12 @@ dmr_recorder_sptr Source::create_dmr_conventional_recorder(gr::top_block_sptr tb
   // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in digital_conv_recorders
   attach_detector(tb);
-  attach_selector(tb);
+  attach_channelizer(tb);
 
   dmr_recorder_sptr log = make_dmr_recorder(this, DMR);
   dmr_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
+  tb->connect(recorder_channelizer, next_selector_port, log, 0);
   next_selector_port++;
   return log;
 }

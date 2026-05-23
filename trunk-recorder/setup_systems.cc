@@ -145,24 +145,35 @@ bool setup_systems(Config &config, gr::top_block_sptr &tb, std::vector<Source *>
           system_added = true;
           system->set_source(source);
 
+          // Trunking control-channel parsers consume from the shared
+          // channelizer the same way recorders do: allocate a port, wire it
+          // up, tune it to the control freq, and leave it permanently
+          // enabled. This avoids each system running its own per-SDR-rate
+          // freq-xlating filter.
+          source->attach_channelizer(tb);
+          unsigned int control_port = source->allocate_recorder_port();
+
           if (system->get_system_type() == "smartnet") {
-            system->smartnet_trunking = smartnet_impl::make(control_channel_freq,
-                                                               source->get_center(),
-                                                               source->get_rate(),
+            system->smartnet_trunking = smartnet_impl::make(source,
+                                                               control_port,
+                                                               control_channel_freq,
                                                                system->get_msg_queue(),
                                                                system->get_sys_num());
-            tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
+            tb->connect(source->get_recorder_channelizer(), control_port, system->smartnet_trunking, 0);
           }
 
           if (system->get_system_type() == "p25") {
-            system->p25_trunking = make_p25_trunking(control_channel_freq,
-                                                     source->get_center(),
-                                                     source->get_rate(),
+            system->p25_trunking = make_p25_trunking(source,
+                                                     control_port,
+                                                     control_channel_freq,
                                                      system->get_msg_queue(),
                                                      system->get_qpsk_mod(),
                                                      system->get_sys_num());
-            tb->connect(source->get_src_block(), 0, system->p25_trunking, 0);
+            tb->connect(source->get_recorder_channelizer(), control_port, system->p25_trunking, 0);
           }
+
+          source->set_recorder_port_offset(control_port, source->get_center() - control_channel_freq);
+          source->set_selector_port_enabled(control_port, true);
 
           break;
         }

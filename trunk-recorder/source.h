@@ -2,6 +2,7 @@
 #define SOURCE_H
 #include "./global_structs.h"
 #include "./gr_blocks/selector.h"
+#include "./gr_blocks/shared_channelizer.h"
 #include "./gr_blocks/signal_detector_cvf.h"
 #include "./autotune.h"
 #include "recorders/analog_recorder.h"
@@ -35,7 +36,7 @@ class Source {
   double error;
   double ppm;
   bool attached_detector;
-  bool attached_selector;
+  bool attached_channelizer;
   bool gain_mode;
   double gain;
   double bb_gain;
@@ -53,6 +54,7 @@ class Source {
   int debug_recorder_port;
   int next_selector_port;
   int silence_frames;
+  double intermediate_rate;
   Config *config;
   bool autotune_source;
 
@@ -69,7 +71,7 @@ class Source {
   std::string device;
   std::string antenna;
   gr::basic_block_sptr source_block;
-  gr::blocks::selector::sptr recorder_selector;
+  gr::blocks::shared_channelizer::sptr recorder_channelizer;
   signal_detector_cvf::sptr signal_detector;
 
   void add_gain_stage(std::string stage_name, double value);
@@ -83,10 +85,13 @@ public:
   void set_iq_source(std::string iq_file, bool repeat, double center, double rate);
   gr::basic_block_sptr get_src_block();
   void attach_detector(gr::top_block_sptr tb);
-  void attach_selector(gr::top_block_sptr tb);
+  void attach_channelizer(gr::top_block_sptr tb);
   double get_min_hz();
   double get_max_hz();
   void set_min_max();
+  // Sample rate produced by the shared channelizer for each recorder port.
+  // Recorders use this as their input rate (replaces the old SDR-rate input).
+  double get_intermediate_rate();
 
   void set_silence_frames(int m);
   int get_silence_frames();
@@ -135,6 +140,16 @@ public:
   void enable_detected_recorders();
   void set_selector_port_enabled(unsigned int port, bool enabled);
   bool is_selector_port_enabled(unsigned int port);
+  // Tune the channelizer output for the given recorder port. offset_hz is
+  // the channel's center frequency relative to the SDR's center frequency.
+  void set_recorder_port_offset(unsigned int port, double offset_hz);
+  // Allocate a new port on the shared channelizer and return its index.
+  // Used by trunking control-channel parsers (p25_trunking, smartnet_impl)
+  // to claim a slot the same way recorders do via create_*_recorders.
+  unsigned int allocate_recorder_port();
+  // Accessor for setup code that needs to attach blocks directly to the
+  // channelizer (e.g. control-channel parsers).
+  gr::blocks::shared_channelizer::sptr get_recorder_channelizer();
   void create_debug_recorder(gr::top_block_sptr tb, int source_num);
   void create_sigmf_recorders(gr::top_block_sptr tb, int r);
   void create_analog_recorders(gr::top_block_sptr tb, int r);

@@ -27,7 +27,7 @@ void dmr_recorder_impl::initialize(Source *src) {
   center_freq = source->get_center();
   config = source->get_config();
   d_soft_vocoder = config->soft_vocoder;
-  input_rate = source->get_rate();
+  input_rate = source->get_intermediate_rate();
   silence_frames = source->get_silence_frames();
   squelch_db = 0;
 
@@ -220,8 +220,7 @@ long dmr_recorder_impl::elapsed() {
 
 void dmr_recorder_impl::tune_freq(double f) {
   chan_freq = f;
-  float freq = (center_freq - f);
-  prefilter->tune_offset(freq);
+  source->set_recorder_port_offset(selector_port, center_freq - f);
 }
 
 bool compareTransmissions(Transmission t1, Transmission t2) {
@@ -288,7 +287,7 @@ bool dmr_recorder_impl::start(Call *call) {
 
     int offset_amount = (center_freq - chan_freq);
 
-    prefilter->tune_offset(offset_amount);
+    source->set_recorder_port_offset(selector_port, offset_amount);
     levels->set_k(call->get_system()->get_digital_levels());
     wav_sink_slot0->start_recording(call, 0);
     wav_sink_slot1->start_recording(call, 1);
