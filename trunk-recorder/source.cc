@@ -232,12 +232,18 @@ bool Source::is_selector_port_enabled(unsigned int port) {
 }
 
 void Source::set_recorder_port_offset(unsigned int port, double offset_hz) {
-  // Recorders pass "(SDR center) - (channel freq)" (the historical sign used
-  // by the freq_xlating filter). The shared channelizer's set_channel_offset
-  // wants the channel's offset relative to SDR center, which is the opposite
-  // sign, so flip here.
+  // Recorders pass "(configured center) - (channel freq)" (the historical
+  // sign used by the freq_xlating filter), which doesn't account for the
+  // SDR's calibration error. Since the SDR is actually tuned to
+  // (configured center + error), the signal physically lives at
+  // (chan_freq - configured_center - error) in the IQ stream. The shared
+  // channelizer wants that signed offset, so flip the input sign and
+  // subtract the error: -offset - error.
+  // (Old code's continuous-frequency rotator absorbed this residual in the
+  // FLL downstream; the new bin-quantized channelizer benefits from getting
+  // it right up front so the signal lands within ±bin_spacing/2 of DC.)
   if (recorder_channelizer) {
-    recorder_channelizer->set_channel_offset(port, -offset_hz);
+    recorder_channelizer->set_channel_offset(port, -offset_hz - error);
   }
 }
 
