@@ -34,10 +34,14 @@ void UnitTags::load_unit_tags(std::string filename) {
       if (row.size() < 2) {
         continue;
       }
-      
+
       std::string pattern = row["unit_id"].get<>();
+      // Allow '#' to comment out lines in the unit tags CSV
+      if (!pattern.empty() && pattern[0] == '#') {
+        continue;
+      }
       std::string tag = row["tag"].get<>();
-      
+
       add(pattern, tag);
       lines_loaded++;
     }
