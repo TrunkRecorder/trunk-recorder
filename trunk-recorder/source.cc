@@ -1,5 +1,6 @@
 #include "source.h"
 #include "formatter.h"
+#include <gnuradio/blocks/file_sink.h>
 
 using json = nlohmann::json;
 
@@ -288,6 +289,23 @@ void Source::attach_channelizer(gr::top_block_sptr tb) {
                                     "input buffer may be undersized";
     }
     tb->connect(source_block, 0, recorder_channelizer, 0);
+
+    // Debug tap: if TR_CHANNELIZER_TAP_PORT is set, dump that port's output
+    // to /tmp/channelizer_tap.cf32 for offline inspection (cf32 = interleaved
+    // float32 I/Q at the channelizer's output rate).
+    if (const char *tap_env = std::getenv("TR_CHANNELIZER_TAP_PORT")) {
+      int tap_port = std::atoi(tap_env);
+      if (tap_port >= 0 && tap_port < static_cast<int>(max_channels)) {
+        auto tap_sink = gr::blocks::file_sink::make(sizeof(gr_complex),
+                                                    "/tmp/channelizer_tap.cf32");
+        tb->connect(recorder_channelizer, tap_port, tap_sink, 0);
+        // Manually enable so we get samples even if the recorder hasn't.
+        recorder_channelizer->set_channel_enabled(tap_port, true);
+        BOOST_LOG_TRIVIAL(info) << "shared_channelizer: tapping port " << tap_port
+                                << " to /tmp/channelizer_tap.cf32 (rate="
+                                << intermediate_rate << " Hz)";
+      }
+    }
   }
 }
 
