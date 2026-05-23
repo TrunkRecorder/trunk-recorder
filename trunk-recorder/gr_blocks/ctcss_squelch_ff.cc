@@ -1,24 +1,23 @@
 /*
  * CTCSS detector + audio gate implementation.
  *
- * Algorithm summary:
- *   1. Internal anti-alias LPF + decimation from full audio rate (e.g. 16 kHz)
- *      to ~1 kHz sub-audible band rate.
- *   2. Sliding rectangular 200 ms Goertzel window per CTCSS standard frequency
- *      (50 bins). Re-evaluated every 50 ms.
- *   3. Adaptive noise floor = median of the 50 bin powers (sub-audible
- *      ambient — voice harmonics, FM noise). Per-bin SNR (dB) computed
- *      relative to this floor.
- *   4. Live squelch: hysteresis on the *configured* bin's SNR — open
- *      when ≥ d_open_threshold_db for d_open_hangtime_ticks consecutive
- *      eval ticks, close when ≤ d_close_threshold_db for
- *      d_close_hangtime_ticks consecutive ticks. Free-scan: same but on
- *      whichever bin is currently the winner.
- *   5. Identification: cumulative scoring per bin — sum of SNR-dB across
- *      every tick where that bin was the winner above the close threshold.
- *      End-of-call verdict picks the bin with the highest cumulative
- *      score (energy-weighted, robust against voice harmonics intermittently
- *      stealing windows).
+ * Two operating modes selected at construction time:
+ *
+ * DECODE (configured_pl_freq maps to a known CTCSS standard, d_configured_bin >= 0):
+ *   Single-bin path. Only the configured CTCSS frequency and its two
+ *   immediate table-neighbours are computed per tick. The neighbours
+ *   provide a local spectral floor reference (not a pass/fail guard).
+ *   Window: 150 ms (7 Hz BW — fine; target freq is known).
+ *   Tick:   50 ms → first eval at ~150 ms → gate-open possible by ~200 ms.
+ *   Verdict: win_ticks > 0 → return configured Hz + confidence; no guards.
+ *
+ * SEARCH (configured_pl_freq == 0):
+ *   Full 50-bin path. Every CTCSS standard frequency is computed each tick.
+ *   Adaptive noise floor = median of all 50 bin powers.
+ *   Adjacent-bin guard rejects voice-fundamental smear.
+ *   Window: 500 ms (2 Hz BW — needed to separate adjacent CTCSS standards).
+ *   Tick:   100 ms → first eval at ~500 ms.
+ *   Verdict: four-guard test (agree, enough_wins, win_dominant, energy_dominant).
  */
 
 #include "ctcss_squelch_ff.h"
@@ -51,21 +50,20 @@ constexpr double CTCSS_FREQS[ctcss_squelch_ff::N_CTCSS] = {
 // well within Nyquist for the LPF.
 constexpr double DECIM_TARGET_RATE = 1000.0;
 
-// Goertzel window: 500 ms at the decimated rate gives 2 Hz noise bandwidth.
-// Narrow enough that adjacent CTCSS standards (2.3-7 Hz spaced at the low
-// end) and voice fundamentals (drifting 80-180 Hz for typical male speech)
-// land in distinct bins. The previous 200 ms / 5 Hz bandwidth blurred
-// voice fundamental in with neighbouring CTCSS bins which let the
-// "winner" bounce around and prevented the verdict guards from ever
-// finding a sustained dominant bin. Matches the original tone_detector_
-// block's window length, which was tuned over many bench iterations.
-constexpr double WINDOW_DURATION_S = 0.500;
+// Search mode: 500 ms window / 100 ms tick (2 Hz noise BW).
+// Required to separate adjacent CTCSS standards (min spacing 2.3 Hz at
+// the low end). Previous 200 ms / 5 Hz blurred voice fundamental into
+// neighbouring bins and caused the winner to bounce.
+constexpr double WINDOW_DURATION_SEARCH_S = 0.500;
+constexpr double EVAL_TICK_SEARCH_S       = 0.100;
 
-// Re-evaluate the squelch decision every 100 ms. With a 500 ms window
-// this gives 4× overlap (75% shared audio across consecutive ticks) —
-// still responsive (~200 ms open latency) without 4× the per-tick cost
-// the 50 ms cadence used to incur.
-constexpr double EVAL_TICK_S = 0.100;
+// Decode mode: 150 ms window / 50 ms tick (7 Hz noise BW).
+// The target frequency is already known so fine bin separation is not
+// needed. Shorter window means the first eval fires at ~150 ms, enabling
+// gate-open on sub-500 ms transmissions that would previously never reach
+// the first eval tick and return verdict=none.
+constexpr double WINDOW_DURATION_DECODE_S = 0.150;
+constexpr double EVAL_TICK_DECODE_S       = 0.050;
 
 // Score-above-threshold bar for the cumulative tally. A bin must beat
 // floor by this many dB to "win" a tick. Significantly above the open
@@ -131,11 +129,31 @@ ctcss_squelch_ff::ctcss_squelch_ff(double sample_rate, float configured_pl_freq,
   d_decim_factor = std::max(1, static_cast<int>(std::round(d_sample_rate / DECIM_TARGET_RATE)));
   const double decim_rate = d_sample_rate / d_decim_factor;
 
+  // Find the configured bin BEFORE timing selection so that is_decode
+  // derives from d_configured_bin >= 0 rather than configured_pl_freq > 0.
+  // The two conditions diverge if a non-standard PL frequency is passed:
+  // > 0 would select decode timing while the code falls through to the
+  // search path — wrong window width. CTCSS_FREQS is a compile-time
+  // constant so we can scan it here without building d_bins first.
+  if (configured_pl_freq > 0.0f) {
+    for (int i = 0; i < N_CTCSS; ++i) {
+      if (std::abs(CTCSS_FREQS[i] - configured_pl_freq) < 1.0) {
+        d_configured_bin = i;
+        break;
+      }
+    }
+  }
+
+  // Select window/tick timing based on mode.
+  const bool   is_decode = (d_configured_bin >= 0);
+  const double window_s  = is_decode ? WINDOW_DURATION_DECODE_S : WINDOW_DURATION_SEARCH_S;
+  const double tick_s    = is_decode ? EVAL_TICK_DECODE_S       : EVAL_TICK_SEARCH_S;
+
   // Goertzel window in decimated samples.
-  d_window_samples = std::max(32, static_cast<int>(std::round(WINDOW_DURATION_S * decim_rate)));
+  d_window_samples = std::max(32, static_cast<int>(std::round(window_s * decim_rate)));
 
   // Eval tick in decimated samples.
-  d_eval_tick_samples = std::max(1, static_cast<int>(std::round(EVAL_TICK_S * decim_rate)));
+  d_eval_tick_samples = std::max(1, static_cast<int>(std::round(tick_s * decim_rate)));
 
   // Squelch hangtimes from ms → eval ticks.
   d_open_hangtime_ticks  = std::max(1, static_cast<int>(std::round(DEFAULT_OPEN_HANG_MS  / 1000.0 * decim_rate / d_eval_tick_samples)));
@@ -157,17 +175,6 @@ ctcss_squelch_ff::ctcss_squelch_ff(double sample_rate, float configured_pl_freq,
     d_bins[i].energy_sum = 0.0;
   }
 
-  // Find the configured bin (within 1 Hz) so the squelch knows which
-  // Goertzel result to drive the gating decision off.
-  if (d_configured_pl_freq > 0.0f) {
-    for (int i = 0; i < N_CTCSS; ++i) {
-      if (std::abs(d_bins[i].freq - d_configured_pl_freq) < 1.0) {
-        d_configured_bin = i;
-        break;
-      }
-    }
-  }
-
   // Pre-allocate the sliding-window ring buffer (decimated samples).
   d_window.assign(d_window_samples, 0.0f);
   d_window_write_idx  = 0;
@@ -176,12 +183,13 @@ ctcss_squelch_ff::ctcss_squelch_ff(double sample_rate, float configured_pl_freq,
   d_total_eval_ticks   = 0;
 
   BOOST_LOG_TRIVIAL(debug)
-      << "ctcss_squelch_ff: configured_pl=" << d_configured_pl_freq << " Hz"
+      << "ctcss_squelch_ff[" << (is_decode ? "decode" : "search") << "]"
+      << " configured_pl=" << d_configured_pl_freq << " Hz"
       << " (bin=" << d_configured_bin << ")"
       << " gate_audio=" << (d_gate_audio ? "true" : "false")
       << " decim=" << d_decim_factor << "x → " << decim_rate << " Hz"
-      << " window=" << d_window_samples << " samples (" << WINDOW_DURATION_S * 1000 << " ms)"
-      << " eval-every=" << d_eval_tick_samples << " samples (" << EVAL_TICK_S * 1000 << " ms)"
+      << " window=" << d_window_samples << " samples (" << window_s * 1000.0 << " ms)"
+      << " eval-every=" << d_eval_tick_samples << " samples (" << tick_s * 1000.0 << " ms)"
       << " open=" << d_open_threshold_db << " dB / " << DEFAULT_OPEN_HANG_MS << " ms"
       << " close=" << d_close_threshold_db << " dB / " << DEFAULT_CLOSE_HANG_MS << " ms";
 }
@@ -239,6 +247,27 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
 
   if (d_total_eval_ticks <= 0) return v;
 
+  // --- DECODE MODE: no 50-bin scan needed. The gate opening is already the
+  // detection confirmation; win_ticks > 0 means the configured tone was
+  // observed above SCORING_THRESHOLD_DB on at least one eval tick. ---
+  if (d_configured_bin >= 0) {
+    const auto &cb = d_bins[d_configured_bin];
+    if (cb.win_ticks > 0) {
+      v.detected_hz     = static_cast<float>(CTCSS_FREQS[d_configured_bin]);
+      v.confidence      = static_cast<float>(cb.win_ticks) / static_cast<float>(d_total_eval_ticks);
+      v.dominant_snr_db = static_cast<float>(cb.cum_score / cb.win_ticks);
+    }
+    BOOST_LOG_TRIVIAL(debug)
+        << "ctcss_squelch_ff[decode] verdict@"
+        << (v.detected_hz > 0.0f ? std::to_string(v.detected_hz) : std::string("none"))
+        << " dom_snr=" << v.dominant_snr_db << "dB"
+        << " | total_ticks=" << d_total_eval_ticks
+        << " win_ticks=" << cb.win_ticks
+        << " conf=" << v.confidence;
+    return v;
+  }
+
+  // --- SEARCH MODE: full 50-bin scan + verdict guards ---
   // Build top-three (by win_ticks then cum_score) for diagnostics regardless
   // of whether the strict guards below pass — useful when a call doesn't
   // produce a confident verdict but the operator wants to see what the
@@ -333,12 +362,12 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
                                    ? d_bins[top_energy_i].energy_sum / total_energy
                                    : 0.0;
   static constexpr double MIN_CONCENTRATION_SEARCH = 0.10;
-  const bool concentrated = (d_configured_bin >= 0)   // verify mode: skip the check
+  const bool concentrated = (d_configured_bin >= 0)   // decode mode: skip the check
                                 ? true
                                 : (concentration >= MIN_CONCENTRATION_SEARCH);
 
   // Verdict guards. The per-tick adjacent-bin guards (and notch-ratio in
-  // verify mode) already filter voice fundamentals out at the tick
+  // decode mode) already filter voice fundamentals out at the tick
   // level — only HIGH-CONFIDENCE ticks ever increment win_ticks. So the
   // verdict's job is no longer to second-guess questionable wins; it's
   // to confirm there are enough confirmed wins AND that they're not a
@@ -370,9 +399,8 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
   // settled.
   const double w_hz = (top_wins_i   >= 0) ? d_bins[top_wins_i].freq   : 0.0;
   const double e_hz = (top_energy_i >= 0) ? d_bins[top_energy_i].freq : 0.0;
-  const char *mode  = (d_configured_bin >= 0) ? "verify" : "search";
   BOOST_LOG_TRIVIAL(debug)
-      << "ctcss_squelch_ff[" << mode << "] verdict@"
+      << "ctcss_squelch_ff[search] verdict@"
       << (v.detected_hz > 0 ? std::to_string(v.detected_hz) : std::string("none"))
       << " dom_snr=" << v.dominant_snr_db << "dB"
       << " | total_ticks=" << d_total_eval_ticks
@@ -400,17 +428,52 @@ ctcss_squelch_verdict ctcss_squelch_ff::get_verdict() const {
 }
 
 void ctcss_squelch_ff::evaluate_goertzels() {
-  // Read the sliding window in time order (oldest first). The ring buffer's
-  // newest sample is at d_window_write_idx-1; oldest is at d_window_write_idx.
-  // For each bin, run a fresh Goertzel over the window's d_window_samples
-  // values. This is the simplest "rectangular sliding window" — recompute
-  // each tick. Cost: 50 bins × 200 samples × 2 ops = 20k ops per eval.
-
-  std::vector<double> powers(N_CTCSS, 0.0);
-
-  // Don't evaluate until the window has been filled at least once — pre-fill
-  // values are zero and would skew the median floor calculation.
+  // Don't evaluate until the window has been filled at least once.
   if (!d_window_filled) return;
+
+  // --- VERIFY MODE: configured frequency known — 3-bin path ---
+  // Only the configured bin and its two immediate CTCSS-table neighbours
+  // are computed.
+  if (d_configured_bin >= 0) {
+    auto goertzel = [&](int i) -> double {
+      const double C = d_bins[i].coeff;
+      double s1 = 0.0, s2 = 0.0;
+      int ri = d_window_write_idx;
+      for (int n = 0; n < d_window_samples; ++n) {
+        const double tmp = d_window[ri] + C * s1 - s2;
+        s2 = s1;
+        s1 = tmp;
+        if (++ri >= d_window_samples) ri = 0;
+      }
+      const double e = s1 * s1 + s2 * s2 - C * s1 * s2;
+      return std::max(e, 1e-12);
+    };
+
+    const double cfg_power = goertzel(d_configured_bin);
+
+    double floor_sum = 0.0;
+    int    floor_n   = 0;
+    if (d_configured_bin > 0)         { floor_sum += goertzel(d_configured_bin - 1); ++floor_n; }
+    if (d_configured_bin < N_CTCSS-1) { floor_sum += goertzel(d_configured_bin + 1); ++floor_n; }
+    const double floor_lin = std::max(floor_n > 0 ? floor_sum / floor_n : cfg_power, 1e-12);
+
+    // Silence gate: skip tick if total power is near-zero (upstream squelch ramp).
+    if (cfg_power + floor_sum < 1e-4) return;
+
+    const double snr_lin = cfg_power / floor_lin;
+    const float  snr_db  = static_cast<float>(10.0 * std::log10(std::max(snr_lin, 1e-12)));
+
+    if (snr_db >= SCORING_THRESHOLD_DB) {
+      d_bins[d_configured_bin].cum_score += snr_db;
+      d_bins[d_configured_bin].win_ticks += 1;
+    }
+    d_total_eval_ticks += 1;
+    update_squelch_state(d_configured_bin, snr_db);
+    return;
+  }
+
+  // --- SEARCH MODE: full 50-bin path ---
+  std::vector<double> powers(N_CTCSS, 0.0);
 
   for (int i = 0; i < N_CTCSS; ++i) {
     const double C = d_bins[i].coeff;
