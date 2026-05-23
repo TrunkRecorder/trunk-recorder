@@ -262,6 +262,25 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_short_name(element.value("shortName", default_script.str()));
         BOOST_LOG_TRIVIAL(info) << "Short Name: " << system->get_short_name();
 
+        // The shortName is used as part of directory and file paths, so reject
+        // characters that would corrupt those paths or break shell-invoked
+        // tools like sox/ffmpeg (issue #995).
+        {
+          std::string sn = system->get_short_name();
+          if (sn.empty()) {
+            BOOST_LOG_TRIVIAL(error) << "shortName is empty - please set a shortName in config.json";
+            return false;
+          }
+          if (sn.find(' ') != std::string::npos) {
+            BOOST_LOG_TRIVIAL(error) << "shortName \"" << sn << "\" contains a space. Spaces are not allowed - they corrupt recording file paths and break sox/ffmpeg. Use _ or - instead.";
+            return false;
+          }
+          if (!std::regex_match(sn, std::regex("^[A-Za-z0-9._-]+$"))) {
+            BOOST_LOG_TRIVIAL(error) << "shortName \"" << sn << "\" contains invalid characters. Only letters, digits, '.', '_' and '-' are allowed - other characters break recording file paths and shell-invoked tools.";
+            return false;
+          }
+        }
+
         system->set_system_type(element["type"]);
         BOOST_LOG_TRIVIAL(info) << "System Type: " << system->get_system_type();
 
