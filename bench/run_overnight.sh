@@ -22,9 +22,15 @@ BASELINE_BIN="${BASELINE_BIN:-$PARENT_DIR/tr-baseline/build/trunk-recorder}"
 TUNED_BIN="${TUNED_BIN:-$PARENT_DIR/tr-fft-tuning/build/trunk-recorder}"
 CONFIG_FILE="${CONFIG_FILE:-$REPO_ROOT/config.json}"
 
-WINDOW_SEC="${WINDOW_SEC:-900}"        # 15 minutes
-TOTAL_WINDOWS="${TOTAL_WINDOWS:-32}"   # 8 hours total at 15 min/window
-SETTLE_SEC="${SETTLE_SEC:-10}"         # Discard first N sec of each window
+WINDOW_SEC="${WINDOW_SEC:-900}"        # 15 minutes of *measurement* per window
+STARTUP_SEC="${STARTUP_SEC:-30}"       # Wait after launch for trunk-recorder
+                                       # to lock onto the control channel
+                                       # before measurement begins
+INTER_WINDOW_SEC="${INTER_WINDOW_SEC:-15}"  # Gap between windows for the SDR
+                                            # USB handle to be released
+TOTAL_WINDOWS="${TOTAL_WINDOWS:-32}"   # ~8.5 hours total at default settings
+SETTLE_SEC="${SETTLE_SEC:-10}"         # Belt-and-suspenders: analyzer trims
+                                       # first N sec of each window's CSV
 POWERMETRICS_INTERVAL_MS="${POWERMETRICS_INTERVAL_MS:-1000}"
 
 for f in "$BASELINE_BIN" "$TUNED_BIN" "$CONFIG_FILE"; do
@@ -106,8 +112,12 @@ run_window() {
     echo $! > "$window_dir/tr.pid"
   )
 
-  # Give trunk-recorder a moment to come up and write its PID.
-  sleep 2
+  # Wait for trunk-recorder to come up and lock onto the control channel.
+  # Without this grace period, the first chunk of each window captures SDR
+  # warmup / control-channel-acquisition cost rather than steady-state.
+  echo "  waiting ${STARTUP_SEC}s for trunk-recorder to settle…"
+  sleep "$STARTUP_SEC"
+
   local tr_pid
   tr_pid="$(cat "$window_dir/tr.pid")"
 
@@ -144,6 +154,12 @@ run_window() {
   fi
 
   echo "  done. tr.pid=$tr_pid  csv=$(wc -l <"$csv_path" 2>/dev/null || echo 0) lines"
+
+  # Inter-window gap so the SDR USB handle is fully released before the next
+  # trunk-recorder tries to claim it. Single-SDR setups need this.
+  if [ "$INTER_WINDOW_SEC" -gt 0 ]; then
+    sleep "$INTER_WINDOW_SEC"
+  fi
 }
 
 # Interleave: alternate starting branch so we don't always start cold on the
