@@ -17,7 +17,8 @@
       "Bash(cmake ../)",
       "Bash(make bench_logger)",
       "Bash(nm /Users/luke/Projects/TrunkRecorder/trunk-recorder/build/libbench_logger.so)",
-      "Bash(nm -gU /Users/luke/Projects/TrunkRecorder/trunk-recorder/build/libbench_logger.so)"
+      "Bash(nm -gU /Users/luke/Projects/TrunkRecorder/trunk-recorder/build/libbench_logger.so)",
+      "Bash(chmod +x /Users/luke/Projects/TrunkRecorder/trunk-recorder/bench/plot.py)"
     ]
   }
 }
