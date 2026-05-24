@@ -18,6 +18,13 @@ REPO_ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
 BENCH_DIR="$REPO_ROOT/bench"
 PARENT_DIR="$(dirname "$REPO_ROOT")"
 
+# Pick up binary paths written by setup_worktrees.sh, if available. Allows
+# the tuned worktree to be the user's current source dir rather than a
+# sibling tr-fft-tuning directory.
+if [ -f "$BENCH_DIR/.paths" ]; then
+  . "$BENCH_DIR/.paths"
+fi
+
 BASELINE_BIN="${BASELINE_BIN:-$PARENT_DIR/tr-baseline/build/trunk-recorder}"
 TUNED_BIN="${TUNED_BIN:-$PARENT_DIR/tr-fft-tuning/build/trunk-recorder}"
 CONFIG_FILE="${CONFIG_FILE:-$REPO_ROOT/config.json}"

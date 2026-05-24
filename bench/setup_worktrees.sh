@@ -1,57 +1,87 @@
 #!/usr/bin/env bash
-# One-time setup: create two git worktrees (baseline + fft-tuning), each with
-# its own build directory, so the overnight harness can flip between them
-# without rebuilding. Run this from inside the trunk-recorder repo.
+# One-time setup: ensure two checkouts exist (baseline + fft-tuning), each
+# with its own build directory, so the overnight harness can flip between
+# them without rebuilding.
+#
+# If a branch is already checked out somewhere (e.g. you're already on
+# dev/fft-tuning in this directory), that existing checkout is reused
+# instead of trying to create a duplicate worktree.
+#
+# Run from inside the trunk-recorder repo.
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel)"
+BENCH_DIR="$REPO_ROOT/bench"
 cd "$REPO_ROOT"
 
 BASELINE_BRANCH="${BASELINE_BRANCH:-master}"
 TUNED_BRANCH="${TUNED_BRANCH:-dev/fft-tuning}"
 
-# Worktrees live as sibling directories so they don't clutter the main checkout.
 PARENT_DIR="$(dirname "$REPO_ROOT")"
-BASELINE_WT="$PARENT_DIR/tr-baseline"
-TUNED_WT="$PARENT_DIR/tr-fft-tuning"
+BASELINE_WT_DEFAULT="$PARENT_DIR/tr-baseline"
+TUNED_WT_DEFAULT="$PARENT_DIR/tr-fft-tuning"
 
-echo "Creating worktrees:"
-echo "  baseline: $BASELINE_WT  ($BASELINE_BRANCH)"
-echo "  tuned:    $TUNED_WT     ($TUNED_BRANCH)"
+# Return the worktree path that currently has the given branch checked out,
+# or empty if no worktree has it.
+existing_worktree_for_branch() {
+  local branch="$1"
+  git worktree list --porcelain | awk -v b="refs/heads/$branch" '
+    $1 == "worktree" { wt = $2; next }
+    $1 == "branch"   && $2 == b { print wt; exit }
+  '
+}
 
-if [ ! -d "$BASELINE_WT" ]; then
-  git worktree add "$BASELINE_WT" "$BASELINE_BRANCH"
-else
-  echo "  baseline worktree already exists, skipping"
-fi
+resolve_worktree() {
+  local branch="$1"
+  local default_path="$2"
+  local label="$3"
+  local existing
+  existing="$(existing_worktree_for_branch "$branch")"
+  if [ -n "$existing" ]; then
+    echo "  $label: reusing existing checkout at $existing"
+    printf '%s\n' "$existing"
+    return
+  fi
+  if [ -d "$default_path" ]; then
+    # Directory exists but git doesn't know about it as a worktree — bail
+    # rather than risk clobbering whatever's there.
+    echo "  $label: $default_path exists but isn't a registered worktree; remove it or set ${label^^}_WT to a clean path" >&2
+    exit 1
+  fi
+  echo "  $label: creating worktree at $default_path on $branch"
+  git worktree add "$default_path" "$branch" >&2
+  printf '%s\n' "$default_path"
+}
 
-if [ ! -d "$TUNED_WT" ]; then
-  git worktree add "$TUNED_WT" "$TUNED_BRANCH"
-else
-  echo "  tuned worktree already exists, skipping"
-fi
+echo "Resolving worktrees:"
+BASELINE_WT="$(resolve_worktree "$BASELINE_BRANCH" "$BASELINE_WT_DEFAULT" "baseline")"
+TUNED_WT="$(resolve_worktree "$TUNED_BRANCH"    "$TUNED_WT_DEFAULT"    "tuned")"
 
-# The bench_logger plugin only exists on dev/fft-tuning right now (where we
-# wrote it). Copy it into the baseline worktree and register it in the
-# baseline CMakeLists so both binaries can log active-recorder counts.
 echo
-echo "Copying bench_logger plugin into baseline worktree…"
-mkdir -p "$BASELINE_WT/plugins/bench_logger"
-cp "$REPO_ROOT/plugins/bench_logger/bench_logger.cc" "$BASELINE_WT/plugins/bench_logger/"
-cp "$REPO_ROOT/plugins/bench_logger/CMakeLists.txt"  "$BASELINE_WT/plugins/bench_logger/"
+echo "  baseline -> $BASELINE_WT  ($BASELINE_BRANCH)"
+echo "  tuned    -> $TUNED_WT     ($TUNED_BRANCH)"
 
-if ! grep -q "add_subdirectory(plugins/bench_logger)" "$BASELINE_WT/CMakeLists.txt"; then
-  # Insert after the simplestream registration to match the pattern.
-  awk '
-    { print }
-    /add_subdirectory\(plugins\/simplestream\)/ && !done {
-      print "add_subdirectory(plugins/bench_logger)"; done=1
-    }
-  ' "$BASELINE_WT/CMakeLists.txt" > "$BASELINE_WT/CMakeLists.txt.tmp"
-  mv "$BASELINE_WT/CMakeLists.txt.tmp" "$BASELINE_WT/CMakeLists.txt"
-  echo "  registered bench_logger in baseline CMakeLists.txt"
-else
-  echo "  bench_logger already registered in baseline"
+# The bench_logger plugin lives on dev/fft-tuning. If the baseline worktree
+# is a different checkout (i.e. master), copy the plugin in and register it.
+if [ "$BASELINE_WT" != "$TUNED_WT" ]; then
+  echo
+  echo "Copying bench_logger plugin into baseline worktree…"
+  mkdir -p "$BASELINE_WT/plugins/bench_logger"
+  cp "$TUNED_WT/plugins/bench_logger/bench_logger.cc" "$BASELINE_WT/plugins/bench_logger/"
+  cp "$TUNED_WT/plugins/bench_logger/CMakeLists.txt"  "$BASELINE_WT/plugins/bench_logger/"
+
+  if ! grep -q "add_subdirectory(plugins/bench_logger)" "$BASELINE_WT/CMakeLists.txt"; then
+    awk '
+      { print }
+      /add_subdirectory\(plugins\/simplestream\)/ && !done {
+        print "add_subdirectory(plugins/bench_logger)"; done=1
+      }
+    ' "$BASELINE_WT/CMakeLists.txt" > "$BASELINE_WT/CMakeLists.txt.tmp"
+    mv "$BASELINE_WT/CMakeLists.txt.tmp" "$BASELINE_WT/CMakeLists.txt"
+    echo "  registered bench_logger in baseline CMakeLists.txt"
+  else
+    echo "  bench_logger already registered in baseline"
+  fi
 fi
 
 echo
@@ -64,9 +94,19 @@ echo "Building tuned…"
 mkdir -p "$TUNED_WT/build"
 ( cd "$TUNED_WT/build" && cmake ../ && make -j"$(sysctl -n hw.ncpu)" )
 
+# Persist the resolved binary paths so run_overnight.sh picks them up
+# automatically — handles the case where the tuned worktree is the user's
+# current source dir rather than $PARENT_DIR/tr-fft-tuning.
+cat > "$BENCH_DIR/.paths" <<EOF
+# Auto-generated by setup_worktrees.sh — sourced by run_overnight.sh
+BASELINE_BIN="$BASELINE_WT/build/trunk-recorder"
+TUNED_BIN="$TUNED_WT/build/trunk-recorder"
+EOF
+
 echo
 echo "Done. Binaries:"
 echo "  $BASELINE_WT/build/trunk-recorder"
 echo "  $TUNED_WT/build/trunk-recorder"
 echo
-echo "Next: edit bench/run_overnight.sh to point at your config.json, then run it."
+echo "Paths recorded in $BENCH_DIR/.paths — run_overnight.sh will use them."
+echo "Next: drop config.json at $REPO_ROOT/config.json, then sudo bench/run_overnight.sh"
