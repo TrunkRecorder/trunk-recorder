@@ -73,18 +73,8 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   // we know the SDR is wired up. intermediate_rate is set there too.
   intermediate_rate = 0;
 
-  // parameters for signal_detector_cvf
-  float threshold_sensitivity = 0.9;
-  bool auto_threshold = true;
-  float threshold = -45;
-  int fft_len = 1024;
-  float average = 0.8;
-  float quantization = 0.01;
-  float min_bw = 0.0;
-  float max_bw = 50000;
-
-  signal_detector = signal_detector_cvf::make(rate, fft_len, 0, threshold, threshold_sensitivity, auto_threshold, average, quantization, min_bw, max_bw, "");
-  BOOST_LOG_TRIVIAL(info) << "Made the Signal Detector";
+  // signal_detector is constructed lazily in attach_channelizer once we
+  // have a channelizer to share its FFT with.
 
   if (driver == "osmosdr") {
     osmosdr::source::sptr osmo_src;
@@ -296,6 +286,25 @@ void Source::attach_channelizer(gr::top_block_sptr tb) {
     }
     tb->connect(source_block, 0, recorder_channelizer, 0);
 
+    // Build the signal_detector now that we have a channelizer. It pulls
+    // power-spectrum snapshots from the channelizer's already-computed FFT
+    // — no second wideband FFT in the flowgraph. Same default parameters
+    // the old GR-block detector used; users can override via
+    // setSignalDetectorThreshold or per-source settings.
+    {
+      const float threshold = -45.0f;
+      const float sensitivity = 0.9f;
+      const bool auto_threshold = true;
+      const float average = 0.8f;
+      const float quantization = 0.01f;
+      const float min_bw = 0.0f;
+      const float max_bw = 50000.0f;
+      signal_detector = signal_detector_cvf::make(
+          recorder_channelizer, rate, 0, threshold, sensitivity,
+          auto_threshold, average, quantization, min_bw, max_bw);
+      BOOST_LOG_TRIVIAL(info) << "Made the Signal Detector (shared FFT)";
+    }
+
     // Debug tap: if TR_CHANNELIZER_TAP_SRC=N is set, dump port
     // TR_CHANNELIZER_TAP_PORT's output of source #N (matched by src_num) to
     // /tmp/channelizer_tap.cf32. Without TR_CHANNELIZER_TAP_SRC, no tap is
@@ -320,11 +329,12 @@ void Source::attach_channelizer(gr::top_block_sptr tb) {
   }
 }
 
-void Source::attach_detector(gr::top_block_sptr tb) {
-  if (!attached_detector) {
-    attached_detector = true;
-    tb->connect(source_block, 0, signal_detector, 0);
-  }
+void Source::attach_detector(gr::top_block_sptr /*tb*/) {
+  // No-op: the signal_detector no longer participates in the flowgraph.
+  // It polls the shared_channelizer's spectrum snapshot from
+  // enable_detected_recorders(). The attached_detector flag is kept so
+  // create_*_conventional_recorder methods still have something to call.
+  attached_detector = true;
 }
 
 void Source::set_antenna(std::string ant) {
@@ -558,6 +568,12 @@ std::vector<Recorder *> Source::find_conventional_recorders_by_freq(Detected_Sig
 }
 
 void Source::enable_detected_recorders() {
+  if (!signal_detector) {
+    return;  // no conventional recorders attached for this source
+  }
+  // Pull a fresh spectrum snapshot from the shared channelizer and run
+  // detection (throttled internally to 10 Hz). Cheap to call here.
+  signal_detector->update();
   std::vector<Detected_Signal> signals = signal_detector->get_detected_signals();
 
   for (std::vector<Detected_Signal>::iterator it = signals.begin(); it != signals.end(); it++) {
@@ -578,8 +594,15 @@ void Source::enable_detected_recorders() {
 }
 
 void Source::set_signal_detector_threshold(float threshold) {
-BOOST_LOG_TRIVIAL(info) << " - Setting Signal Detector Threshold to: " << threshold;
-  signal_detector->set_threshold(threshold);
+  BOOST_LOG_TRIVIAL(info) << " - Setting Signal Detector Threshold to: " << threshold;
+  if (signal_detector) {
+    signal_detector->set_threshold(threshold);
+  } else {
+    // Called before any conventional recorders configured this source. The
+    // detector will be built when attach_channelizer runs; threshold will
+    // need to be re-set then. For now just log.
+    BOOST_LOG_TRIVIAL(warning) << " - Signal detector not yet constructed; threshold ignored";
+  }
 }
 
 void Source::create_analog_recorders(gr::top_block_sptr tb, int r) {

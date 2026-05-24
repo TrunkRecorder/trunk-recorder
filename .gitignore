@@ -35,3 +35,4 @@ debug_recorder.py
 user_plugins/*/
 channelizer_tap.cf32
 postfilter_tap.cf32
+.claude/settings.json

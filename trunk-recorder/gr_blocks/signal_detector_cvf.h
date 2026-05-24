@@ -21,42 +21,21 @@
 #ifndef INCLUDED_INSPECTOR_SIGNAL_DETECTOR_CVF_H
 #define INCLUDED_INSPECTOR_SIGNAL_DETECTOR_CVF_H
 
-#include <gnuradio/sync_decimator.h>
-/*
-namespace gr {
-namespace inspector {*/
+#include <memory>
+#include <vector>
 
-/*!
- * \brief Signal detection block using energy detection.
- * \ingroup inspector
- *
- * \details
- * Takes input spectrum as complex float and performs an energy detection
- * to find potential continuous signals and build a RF map (tuple
- * of center frequency and bandwidth). The RF map gets passed as a
- * message with center frequency and bandwidth information for each detected
- * signal.
- *
- * Threshold for energy detection can either be set in dB or an automatic
- * threshold calculation can be performed by setting a sensitivity between 0
- * and 1. The PSD is then sorted and searched for relative power jumps with height
- * (1-sensitivity) and the threshold is set to the sample before that jump
- * (which should be the strongest noise sample).
- *
- * To surpress false detection in noisy scenarios, the minimum signal bandwidth
- * can be set. All detected signals smaller than this value will not be written
- * in the RF map.
- *
- * To average the PSD (and provide a better detection) an single pole IIR
- * filter is implemented in this block. The parameter alpha can be set as
- * block parameter. The IIR equation yields y[n] = alpha*x[n]+(1-alpha)*y[n-1].
- *
- * The bandwidth of the detected signals can be quantized relative to the
- * sampling rate. This leads to less recalculations in the Signal Separator
- * block. There, a filter must be recalculated, when the bandwidth of a signal
- * changed.
- */
+#include "shared_channelizer.h"
 
+// signal_detector: Energy-detection scanner used by Source to enable
+// conventional recorders when their channel's RF energy goes above a
+// (possibly auto-calibrated) threshold.
+//
+// In the new architecture this is no longer a GR block in the flowgraph —
+// it consumes the shared_channelizer's already-computed wideband forward
+// FFT via get_spectrum_snapshot(). Source calls update() periodically
+// (currently from enable_detected_recorders()) before reading the
+// detected-signal list. This eliminates the second wideband FFT that the
+// old GR block was running on the SDR stream.
 
 struct Detected_Signal {
   int avg_rssi;
@@ -70,61 +49,44 @@ struct Detected_Signal {
   unsigned int end_bin;
 };
 
-class signal_detector_cvf : virtual public gr::sync_decimator
-{
+class signal_detector_cvf {
 public:
-
-#if GNURADIO_VERSION < 0x030900
-  typedef boost::shared_ptr<signal_detector_cvf> sptr;
-#else
   typedef std::shared_ptr<signal_detector_cvf> sptr;
-#endif
 
-    
+  // Construct a signal detector that reads spectrum snapshots from the
+  // given shared_channelizer. samp_rate is needed to map bin index to Hz
+  // when building Detected_Signal entries.
+  //
+  // The threshold/sensitivity/average/quantization/min_bw/max_bw arguments
+  // are the same as before; threshold is initial only when auto_threshold
+  // is true. window_type is currently ignored (the shared_channelizer's FFT
+  // is unwindowed).
+  static sptr make(gr::blocks::shared_channelizer::sptr channelizer,
+                   double samp_rate,
+                   int /*window_type*/ = 0,
+                   float threshold = -45.0f,
+                   float sensitivity = 0.9f,
+                   bool auto_threshold = true,
+                   float average = 0.8f,
+                   float quantization = 0.01f,
+                   float min_bw = 0.0f,
+                   float max_bw = 50000.0f);
 
-    /*!
-     * \brief Return a signal detector block instance.
-     *
-     * \param samp_rate Sample rate of the input signal
-     * \param fft_len Desired number of FFT points for the PSD. Also sets the input items
-     * consumed in evry work cycle. \param window_type Firdes window type to scale the
-     * input samples with \param threshold Threshold in dB for energy detection when
-     * automatic signal detection is disabled \param sensitivity Sensitivity value between
-     * 0 and 1 if automatic signal detection is enabled \param auto_threshold Bool to set
-     * automatic threshold calculation \param average Averaging factor in (0,1] (equal to
-     * alpha in IIR equation) \param quantization Bandwidth quantization yields
-     * quantization*samp_rate [Hz] \param min_bw Minimum signal bandwidth. Don't pass any
-     * narrower signals. \param filename Path to a file where the detections are logged.
-     * Leave empty for no log.
-     */
-    static sptr make(double samp_rate,
-                     int fft_len = 1024,
-                     int window_type = 0,
-                     float threshold = 0.7,
-                     float sensitivity = 0.2,
-                     bool auto_threshold = true,
-                     float average = 0.8,
-                     float quantization = 0.01,
-                     float min_bw = 0.0,
-                     float max_bw = 50000,
-                     const char* filename = "");
+  virtual ~signal_detector_cvf() = default;
 
-    virtual void set_samp_rate(double d_samp_rate) = 0;
-    virtual void set_fft_len(int fft_len) = 0;
+  // Pull a spectrum snapshot from the channelizer and run detection.
+  // Internally throttled to ~100 ms between snapshots so it's cheap to
+  // call from a hot loop.
+  virtual void update() = 0;
 
-    /*!
-     *  Takes integers and does internal cast to firdes::win_type
-     */
-    virtual void set_window_type(int d_window) = 0;
-    virtual std::vector<Detected_Signal> get_detected_signals() = 0; 
+  // Latest detection results. Returns a copy (thread-safe).
+  virtual std::vector<Detected_Signal> get_detected_signals() = 0;
 
-    virtual void set_threshold(float d_threshold) = 0;
-    virtual void set_sensitivity(float d_sensitivity) = 0;
-    virtual void set_auto_threshold(bool d_auto_threshold) = 0;
-    virtual void set_average(float d_average) = 0;
+  // Knobs (same semantics as old code).
+  virtual void set_threshold(float threshold) = 0;
+  virtual void set_sensitivity(float sensitivity) = 0;
+  virtual void set_auto_threshold(bool auto_threshold) = 0;
+  virtual void set_average(float average) = 0;
 };
-
-//} // namespace inspector
-//} // namespace gr
 
 #endif /* INCLUDED_INSPECTOR_SIGNAL_DETECTOR_CVF_H */

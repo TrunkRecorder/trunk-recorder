@@ -2,6 +2,7 @@
 
 #include <gnuradio/io_signature.h>
 #include <gnuradio/filter/firdes.h>
+#include <volk/volk.h>
 
 #include <boost/log/trivial.hpp>
 
@@ -80,24 +81,44 @@ shared_channelizer_impl::shared_channelizer_impl(double input_rate,
   d_channel_rotator_phase_inc.reset(new std::atomic<double>[d_max_channels]);
   d_channel_rotator.assign(d_max_channels, gr_complex(1.0f, 0.0f));
   d_channel_rotator_renorm.assign(d_max_channels, 0);
+  d_channel_filter.resize(d_max_channels);
+  d_channel_filter_mutex.reset(new std::mutex[d_max_channels]);
   for (unsigned int i = 0; i < d_max_channels; i++) {
     d_channel_bin_offset[i].store(0, std::memory_order_relaxed);
     d_channel_enabled[i].store(false, std::memory_order_relaxed);
     d_channel_rotator_phase_inc[i].store(0.0, std::memory_order_relaxed);
+    d_channel_filter[i].resize(d_fft_size, gr_complex(0.0f, 0.0f));
   }
 
   design_prototype_filter();
 
+  // Initialize per-port filters to the unshifted prototype. They'll be
+  // overwritten on the first set_channel_offset call for each active port.
+  for (unsigned int i = 0; i < d_max_channels; i++) {
+    std::copy(d_prototype_freq.begin(), d_prototype_freq.end(),
+              d_channel_filter[i].begin());
+  }
+
+  // Multi-threaded FFT. Defaults to 2 threads — most modern systems benefit.
+  // Override with TR_CHANNELIZER_FFT_THREADS=N (e.g. 1 on a Raspberry Pi,
+  // 4 on a desktop with idle cores).
+  int fft_threads = 2;
+  if (const char *env = std::getenv("TR_CHANNELIZER_FFT_THREADS")) {
+    fft_threads = std::max(1, std::atoi(env));
+  }
+  BOOST_LOG_TRIVIAL(info) << "shared_channelizer: FFT threads=" << fft_threads;
 #if GNURADIO_VERSION >= 0x030900
-  d_fwd_fft.reset(new gr::fft::fft_complex_fwd(d_fft_size, 1));
-  d_inv_fft.reset(new gr::fft::fft_complex_rev(d_fft_size, 1));
+  d_fwd_fft.reset(new gr::fft::fft_complex_fwd(d_fft_size, fft_threads));
+  d_inv_fft.reset(new gr::fft::fft_complex_rev(d_fft_size, fft_threads));
 #else
-  d_fwd_fft.reset(new gr::fft::fft_complex(d_fft_size, true, 1));
-  d_inv_fft.reset(new gr::fft::fft_complex(d_fft_size, false, 1));
+  d_fwd_fft.reset(new gr::fft::fft_complex(d_fft_size, true, fft_threads));
+  d_inv_fft.reset(new gr::fft::fft_complex(d_fft_size, false, fft_threads));
 #endif
 
   set_output_multiple(d_step_out);
   set_history(d_overlap_in + 1);
+
+  d_spectrum_snapshot.assign(d_fft_size, 0.0f);
 
   if (const char *env = std::getenv("TR_CHANNELIZER_DIAG")) {
     d_diagnostic_interval = static_cast<uint64_t>(std::atoi(env));
@@ -172,11 +193,6 @@ void shared_channelizer_impl::set_channel_offset(unsigned int port, double offse
                              << " >= max_channels " << d_max_channels;
     return;
   }
-  // The per-port filter in the freq domain is the prototype filter
-  // circularly shifted by the carrier bin. We use that bin index to compute
-  // the shift in work(). The continuous part of the offset (sub-bin) is
-  // applied by the output-rate rotator (= what the old freq_xlating did
-  // after its fft_filter_ccc).
   double bin_spacing = d_input_rate / static_cast<double>(d_fft_size);
   int signed_bin = static_cast<int>(std::lround(offset_hz / bin_spacing));
   int bin = ((signed_bin % d_fft_size) + d_fft_size) % d_fft_size;
@@ -185,6 +201,19 @@ void shared_channelizer_impl::set_channel_offset(unsigned int port, double offse
   // (matches the rotator in gr_blocks/freq_xlating_fft_filter).
   double phase_inc = -2.0 * M_PI * offset_hz / d_output_rate;
   d_channel_rotator_phase_inc[port].store(phase_inc, std::memory_order_relaxed);
+
+  // Pre-compute the per-port filter as the prototype circularly shifted to
+  // the carrier bin. Doing this here once per tune-event (rare) lets work()
+  // use a single VOLK multiply per port per block — no modulo in the inner
+  // loop, fully SIMD-vectorizable.
+  {
+    std::lock_guard<std::mutex> lock(d_channel_filter_mutex[port]);
+    for (int k = 0; k < d_fft_size; k++) {
+      int proto_idx = ((k - bin) % d_fft_size + d_fft_size) % d_fft_size;
+      d_channel_filter[port][k] = d_prototype_freq[proto_idx];
+    }
+  }
+
   BOOST_LOG_TRIVIAL(debug) << "shared_channelizer: port=" << port
                            << " offset_hz=" << offset_hz
                            << " bin_spacing=" << bin_spacing
@@ -205,6 +234,11 @@ void shared_channelizer_impl::set_channel_enabled(unsigned int port, bool enable
 bool shared_channelizer_impl::is_channel_enabled(unsigned int port) const {
   if (port >= d_max_channels) return false;
   return d_channel_enabled[port].load(std::memory_order_relaxed);
+}
+
+void shared_channelizer_impl::get_spectrum_snapshot(std::vector<float> &out) {
+  std::lock_guard<std::mutex> lock(d_spectrum_mutex);
+  out = d_spectrum_snapshot;
 }
 
 void shared_channelizer_impl::forecast(int noutput_items, gr_vector_int &ninput_items_required) {
@@ -242,6 +276,14 @@ int shared_channelizer_impl::general_work(int noutput_items,
     std::memcpy(fwd_in, in + b * d_step_in, N * sizeof(gr_complex));
     d_fwd_fft->execute();
 
+    // Update the spectrum snapshot (|X[k]|²) once per FFT block. This is
+    // what signal_detector consumes to do energy detection without running
+    // its own wideband FFT.
+    {
+      std::lock_guard<std::mutex> lock(d_spectrum_mutex);
+      volk_32fc_magnitude_squared_32f(d_spectrum_snapshot.data(), fwd_out, N);
+    }
+
     for (unsigned int port = 0; port < d_num_outputs; port++) {
       if (!d_channel_enabled[port].load(std::memory_order_relaxed)) {
         continue;
@@ -249,12 +291,13 @@ int shared_channelizer_impl::general_work(int noutput_items,
 
       int carrier_bin = d_channel_bin_offset[port].load(std::memory_order_relaxed);
 
-      // Per-port filter response = prototype shifted by carrier_bin. That is,
-      // H_port[k] = H_proto[(k - carrier_bin) mod N]. Multiply with input
-      // spectrum and place in IFFT input.
-      for (int k = 0; k < N; k++) {
-        int proto_idx = ((k - carrier_bin) % N + N) % N;
-        inv_in[k] = fwd_out[k] * d_prototype_freq[proto_idx];
+      // Multiply shared FFT output by per-port pre-shifted filter response.
+      // Lock briefly so a concurrent retune doesn't write the filter mid-read.
+      // Both lock acquisition and the VOLK call are tiny compared to the IFFT.
+      {
+        std::lock_guard<std::mutex> lock(d_channel_filter_mutex[port]);
+        volk_32fc_x2_multiply_32fc(inv_in, fwd_out,
+                                   d_channel_filter[port].data(), N);
       }
       d_inv_fft->execute();
 

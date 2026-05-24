@@ -5,9 +5,11 @@
 
 #include <gnuradio/fft/fft.h>
 #include <gnuradio/gr_complex.h>
+#include <volk/volk_alloc.hh>
 
 #include <atomic>
 #include <memory>
+#include <mutex>
 #include <vector>
 
 namespace gr {
@@ -37,6 +39,7 @@ public:
   bool is_channel_enabled(unsigned int port) const override;
   void set_diagnostic_interval(uint64_t interval) override { d_diagnostic_interval = interval; }
   void set_phase_rotation_mode(int /*mode*/) override {}  // no-op (was a debug knob in the bin-select version)
+  void get_spectrum_snapshot(std::vector<float> &out) override;
 
   void forecast(int noutput_items, gr_vector_int &ninput_items_required) override;
   bool check_topology(int ninputs, int noutputs) override;
@@ -84,9 +87,23 @@ private:
   std::vector<gr_complex> d_channel_rotator;
   std::vector<int> d_channel_rotator_renorm;
 
+  // Per-port pre-shifted filter coefficients (length N each). Updated when
+  // set_channel_offset is called; multiplied with the shared FFT output via
+  // a single VOLK call in work(). VOLK-aligned for SIMD.
+  // Mutex protects the filter vector against concurrent read/write between
+  // a tune call (rare) and the work() loop. Contention is negligible.
+  std::vector<volk::vector<gr_complex>> d_channel_filter;
+  std::unique_ptr<std::mutex[]> d_channel_filter_mutex;
+
   // Diagnostic counters.
   uint64_t d_diagnostic_interval;
   uint64_t d_diagnostic_block_count;
+
+  // Power-spectrum snapshot, updated at the end of every FFT block in
+  // work(). Consumed by external readers (e.g. signal_detector). Mutex
+  // protects against torn reads. Magnitudes are |X[k]|², no scaling.
+  std::vector<float> d_spectrum_snapshot;
+  std::mutex d_spectrum_mutex;
 
   void design_prototype_filter();
 };

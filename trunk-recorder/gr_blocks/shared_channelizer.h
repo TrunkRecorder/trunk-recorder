@@ -77,6 +77,14 @@ public:
   // 1 = -2π·k·t/N (current derivation; this is what theory says)
   // 2 = +2π·k·t/N (sign-flipped)
   virtual void set_phase_rotation_mode(int mode) = 0;
+
+  // Snapshot of the most recent forward-FFT *power* spectrum (|X[k]|²),
+  // resized to the caller's vector with length get_fft_size(). Returned in
+  // raw FFTW bin order: bin 0 = DC, bins [1..N/2-1] are positive freqs,
+  // bins [N/2..N-1] are negative freqs. Used by signal_detector to avoid
+  // duplicating the wideband FFT it would otherwise need to compute.
+  // Thread-safe; copies under a lock.
+  virtual void get_spectrum_snapshot(std::vector<float> &out) = 0;
 };
 
 } // namespace blocks
