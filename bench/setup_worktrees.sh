@@ -22,15 +22,17 @@ BASELINE_WT_DEFAULT="$PARENT_DIR/tr-baseline"
 TUNED_WT_DEFAULT="$PARENT_DIR/tr-fft-tuning"
 
 # Return the worktree path that currently has the given branch checked out,
-# or empty if no worktree has it.
+# or empty if no worktree has it. Uses substr() so paths with spaces survive.
 existing_worktree_for_branch() {
   local branch="$1"
   git worktree list --porcelain | awk -v b="refs/heads/$branch" '
-    $1 == "worktree" { wt = $2; next }
-    $1 == "branch"   && $2 == b { print wt; exit }
+    /^worktree / { wt = substr($0, 10); next }
+    $1 == "branch" && $2 == b { print wt; exit }
   '
 }
 
+# Every status message inside this function MUST go to stderr — stdout is
+# captured by the caller via $(...) to get the resolved path.
 resolve_worktree() {
   local branch="$1"
   local default_path="$2"
@@ -38,17 +40,15 @@ resolve_worktree() {
   local existing
   existing="$(existing_worktree_for_branch "$branch")"
   if [ -n "$existing" ]; then
-    echo "  $label: reusing existing checkout at $existing"
+    echo "  $label: reusing existing checkout at $existing" >&2
     printf '%s\n' "$existing"
     return
   fi
   if [ -d "$default_path" ]; then
-    # Directory exists but git doesn't know about it as a worktree — bail
-    # rather than risk clobbering whatever's there.
-    echo "  $label: $default_path exists but isn't a registered worktree; remove it or set ${label^^}_WT to a clean path" >&2
+    echo "  $label: $default_path exists but isn't a registered worktree; remove it or set the path manually" >&2
     exit 1
   fi
-  echo "  $label: creating worktree at $default_path on $branch"
+  echo "  $label: creating worktree at $default_path on $branch" >&2
   git worktree add "$default_path" "$branch" >&2
   printf '%s\n' "$default_path"
 }
