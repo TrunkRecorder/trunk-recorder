@@ -12,7 +12,12 @@
       "Read(//Users/luke/Downloads/**)",
       "Read(//Users/luke/**)",
       "Bash(ls -la /Users/luke/Projects/TrunkRecorder/trunk-recorder/*.cf32 /tmp/*.cf32 2>/dev/null)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(chmod +x /Users/luke/Projects/TrunkRecorder/trunk-recorder/bench/setup_worktrees.sh /Users/luke/Projects/TrunkRecorder/trunk-recorder/bench/run_overnight.sh /Users/luke/Projects/TrunkRecorder/trunk-recorder/bench/analyze.py)",
+      "Bash(cmake ../)",
+      "Bash(make bench_logger)",
+      "Bash(nm /Users/luke/Projects/TrunkRecorder/trunk-recorder/build/libbench_logger.so)",
+      "Bash(nm -gU /Users/luke/Projects/TrunkRecorder/trunk-recorder/build/libbench_logger.so)"
     ]
   }
 }
