@@ -17,6 +17,7 @@ import plistlib
 import re
 import sys
 from collections import defaultdict
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -49,11 +50,15 @@ def parse_powermetrics(plist_path: Path):
 
         ts = doc.get("timestamp")
         epoch_ms = None
-        if isinstance(ts, (int, float)):
-            epoch_ms = int(ts * 1000)
-        elif "hw_model" in doc and "elapsed_ns" in doc:
-            # Fallback: use 'timestamp' field, ms since epoch as int.
-            epoch_ms = int(doc.get("timestamp", 0))
+        if isinstance(ts, datetime):
+            # plistlib decodes <date> as naive datetime in UTC (per the Apple
+            # spec). The bench CSV uses std::chrono::system_clock which is
+            # also UTC, so we can compare directly.
+            dt_utc = ts.replace(tzinfo=timezone.utc) if ts.tzinfo is None else ts
+            epoch_ms = int(dt_utc.timestamp() * 1000)
+        elif isinstance(ts, (int, float)):
+            # Seconds (~1.7e9 in 2026) vs ms (~1.7e12): heuristically detect.
+            epoch_ms = int(ts * 1000) if ts < 1e12 else int(ts)
 
         processor = doc.get("processor", {})
         # On Apple Silicon, prefer combined_power; fall back to package_joules
