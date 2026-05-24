@@ -110,11 +110,13 @@ run_window() {
   echo
   echo "[$(date '+%H:%M:%S')] window $pad / $TOTAL_WINDOWS  branch=$branch"
 
-  # Launch trunk-recorder pinned to P-cores via QoS (user-interactive on
-  # Apple Silicon biases scheduling to P-cores).
+  # Launch trunk-recorder. A process launched from Terminal already inherits
+  # user-interactive QoS, so its CPU-busy threads get P-core preference from
+  # the macOS scheduler. taskpolicy -c can only *lower* QoS, not raise it,
+  # so wrapping wouldn't help here.
   (
     cd "$build_dir"
-    taskpolicy -c user-interactive ./trunk-recorder -c "$config_path" \
+    ./trunk-recorder -c "$config_path" \
       >"$stdout_log" 2>&1 &
     echo $! > "$window_dir/tr.pid"
   )

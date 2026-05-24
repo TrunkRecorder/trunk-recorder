@@ -25,9 +25,10 @@ Reporting them separately is more informative than a single ratio: a single
 
 - **Deterministic-ish workload**: live RF, but interleaved 15-min windows
   (A/B/A/B…) so adjacent windows see similar traffic.
-- **P-core pinning** via `taskpolicy -c user-interactive` (Apple Silicon
-  schedules user-interactive QoS on P-cores), so we don't conflate
-  heterogeneous cores.
+- **P-core bias** via inherited Terminal QoS. Terminal-launched processes
+  get user-interactive QoS by default, which biases the scheduler toward
+  P-cores for CPU-busy threads. (`taskpolicy -c` on macOS can only *lower*
+  QoS, not raise it, so it can't be used to force P-cores.)
 - **Frequency-immune metric**: package power in watts, not CPU%.
 - **Many windows**: ~32 windows over 8 hours = 16 per branch, plenty for
   bootstrap CIs.
@@ -97,11 +98,12 @@ per-branch fits with bootstrap CIs.
 - **Per-PID power**: powermetrics' per-task energy_impact is a unitless score
   on Apple Silicon, not real joules. We use global package power instead and
   rely on the rest of the machine being quiet for the comparison to hold.
-- **Pinning is soft**: `taskpolicy -c user-interactive` biases the scheduler,
-  it doesn't force P-core-only execution. Threads with lower QoS classes set
-  internally (e.g., by GNU Radio) may still land on E-cores. Both branches
-  are subject to the same softness so it's fair, just noisier than a hard
-  pin would be.
+- **Pinning is soft**: macOS doesn't expose hard core affinity. The scheduler
+  uses thread QoS (inherited from Terminal as user-interactive) to bias
+  CPU-busy threads to P-cores, but threads with internally-set lower QoS
+  (e.g., some GNU Radio worker pools) may still land on E-cores. Both
+  branches are subject to the same softness so it's fair, just noisier than
+  a hard pin would be.
 
 ## Cleanup
 
