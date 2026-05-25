@@ -99,6 +99,19 @@ void rx_sync::sync_reset(void) {
 void rx_sync::call_end(void) {
 	p25fdma.call_end();
 	p25tdma.call_end();
+	// Reset the per-slot software IMBE decoders so YSF / DMR fullrate calls
+	// don't inherit a stuck ER, stale voicing history, or any other cross-
+	// frame state from the previous call - same class of bug as the P25
+	// p25p1_fdma path; would otherwise produce silent recordings when the
+	// previous call ended with errors.
+	d_software_decoder[0].clear();
+	d_software_decoder[1].clear();
+	// And reset the YSF-fullrate gating state on the rx_sync side.
+	d_ysf_imbe_er[0] = 0.0f;
+	d_ysf_imbe_er[1] = 0.0f;
+	d_ysf_rpt_ctr[0] = 0;
+	d_ysf_rpt_ctr[1] = 0;
+	memset(d_ysf_last_vec, 0, sizeof(d_ysf_last_vec));
 }
 
 void rx_sync::crypt_reset(void) {

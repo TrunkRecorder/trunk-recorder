@@ -137,7 +137,13 @@ static const int MAX_IN = 1;	// maximum number of input streams
       clear = p1fdma.get_curr_grp_id();
       clear = p2tdma.get_ptt_src_id();
       clear = p2tdma.get_ptt_grp_id();
-      // p1fdma.clear(); //All this does is Clear the Vocoder - I am nervous about doing this because there are some memsets...
+      // Reset the vocoder state too. Without this, the smoothed ER, repeat
+      // counter, voicing history, spectral state, and Old/New ping-pong index
+      // all carry across calls. If the previous call ended with ER above the
+      // mute threshold, the next call starts already in mute and produces a
+      // fully-silent recording. (Memsets in the vocoder's clear are scoped
+      // to its own state; safe to call between calls.)
+      p1fdma.clear();
     }
 
     void p25_frame_assembler_impl::set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {

@@ -1264,9 +1264,31 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		enhance_spectral_amplitudes(SE);
 	}
 	if (!muted) {
-		adaptive_smoothing(SE, ET);
-		smooth_voicing_decisions();
-		apply_formant_postfilter();
+		if (repeated) {
+			// Frame-repeat: decode_vuv / decode_spectral_amplitudes did NOT
+			// run this frame, so vee/M/Mu/phi[New] still hold whatever was
+			// last written into the [New] slot - which because of the
+			// unconditional Old/New ping-pong is actually data from TWO
+			// frames ago, not the previous frame. Synth would then
+			// interpolate two-frames-old -> previous, going backwards in
+			// time. Copy [Old] -> [New] so synth re-renders the last good
+			// frame; adaptive_smoothing / smooth_voicing / postfilter are
+			// also skipped because their effects are already baked into the
+			// [Old] values (re-applying would compound).
+			for (int l = 0; l < 57; l++) {
+				vee[l][New] = vee[l][Old];
+				M[l][New]   = M[l][Old];
+				Mu[l][New]  = Mu[l][Old];
+				phi[l][New] = phi[l][Old];
+			}
+			for (int l = 0; l < 58; l++) log2Mu[l][New] = log2Mu[l][Old];
+			L = OldL;
+			w0 = Oldw0;
+		} else {
+			adaptive_smoothing(SE, ET);
+			smooth_voicing_decisions();
+			apply_formant_postfilter();
+		}
 
 		// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
@@ -1296,30 +1318,36 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	{
 		bool prev_any_v = false, cur_any_v = false;
 		int  flips = 0;
-		int maxL = (L > OldL) ? L : OldL;
-		for (int l = 1; l <= maxL; l++) {
-			int cur  = (l <= L)    ? vee[l][New] : 0;
-			int prev = (l <= OldL) ? vee[l][Old] : 0;
-			if (cur)  cur_any_v  = true;
-			if (prev) prev_any_v = true;
-			if (cur != prev) flips++;
-		}
 		float sfm = 0.0f;
-		if (!muted && L > 0) {
-			double arith = 0.0, log_geom = 0.0;
-			int nz = 0;
-			for (int l = 1; l <= L; l++) {
-				float m = M[l][New];
-				if (m > 1e-6f) {
-					arith += m;
-					log_geom += std::log((double)m);
-					nz++;
-				}
+		// Only meaningful when this frame actually decoded/synthesized.
+		// On muted frames, vee[New] is stale (from two frames ago, see
+		// fix-#2 note above), so comparing it to vee[Old] would emit
+		// spurious flips and pitch-jumps.
+		if (!muted) {
+			int maxL = (L > OldL) ? L : OldL;
+			for (int l = 1; l <= maxL; l++) {
+				int cur  = (l <= L)    ? vee[l][New] : 0;
+				int prev = (l <= OldL) ? vee[l][Old] : 0;
+				if (cur)  cur_any_v  = true;
+				if (prev) prev_any_v = true;
+				if (cur != prev) flips++;
 			}
-			if (nz > 0 && arith > 0.0) {
-				double am = arith / (double)nz;
-				double gm = std::exp(log_geom / (double)nz);
-				sfm = (float)(gm / am);
+			if (L > 0) {
+				double arith = 0.0, log_geom = 0.0;
+				int nz = 0;
+				for (int l = 1; l <= L; l++) {
+					float m = M[l][New];
+					if (m > 1e-6f) {
+						arith += m;
+						log_geom += std::log((double)m);
+						nz++;
+					}
+				}
+				if (nz > 0 && arith > 0.0) {
+					double am = arith / (double)nz;
+					double gm = std::exp(log_geom / (double)nz);
+					sfm = (float)(gm / am);
+				}
 			}
 		}
 		g_vocoder_telem.push_frame(muted, repeated, ER, L, (int)Luv,
@@ -1327,9 +1355,15 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		                           flips, sfm, samples, 160);
 	}
 
-	OldL = L;
-	Oldw0 = w0;
-	tmp_f = Old; Old = New; New = tmp_f;
+	// Only advance Old/New on a frame we actually decoded/synthesized.
+	// On a mute frame the Old/New labels stay put so the next non-mute
+	// frame's [Old] still points at the last actually-synthesized data,
+	// not two-frames-ago via parity of the ping-pong.
+	if (!muted) {
+		OldL = L;
+		Oldw0 = w0;
+		tmp_f = Old; Old = New; New = tmp_f;
+	}
 }
 
 void
