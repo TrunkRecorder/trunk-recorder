@@ -395,9 +395,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Audio Archive: " << system->get_audio_archive();
         system->set_transmission_archive(element.value("transmissionArchive", false));
         BOOST_LOG_TRIVIAL(info) << "Transmission Archive: " << system->get_transmission_archive();
-                bool audio_postprocess_enabled = false;
-        int audio_highpass_hz = 0;
-        int audio_lowpass_hz = 0;
+                bool audio_postprocess_enabled = true;
+        int audio_highpass_hz = 300;
+        int audio_lowpass_hz = 3000;
         int audio_bandreject_hz = 0;
         int audio_bandreject_width_hz = 0;
         bool audio_loudnorm = true;
@@ -411,9 +411,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         if (element.contains("audio_postprocess") && element["audio_postprocess"].is_object()) {
           const json &audio_post = element["audio_postprocess"];
 
-          audio_postprocess_enabled = audio_post.value("enabled", false);
-          audio_highpass_hz = audio_post.value("highpass_hz", 0);
-          audio_lowpass_hz = audio_post.value("lowpass_hz", 0);
+          audio_postprocess_enabled = audio_post.value("enabled", true);
+          audio_highpass_hz = audio_post.value("highpass_hz", 300);
+          audio_lowpass_hz = audio_post.value("lowpass_hz", 3000);
           audio_bandreject_hz = audio_post.value("bandreject_hz", 0);
           audio_bandreject_width_hz = audio_post.value("bandreject_width_hz", 0);
 
@@ -425,6 +425,21 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
           audio_ffmpeg_filter = audio_post.value("ffmpeg_filter", "");
           audio_output_raw_audio = audio_post.value("outputRawAudio", false);
+
+          // Migration warning: `enabled` used to gate only the cleanup chain;
+          // loudnorm and the (new) final limiter had independent flags. It is
+          // now the master switch — false skips the entire post-processing
+          // pipeline. Warn loudly if the user explicitly set it false so they
+          // don't get silently wider-band, un-normalized audio they didn't
+          // expect.
+          if (audio_post.contains("enabled") && audio_post["enabled"].is_boolean()
+              && audio_post["enabled"].get<bool>() == false) {
+            BOOST_LOG_TRIVIAL(warning)
+                << "\033[0;33maudio_postprocess.enabled=false is now a master switch — "
+                << "cleanup, loudnorm, and final_limiter are ALL skipped. The recorded "
+                << "audio will be the raw concatenation of transmissions. Previously this "
+                << "flag only disabled cleanup. See CONFIGURE.md for the new semantics.\033[0m";
+          }
         }
 
         if (audio_highpass_hz < 0) {

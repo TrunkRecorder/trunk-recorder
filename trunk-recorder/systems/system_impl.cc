@@ -207,9 +207,9 @@ System_impl::System_impl(int sys_num) {
   message_count = 0;
   decode_rate = 0;
   msg_queue = gr::msg_queue::make(100);
-  audio_postprocess_enabled = false;
-  audio_highpass_hz = 0;
-  audio_lowpass_hz = 0;
+  audio_postprocess_enabled = true;
+  audio_highpass_hz = 300;
+  audio_lowpass_hz = 3000;
   audio_bandreject_hz = 0;
   audio_bandreject_width_hz = 0;
   audio_loudnorm = false;

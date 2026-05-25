@@ -300,6 +300,7 @@ static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cf
 }
 
 static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg) {
+  if (!cfg.enabled)  return false;
   if (!cfg.loudnorm) return false;
 
   if (override_filter_contains_loudnorm(cfg)) {
@@ -408,32 +409,112 @@ static void append_common_metadata_args(std::vector<std::string> &args,
   });
 }
 
-// Build the filter_complex graph for per-transmission processing:
-//   [0:a] <per_tx_filter> [a0];
-//   [1:a] <per_tx_filter> [a1];
-//   ...
-//   [a0][a1]...[aN-1] concat=n=N:v=0:a=1 <post_concat_filter> [<tail_label>]
+// Build the filter_complex graph for per-transmission processing.
+//   per_tx_filter — cleanup + loudnorm + limiter applied to each input
+//   emit_archive_pads — when true, asplit each per-tx pad so both the
+//     concat path and an [archiveN] pad can consume it (caller maps
+//     [archiveN] to an archive output file)
+//   concat_tail — appended after the concat filter; either a single label
+//     like "[out]" (uncompressed) or a filter chain like
+//     ",asplit=2[awav][aaac]" (compressed dual-output)
 //
-// per_tx_filter is the cleanup + loudnorm chain applied to each input.
-// post_concat_filter is the limiter (or empty). tail_label is what the caller
-// wants the final labeled pad to be named (e.g. "out" or for asplit downstream).
+// Example (3 inputs, archive on, uncompressed):
+//   [0:a]<chain>,asplit=2[a0][archive0];
+//   [1:a]<chain>,asplit=2[a1][archive1];
+//   [2:a]<chain>,asplit=2[a2][archive2];
+//   [a0][a1][a2]concat=n=3:v=0:a=1[out]
 static std::string build_filter_complex(std::size_t n_inputs,
                                         const std::string &per_tx_filter,
-                                        const std::string &post_concat_filter,
-                                        const std::string &tail_label) {
+                                        bool emit_archive_pads,
+                                        const std::string &concat_tail) {
   std::ostringstream g;
   // anull keeps each per-input chain non-empty when per_tx_filter is empty;
   // ffmpeg filter_complex requires at least one filter between an input pad
   // and a labeled output pad.
   const std::string per_chain = per_tx_filter.empty() ? "anull" : per_tx_filter;
-  for (std::size_t i = 0; i < n_inputs; ++i)
-    g << '[' << i << ":a]" << per_chain << "[a" << i << "];";
-
-  for (std::size_t i = 0; i < n_inputs; ++i) g << "[a" << i << "]";
-  g << "concat=n=" << n_inputs << ":v=0:a=1";
-  if (!post_concat_filter.empty()) g << ',' << post_concat_filter;
-  g << '[' << tail_label << ']';
+  for (std::size_t i = 0; i < n_inputs; ++i) {
+    g << '[' << i << ":a]" << per_chain;
+    if (emit_archive_pads)
+      g << ",asplit=2[a" << i << "][archive" << i << ']';
+    else
+      g << "[a" << i << ']';
+    g << ';';
+  }
+  for (std::size_t i = 0; i < n_inputs; ++i) g << "[a" << i << ']';
+  g << "concat=n=" << n_inputs << ":v=0:a=1" << concat_tail;
   return g.str();
+}
+
+// Compute per-transmission archive target paths: each raw tx file's basename
+// dropped into the call's capture directory. Used when transmissionArchive=true.
+static std::vector<std::string> archive_target_paths(const Call_Data_t &call_info,
+                                                     const std::vector<std::string> &input_files) {
+  std::vector<std::string> out;
+  out.reserve(input_files.size());
+  const fs::path call_dir = fs::path(call_info.filename).parent_path();
+  for (const auto &src : input_files)
+    out.push_back((call_dir / fs::path(src).filename()).string());
+  return out;
+}
+
+// enabled=false path: stream-copy concat of raw transmission wavs into the
+// main output. For compressed mode we still need an AAC encode pass since
+// PCM can't be stream-copied into m4a. transmissionArchive simply duplicates
+// the raw tx files into the capture dir.
+static int render_raw_concat(const Call_Data_t &call_info,
+                             const std::vector<std::string> &input_files,
+                             const std::vector<std::string> &archive_paths,
+                             bool do_compress,
+                             const std::string &date,
+                             const std::string &short_name,
+                             const std::string &talkgroup,
+                             const std::string &loghdr) {
+  const fs::path transmission_dir = fs::path(input_files[0]).parent_path();
+  const std::string list_filename = (transmission_dir /
+      (fs::path(call_info.filename).filename().string() + ".concat.txt")).string();
+  if (!write_concat_list(input_files, list_filename)) return -1;
+
+  std::vector<std::string> args;
+  args.reserve(30);
+  args.insert(args.end(), {
+      "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+      "-f", "concat", "-safe", "0", "-i", list_filename, "-vn"
+  });
+
+  // Main wav: stream-copy the raw transmissions joined together.
+  append_common_metadata_args(args, date, short_name, talkgroup);
+  args.insert(args.end(), {"-c:a", "copy"});
+  args.push_back(call_info.filename);
+
+  // Compressed mode: a second output spec encodes the same input as AAC.
+  if (do_compress) {
+    append_common_metadata_args(args, date, short_name, talkgroup);
+    append_ffmpeg_output_args(args, true, call_info.audio_bitrate);
+    args.push_back(call_info.converted);
+  }
+
+  const int rc = run_process_wait(args, loghdr, "ffmpeg raw concat");
+  std::remove(list_filename.c_str());
+
+  if (rc != 0) {
+    BOOST_LOG_TRIVIAL(error) << loghdr
+        << "\033[0;31mFailed to write raw-concat call audio. Make sure ffmpeg is installed.\033[0m";
+    return -1;
+  }
+
+  // Archive raw transmissions by simple copy — they're already in the format
+  // the user wants when post-processing is disabled.
+  for (std::size_t i = 0; i < archive_paths.size(); ++i) {
+    if (!checkIfFile(input_files[i])) continue;
+    try {
+      boost::filesystem::copy_file(input_files[i], archive_paths[i],
+                                   boost::filesystem::copy_options::overwrite_existing);
+    } catch (const boost::filesystem::filesystem_error &e) {
+      BOOST_LOG_TRIVIAL(error) << loghdr
+          << "\033[0;31mFailed to archive raw transmission: " << e.what() << "\033[0m";
+    }
+  }
+  return 0;
 }
 
 static int render_call_audio_artifacts(const Call_Data_t &call_info,
@@ -449,31 +530,53 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
   const std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
-  const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
   const bool do_compress           = call_info.compress_wav;
+
+  // Only bother writing per-tx archives if they'll actually be kept after
+  // upload. transmission_archive on its own is meaningless if neither
+  // audio_archive nor archive_files_on_failure is set — remove_call_files
+  // would just delete them. Match that policy at render time so we avoid
+  // wasted disk writes.
+  const bool archive_transmissions = call_info.transmission_archive &&
+      (call_info.audio_archive || call_info.archive_files_on_failure);
+
+  std::vector<std::string> archive_paths;
+  if (archive_transmissions)
+    archive_paths = archive_target_paths(call_info, input_files);
+
+  // enabled=false → master switch off, skip the whole processing pipeline.
+  // Main file is the raw concat of transmissions; archived tx files are
+  // verbatim copies of the recorder's output.
+  if (!call_info.audio_postprocess.enabled)
+    return render_raw_concat(call_info, input_files, archive_paths,
+                             do_compress, date, short_name, talkgroup, loghdr);
+
+  // enabled=true path: full per-transmission filter chain.
+  const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
   const bool apply_loudnorm        = should_apply_structured_loudnorm(call_info.audio_postprocess);
   const bool apply_limiter         = call_info.audio_postprocess.final_limiter;
 
-  // Per-transmission filter chain: cleanup (or user override) then loudnorm.
-  // Applied independently to each input so each transmission lands at the same
-  // target loudness regardless of capture level.
-  auto build_per_tx = [&](bool include_loudnorm) -> std::string {
+  // Each per-tx chain: cleanup → loudnorm → limiter. Asplit (when archiving)
+  // happens after the limiter so the archived per-tx files are fully processed
+  // and ready to play standalone.
+  auto build_per_tx = [&](bool include_loudnorm, bool include_limiter) -> std::string {
     std::string chain = cleanup_filter;
-    if (include_loudnorm) {
+    auto append = [&](const std::string &filt) {
       if (!chain.empty()) chain += ',';
-      chain += build_loudnorm_filter(call_info.audio_postprocess);
-    }
+      chain += filt;
+    };
+    if (include_loudnorm) append(build_loudnorm_filter(call_info.audio_postprocess));
+    if (include_limiter)  append(build_limiter_filter(call_info.audio_postprocess));
     return chain;
   };
 
-  const std::string post_concat = apply_limiter ? build_limiter_filter(call_info.audio_postprocess) : "";
+  const bool emit_archive_pads = archive_transmissions;
 
-  // Each render attempt builds a fresh argv. Returns ffmpeg exit code.
   auto run_render = [&](const std::string &per_tx) -> int {
     std::vector<std::string> args;
-    // Worst case: 5 fixed flags + 2*N for inputs + filter_complex (2) +
-    // 2 maps + 2*(6 metadata + 10 output args) + 2 output paths ~= 30 + 2*N
-    args.reserve(40 + 2 * input_files.size());
+    // Rough size: 5 fixed flags + 2*N inputs + filter_complex (2) +
+    // 4 maps + 2*(6 metadata + 10 output args) + 2*N archive outputs.
+    args.reserve(40 + 4 * input_files.size());
 
     args.insert(args.end(), {"ffmpeg", "-y", "-hide_banner", "-loglevel", "error"});
     for (const auto &f : input_files) {
@@ -482,12 +585,19 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
     }
     args.push_back("-vn");
 
+    // Concat tail differs by output mode. Uncompressed gets a plain [out]
+    // label. Compressed splits the concat output into wav and aac feeds.
+    const std::string concat_tail = do_compress
+        ? ",asplit=2[awav][aaac]"
+        : "[out]";
+
+    const std::string graph = build_filter_complex(
+        input_files.size(), per_tx, emit_archive_pads, concat_tail);
+    args.insert(args.end(), {"-filter_complex", graph});
+
+    // Main outputs (wav, optional m4a).
     if (do_compress) {
-      const std::string graph = build_filter_complex(
-          input_files.size(), per_tx, post_concat, "post") +
-          ";[post]asplit=2[awav][aaac]";
-      args.insert(args.end(), {"-filter_complex", graph,
-                               "-map", "[awav]"});
+      args.insert(args.end(), {"-map", "[awav]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
       append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
@@ -497,30 +607,40 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
       append_ffmpeg_output_args(args, true, call_info.audio_bitrate);
       args.push_back(call_info.converted);
     } else {
-      const std::string graph = build_filter_complex(
-          input_files.size(), per_tx, post_concat, "out");
-      args.insert(args.end(), {"-filter_complex", graph, "-map", "[out]"});
+      args.insert(args.end(), {"-map", "[out]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
       append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
+    }
+
+    // Per-transmission archive outputs (uncompressed WAV, matching the
+    // recorder's original format). One [archiveN] mapping per input.
+    if (emit_archive_pads) {
+      for (std::size_t i = 0; i < input_files.size(); ++i) {
+        args.insert(args.end(), {"-map", "[archive" + std::to_string(i) + "]"});
+        append_common_metadata_args(args, date, short_name, talkgroup);
+        append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
+        args.push_back(archive_paths[i]);
+      }
     }
 
     return run_process_wait(args, loghdr, "ffmpeg render");
   };
 
   // Primary attempt: full chain (cleanup + loudnorm + limiter).
-  int rc = run_render(build_per_tx(apply_loudnorm));
+  int rc = run_render(build_per_tx(apply_loudnorm, apply_limiter));
 
-  // First fallback: drop loudnorm, keep cleanup + limiter. Catches loudnorm
-  // failures (extremely short input, malformed filter) without losing cleanup.
+  // First fallback: drop loudnorm. Catches loudnorm failures (extremely short
+  // input, malformed filter) without losing cleanup or the limiter.
   if (rc != 0 && apply_loudnorm) {
     BOOST_LOG_TRIVIAL(warning) << loghdr
         << "\033[0;33mLoudnorm render failed; retrying with cleanup-only per-transmission filtering\033[0m";
-    rc = run_render(build_per_tx(false));
+    rc = run_render(build_per_tx(false, apply_limiter));
   }
 
-  // Second fallback: no per-tx filtering at all (still concat + limiter if
-  // enabled). Catches a bad user-provided ffmpeg_filter override.
+  // Second fallback: drop the per-tx filter entirely. Catches a bad user
+  // ffmpeg_filter override. Archived per-tx outputs in this mode are
+  // unprocessed (anull passthrough) — better than no archive at all.
   if (rc != 0 && !cleanup_filter.empty()) {
     BOOST_LOG_TRIVIAL(warning) << loghdr
         << "\033[0;33mCleanup-filter render failed; falling back to unfiltered rendering\033[0m";
@@ -707,30 +827,37 @@ void remove_call_files(const Call_Data_t &call_info, bool plugin_failure) {
 
   const bool should_archive = call_info.audio_archive ||
                                (plugin_failure && call_info.archive_files_on_failure);
+
+  // Per-tx archive files were already written into the capture dir during
+  // render_call_audio_artifacts (when transmission_archive=true AND the
+  // archive was going to be kept). Just clean them up here if the user
+  // doesn't actually want archives this time.
   if (should_archive) {
-    if (call_info.transmission_archive) {
-      for (const auto &t : call_info.transmission_list) {
-        if (!checkIfFile(t.filename)) continue;
-        const boost::filesystem::path target =
-            boost::filesystem::path(fs::path(call_info.filename)
-                                        .replace_filename(fs::path(t.filename).filename()));
-        try {
-          boost::filesystem::copy_file(t.filename, target);
-        } catch (const boost::filesystem::filesystem_error &e) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to copy transmission file: "
-                                   << e.what() << "\033[0m";
-        }
-      }
-    }
+    // Keep call main files + any per-tx archive files. Just clean up the
+    // recorder's tmp tx files now that they've been processed.
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
   } else {
+    // No archive wanted. Delete call main files, per-tx archive files in
+    // the capture dir (if any were written), and the recorder tmp tx files.
     for (const std::string &f : {call_info.filename, call_info.converted})
       if (checkIfFile(f)) std::remove(f.c_str());
+
+    if (call_info.transmission_archive) {
+      const fs::path call_dir = fs::path(call_info.filename).parent_path();
+      for (const auto &t : call_info.transmission_list) {
+        const std::string archived =
+            (call_dir / fs::path(t.filename).filename()).string();
+        if (checkIfFile(archived)) std::remove(archived.c_str());
+      }
+    }
+
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
 
     // Raw audio output is intentionally kept on success (audio_archive=false) — it is
+    // the documented debug-keep file. Cleaned only on plugin failure with no
+    // archive_files_on_failure (handled by the catch-all path above).
   }
 
   const bool keep_json = call_info.call_log || (plugin_failure && call_info.archive_files_on_failure);

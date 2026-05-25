@@ -58,10 +58,16 @@ struct Config {
 };
 
 struct Audio_Postprocess_Config {
-  bool enabled = false;
+  // Master switch. When false, the entire post-processing pipeline is
+  // skipped — cleanup, loudnorm, and final_limiter are all bypassed —
+  // and the call's main file is the raw concat of transmission WAVs.
+  // Defaults to true, which preserves the analog audio character that
+  // used to come from the in-recorder bandpass (highpass_hz / lowpass_hz
+  // below default to 300/3000, matching the old hardcoded GR-chain FIR).
+  bool enabled = true;
 
-  int highpass_hz = 0;
-  int lowpass_hz = 0;
+  int highpass_hz = 300;
+  int lowpass_hz = 3000;
 
   int bandreject_hz = 0;
   int bandreject_width_hz = 0;
