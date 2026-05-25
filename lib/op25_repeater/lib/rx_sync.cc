@@ -461,21 +461,42 @@ void rx_sync::codeword(const uint8_t* cw, const enum codeword_types codeword_typ
 			if (d_soft_vocoder) {
 				d_software_decoder[slot_id].decode(samp_buf, fullrate_cw);
 			} else {
-				// YSF fullrate IMBE on the fixed-point path: float decoder
-				// mutes internally; mirror that here so bit errors don't
-				// produce loud artifacts. Per TIA-102.BABA-A §7.7-7.8.
+				// YSF fullrate IMBE on the fixed-point path. Mirror the float
+				// decoder's TIA-102.BABA-A §7.7-7.8 mute/repeat policy: on
+				// repeat, re-run the vocoder with the last good frame_vector
+				// so synthesis keeps phase continuity instead of emitting a
+				// stuttered PCM copy (or just silencing).
 				d_ysf_imbe_er[slot_id] = (0.95f * d_ysf_imbe_er[slot_id]) + (0.000365f * (float)ET);
 				int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
-				if (d_ysf_imbe_er[slot_id] > 0.0875f ||
-				    b0 > 207 || E0 >= 2 ||
-				    ET >= (uint32_t)(10.0f + 40.0f * d_ysf_imbe_er[slot_id])) {
-					do_silence = true;
+				bool muted = false, repeated = false;
+				if (d_ysf_imbe_er[slot_id] > 0.0875f) {
+					muted = true;
+				} else if (b0 > 207 || E0 >= 2 ||
+				           ET >= (uint32_t)(10.0f + 40.0f * d_ysf_imbe_er[slot_id])) {
+					if (++d_ysf_rpt_ctr[slot_id] >= 4)
+						muted = true;
+					else
+						repeated = true;
 				} else {
-					int16_t frame_vector[8];
+					d_ysf_rpt_ctr[slot_id] = 0;
+				}
+
+				int16_t frame_vector[8];
+				if (repeated) {
+					memcpy(frame_vector, d_ysf_last_vec[slot_id], sizeof(frame_vector));
+				} else {
 					for (int i = 0; i < 8; i++) {
 						frame_vector[i] = u[i];
 					}
 					frame_vector[7] >>= 1;
+					if (!muted) {
+						memcpy(d_ysf_last_vec[slot_id], frame_vector, sizeof(frame_vector));
+					}
+				}
+
+				if (muted) {
+					do_silence = true;
+				} else {
 					d_imbe_vocoder[slot_id].imbe_decode(frame_vector, samp_buf);
 				}
 			}
