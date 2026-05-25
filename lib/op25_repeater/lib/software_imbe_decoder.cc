@@ -722,13 +722,6 @@ static const float woaa[105] = {
 	1.418842, 1.367615, 1.317176, 1.267748, 1.219512, 1.172608, 1.127142, 1.083189, 1.040799
 };
 
-static const float PhzNz[57] = {
-	0.000000, 3.002978, -0.385743, -1.804058, 0.708389, 3.080091, 0.234237, -2.601564, 2.564900, 0.101063, -0.241570, -2.283176, 0.460491, -1.611275, 2.258339, -2.055267,
-	1.733923, 2.517236, -1.766211, 0.897032, -2.360999, -0.280836, -2.714514, 2.100092, 2.300326, -1.158767, -2.044268, -2.668387, -2.578737, 0.185036, 1.551429, 2.726814,
-	2.655614, 3.046857, 0.834348, -0.513595, 1.466037, 0.691121, 0.127319, -2.034924, -1.070655, 0.456588, -2.278682, 1.229021, -2.139595, -0.119750, -0.301534, 0.029391,
-	0.068775, 0.520336, 2.339119, -0.808328, 1.332154, 2.929768, -0.338316, 0.022767, -1.063795
-};
-
 software_imbe_decoder::software_imbe_decoder()
 {
    int i,j;
@@ -739,6 +732,7 @@ software_imbe_decoder::software_imbe_decoder()
    L = 9;
    Old = 1; New = 0;
    psi1 = 0.0;
+   voiced_phase_seed = 0xDEADBEEFu;
    for(i=0; i < 58; i++) {
       for(j=0; j < 2; j++) {
          log2Mu[i][j] = 0.0;
@@ -1607,13 +1601,20 @@ software_imbe_decoder::synth_voiced()
       phi[ell][ New] = psi1 * ell;
    }
 
-   // TIA-102.BABA-A eq. 142: high-order voiced harmonics receive random phase
-   // scaled by the unvoiced fraction. Without this, sustained vowels and
-   // repeated voiced frames sound mechanical.
-   float rho = (L > 0) ? (M_PI * (float)Luv / (float)L) : 0.0f;
+   // TIA-102.BABA-A eq. 142: phi(l) = psi(l) + (Luv/L) * z(l), where z(l) is a
+   // fresh independent uniform random in [-pi, pi] per frame. The earlier patch
+   // used a static PhzNz[] lookup, which made the random offsets identical from
+   // frame to frame — that's a 50 Hz (1/20 ms) comb on top of the harmonics and
+   // sounds exactly like talking through a kazoo / wax-paper-on-comb, especially
+   // for male voices (more harmonics in band). Use a per-instance xorshift32 so
+   // each frame's z(l) is genuinely independent.
+   float rho = (L > 0) ? ((float)Luv / (float)L) : 0.0f;
    for(; ell <= MaxL; ell++) {
-      int pidx = (ell < 57) ? ell : 56;
-      phi[ell][ New] = psi1 * ell + rho * PhzNz[pidx];
+      uint32_t s = voiced_phase_seed;
+      s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+      voiced_phase_seed = s;
+      float z = ((float)s * (2.0f / 4294967296.0f) - 1.0f) * (float)M_PI;  // uniform in [-pi, pi]
+      phi[ell][ New] = psi1 * ell + rho * z;
    }
 
    for(en = 0; en <= 159; en++) {
