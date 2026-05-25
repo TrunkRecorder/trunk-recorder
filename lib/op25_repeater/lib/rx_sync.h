@@ -166,6 +166,8 @@ private:
 	mbe_tone tone_mp[2];
 	int mbe_err_cnt[2];
 	float d_ysf_imbe_er[2] = {0.0f, 0.0f};
+	int d_ysf_rpt_ctr[2] = {0, 0};
+	int16_t d_ysf_last_vec[2][8] = {{0}, {0}};
 	bool d_soft_vocoder;
 	software_imbe_decoder d_software_decoder[2];
 	imbe_vocoder d_imbe_vocoder[2];
