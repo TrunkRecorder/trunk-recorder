@@ -1597,24 +1597,64 @@ software_imbe_decoder::synth_voiced()
    psi1 = psi1 +(Oldw0 + w0) * 80;
    psi1 = remainderf(psi1, 2 * M_PI); // ToDo: decide if its 2pi or pi^2 // YEP it should be 2pi
 
-   for(ell = 1; ell <= L/4; ell++) {
-      phi[ell][ New] = psi1 * ell;
+   // Voiced phase regeneration. Three layered effects:
+   //
+   //   1. Linear phase psi1*l: glottal-pulse phase alignment (TIA spec).
+   //   2. Spectral-envelope phase per US5701390 (DVSI's hardware approach):
+   //      phi_env(l) = c * Sum_{m=1..D} (B[l+m] - B[l-m]) / m where B = log2(M).
+   //      This is a discrete Hilbert transform of log-magnitude that produces
+   //      minimum-phase response - phase correlates with formant shape, which
+   //      sounds more natural than either pure zero phase (buzzy) or pure
+   //      random phase (reverberant).
+   //   3. Residual random phase scaled by Luv/L (TIA eq. 142): keeps purely
+   //      voiced frames from collapsing back to zero-phase buzz when the
+   //      spectrum is locally flat (env_phase ~ 0). Small weight.
+   //
+   // Boundary handling for the kernel: B[0]=0, B[-l]=B[l] (reflection),
+   // B[L+k] = B[L] * gamma^k with gamma=0.72 (geometric decay).
+   const int D = 19;
+   const float gamma = 0.72f;
+   const float c_env = 0.5f;        // scaling for envelope phase; ~2/pi - from 0.65f orig
+   const float w_rand = 0.0f;       // residual random weight (small) from 0.25f orig
+   float B[2 * D + 57];               // index B[l + D] for l in [-D, 56+D]
+   for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
+   for (int l = 1; l <= L; l++) {
+      float mag = M[l][New];
+      B[l + D] = (mag > 1e-6f) ? log2f(mag) : -20.0f;
+   }
+   // Symmetric reflection for l <= 0 (B[0] already zero)
+   for (int l = 1; l <= D; l++) {
+      B[-l + D] = B[l + D];
+   }
+   // Geometric decay for l > L
+   {
+      float decay = 1.0f;
+      float B_L = B[L + D];
+      for (int l = L + 1; l <= L + D && l < 56 + D; l++) {
+         decay *= gamma;
+         B[l + D] = B_L * decay;
+      }
    }
 
-   // TIA-102.BABA-A eq. 142: phi(l) = psi(l) + (Luv/L) * z(l), where z(l) is a
-   // fresh independent uniform random in [-pi, pi] per frame. The earlier patch
-   // used a static PhzNz[] lookup, which made the random offsets identical from
-   // frame to frame — that's a 50 Hz (1/20 ms) comb on top of the harmonics and
-   // sounds exactly like talking through a kazoo / wax-paper-on-comb, especially
-   // for male voices (more harmonics in band). Use a per-instance xorshift32 so
-   // each frame's z(l) is genuinely independent.
    float rho = (L > 0) ? ((float)Luv / (float)L) : 0.0f;
-   for(; ell <= MaxL; ell++) {
+   for(ell = 1; ell <= MaxL; ell++) {
+      // Envelope-based phase via 1/m kernel
+      float env_phase = 0.0f;
+      for (int m = 1; m <= D; m++) {
+         env_phase += (B[ell + m + D] - B[ell - m + D]) / (float)m;
+      }
+      // Fresh random per harmonic per frame (xorshift32)
       uint32_t s = voiced_phase_seed;
       s ^= s << 13; s ^= s >> 17; s ^= s << 5;
       voiced_phase_seed = s;
-      float z = ((float)s * (2.0f / 4294967296.0f) - 1.0f) * (float)M_PI;  // uniform in [-pi, pi]
-      phi[ell][ New] = psi1 * ell + rho * z;
+      float z = ((float)s * (2.0f / 4294967296.0f) - 1.0f) * (float)M_PI;
+      if (ell <= L/4) {
+         // Preserve glottal-pulse alignment for low harmonics; envelope phase
+         // mixed in lightly so smooth spectra still get a touch of phase shape.
+         phi[ell][ New] = psi1 * ell + 0.5f * c_env * env_phase;
+      } else {
+         phi[ell][ New] = psi1 * ell + c_env * env_phase + w_rand * rho * z;
+      }
    }
 
    for(en = 0; en <= 159; en++) {
