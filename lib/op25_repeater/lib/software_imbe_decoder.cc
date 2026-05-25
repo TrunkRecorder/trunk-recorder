@@ -36,6 +36,12 @@
 #include <math.h>
 #include <string.h>
 
+#include <chrono>
+#include <climits>
+#include <mutex>
+#include <string>
+#include <vector>
+
 // =============================================================================
 // AUDIO TUNING PARAMETERS
 // =============================================================================
@@ -184,6 +190,167 @@ static constexpr bool UV_TO_V_RESET = true;
 //   0.20 -> includes mild vibrato; risks smearing real pitch jumps
 static constexpr int   INTERP_MAX_L      = 12;
 static constexpr float INTERP_PITCH_TOL  = 0.15f;
+
+// =============================================================================
+// TELEMETRY
+// =============================================================================
+// Off by default; set env var OP25_DEBUG_VOCODER=1 before launching
+// trunk-recorder to enable. When on, every TELEMETRY_WINDOW_SEC, an aggregate
+// summary across all P25 calls handled by all software_imbe_decoder instances
+// is written to stderr. Useful for picking knob values from a live system.
+//
+// Aggregated per window:
+//   - frame counts, % muted, % repeated
+//   - V/UV band-flips per second (chatter signal)
+//   - % of frames with >25% pitch jump
+//   - smoothed-ER mean and 95th percentile
+//   - L (#harmonics) range/mean, Luv mean
+//   - output crest factor and spectral flatness (from M[l])
+//   - one-line tuning hint string based on those metrics
+static constexpr int TELEMETRY_WINDOW_SEC = 60;
+
+namespace {
+
+class VocoderTelemetry {
+public:
+   void push_frame(bool muted, bool repeated, float er, int L_val, int Luv_val,
+                   float w0, float prev_w0, bool prev_any_voiced, bool cur_any_voiced,
+                   int vee_flips, float sfm,
+                   const int16_t* samples, int n)
+   {
+      ensure_init();
+      if (!enabled_) return;
+      std::lock_guard<std::mutex> lock(mtx_);
+
+      frames_++;
+      if (muted) muted_++;
+      if (repeated) repeated_++;
+      flips_ += vee_flips;
+      if (prev_w0 > 0.0f && std::fabs(w0 - prev_w0) / prev_w0 > 0.25f) jumps_++;
+      if (!prev_any_voiced && cur_any_voiced) uv_to_v_++;
+      er_sum_ += er;
+      if (er_samples_.size() < 200000) er_samples_.push_back(er);
+      if (L_val > 0) {
+         if (L_val < L_min_) L_min_ = L_val;
+         if (L_val > L_max_) L_max_ = L_val;
+         L_sum_ += L_val;
+         L_n_++;
+      }
+      Luv_sum_ += Luv_val;
+      if (sfm > 0.0f) { sfm_sum_ += sfm; sfm_n_++; }
+      for (int i = 0; i < n; i++) {
+         int v = samples[i] < 0 ? -samples[i] : samples[i];
+         if (v > peak_) peak_ = v;
+         double s = (double)samples[i];
+         sumsq_ += s * s;
+      }
+      n_samp_ += n;
+
+      maybe_print_();
+   }
+
+private:
+   void ensure_init()
+   {
+      if (init_) return;
+      const char* e = std::getenv("OP25_DEBUG_VOCODER");
+      enabled_ = (e && (e[0] == '1' || e[0] == 'y' || e[0] == 'Y' || e[0] == 't' || e[0] == 'T'));
+      last_print_ = std::chrono::steady_clock::now();
+      L_min_ = INT_MAX;
+      init_ = true;
+   }
+
+   void maybe_print_()
+   {
+      auto now = std::chrono::steady_clock::now();
+      auto elapsed = std::chrono::duration_cast<std::chrono::seconds>(now - last_print_).count();
+      if (elapsed < TELEMETRY_WINDOW_SEC) return;
+      if (frames_ > 0) print_();
+      reset_();
+      last_print_ = now;
+   }
+
+   void print_()
+   {
+      const float audio_sec = (float)frames_ * 0.020f;
+      const float pct_mute  = 100.0f * (float)muted_ / (float)frames_;
+      const float pct_rep   = 100.0f * (float)repeated_ / (float)frames_;
+      const float flips_per_sec = (audio_sec > 0) ? (float)flips_ / audio_sec : 0.0f;
+      const float pct_jump  = 100.0f * (float)jumps_ / (float)frames_;
+      const float er_mean   = (float)(er_sum_ / (double)frames_);
+      float er_p95 = 0.0f;
+      if (!er_samples_.empty()) {
+         std::sort(er_samples_.begin(), er_samples_.end());
+         er_p95 = er_samples_[(size_t)((double)er_samples_.size() * 0.95)];
+      }
+      const float L_mean   = L_n_ ? (float)L_sum_ / (float)L_n_ : 0.0f;
+      const float Luv_mean = L_n_ ? (float)Luv_sum_ / (float)L_n_ : 0.0f;
+      const double rms = std::sqrt(sumsq_ / (double)std::max((uint64_t)1, n_samp_));
+      const float crest = (rms > 0) ? (float)((double)peak_ / rms) : 0.0f;
+      const float sfm_mean = sfm_n_ ? (float)(sfm_sum_ / (double)sfm_n_) : 0.0f;
+
+      std::fprintf(stderr,
+         "\n[VOCODER STATS] %ds window  audio=%.0fs  frames=%llu  uv->v=%llu\n"
+         "  frames    : muted=%.1f%%  repeated=%.1f%%\n"
+         "  voicing   : %.1f band-flips/sec\n"
+         "  pitch     : %.1f%% of frames with |dw0|/w0 > 0.25\n"
+         "  ER        : mean=%.4f  p95=%.4f   (mute threshold 0.0875)\n"
+         "  model     : L mean=%.1f (range %d-%d)  Luv mean=%.1f\n"
+         "  output    : crest=%.2f  SFM=%.3f\n",
+         TELEMETRY_WINDOW_SEC, audio_sec,
+         (unsigned long long)frames_, (unsigned long long)uv_to_v_,
+         pct_mute, pct_rep,
+         flips_per_sec,
+         pct_jump,
+         er_mean, er_p95,
+         L_mean, (L_min_ == INT_MAX ? 0 : L_min_), L_max_, Luv_mean,
+         crest, sfm_mean);
+
+      std::string hints;
+      auto add = [&](const char* h) {
+         if (!hints.empty()) hints += "; ";
+         hints += h;
+      };
+      if (crest > 8.5f) add("crest>8.5 - try +PHASE_C_ENV or +PHASE_LOW_BLEND");
+      else if (crest > 0.0f && crest < 3.0f) add("crest<3 - try -PHASE_C_ENV / -PHASE_W_RAND");
+      if (sfm_mean > 0.35f) add("SFM>0.35 - try +FMT_ALPHA");
+      else if (sfm_mean > 0.0f && sfm_mean < 0.08f) add("SFM<0.08 - try -FMT_ALPHA");
+      if (flips_per_sec > 12.0f) add("voicing chatter - try VOICING_SMOOTH_TAPS=5");
+      if (pct_jump > 5.0f) add("pitch instability - check RF / INTERP_PITCH_TOL");
+      std::fprintf(stderr, "  hints     : %s\n",
+                   hints.empty() ? "(metrics in healthy ranges)" : hints.c_str());
+   }
+
+   void reset_()
+   {
+      frames_ = muted_ = repeated_ = flips_ = jumps_ = uv_to_v_ = 0;
+      er_sum_ = 0.0; er_samples_.clear();
+      L_min_ = INT_MAX; L_max_ = 0; L_sum_ = 0; L_n_ = 0; Luv_sum_ = 0;
+      peak_ = 0; sumsq_ = 0.0; n_samp_ = 0;
+      sfm_sum_ = 0.0; sfm_n_ = 0;
+   }
+
+   std::mutex mtx_;
+   bool init_ = false;
+   bool enabled_ = false;
+   std::chrono::steady_clock::time_point last_print_;
+
+   uint64_t frames_ = 0, muted_ = 0, repeated_ = 0;
+   uint64_t flips_ = 0, jumps_ = 0, uv_to_v_ = 0;
+   double er_sum_ = 0.0;
+   std::vector<float> er_samples_;
+   int L_min_ = INT_MAX, L_max_ = 0;
+   uint64_t L_sum_ = 0, L_n_ = 0, Luv_sum_ = 0;
+   int peak_ = 0;
+   double sumsq_ = 0.0;
+   uint64_t n_samp_ = 0;
+   double sfm_sum_ = 0.0;
+   uint64_t sfm_n_ = 0;
+};
+
+static VocoderTelemetry g_vocoder_telem;
+
+}  // namespace
 
 // =============================================================================
 
@@ -1022,6 +1189,7 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	float SE = 0;
 	int en, tmp_f;
 	bool muted = false;
+	bool repeated = false;
     int b0 = ((u0 >> 4) & 0xfc) | ((u7 >> 1) & 0x3);
 
 	ER = (0.95 * ER) + (0.000365 * ET);
@@ -1030,6 +1198,8 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	} else if(b0 > 207 || E0 >= 2 || ET >=(10 + 40 * ER)) {      // Frame Repeat per TIA-102-BABA-A section 7.7
 		if (repeat_last()) {                                     // mute if repeat not allowed
 			muted = true;
+		} else {
+			repeated = true;
 		}
 	} else {                                                     // Voice Frame decoding
 		rpt_ctr = 0;
@@ -1073,6 +1243,42 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 			samples[en] = 0;
 		}
 	}
+
+	// Telemetry push (no-op unless OP25_DEBUG_VOCODER is set).
+	{
+		bool prev_any_v = false, cur_any_v = false;
+		int  flips = 0;
+		int maxL = (L > OldL) ? L : OldL;
+		for (int l = 1; l <= maxL; l++) {
+			int cur  = (l <= L)    ? vee[l][New] : 0;
+			int prev = (l <= OldL) ? vee[l][Old] : 0;
+			if (cur)  cur_any_v  = true;
+			if (prev) prev_any_v = true;
+			if (cur != prev) flips++;
+		}
+		float sfm = 0.0f;
+		if (!muted && L > 0) {
+			double arith = 0.0, log_geom = 0.0;
+			int nz = 0;
+			for (int l = 1; l <= L; l++) {
+				float m = M[l][New];
+				if (m > 1e-6f) {
+					arith += m;
+					log_geom += std::log((double)m);
+					nz++;
+				}
+			}
+			if (nz > 0 && arith > 0.0) {
+				double am = arith / (double)nz;
+				double gm = std::exp(log_geom / (double)nz);
+				sfm = (float)(gm / am);
+			}
+		}
+		g_vocoder_telem.push_frame(muted, repeated, ER, L, (int)Luv,
+		                           w0, Oldw0, prev_any_v, cur_any_v,
+		                           flips, sfm, samples, 160);
+	}
+
 	OldL = L;
 	Oldw0 = w0;
 	tmp_f = Old; Old = New; New = tmp_f;

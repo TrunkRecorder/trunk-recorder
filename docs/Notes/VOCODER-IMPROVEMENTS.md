@@ -270,6 +270,55 @@ top of file:
 
 ---
 
+## Measuring / tuning
+
+Two analysis tools are provided to make picking knob values empirical
+rather than ear-only.
+
+### Offline WAV analyzer
+
+`utils/analyze_vocoder.py` reads decoded WAV files and prints objective
+audio-quality metrics plus concrete tuning suggestions. No rebuild needed,
+works on any existing recording.
+
+```
+python3 utils/analyze_vocoder.py call-*.wav
+```
+
+It computes crest factor, spectral flatness, formant/valley energy ratio,
+spectral tilt, and HF-energy variance, grades each against target ranges
+typical of natural P25-bandlimited speech, and recommends which knob to
+nudge. With multiple files it also prints an aggregate row.
+
+### Live telemetry
+
+Setting the environment variable `OP25_DEBUG_VOCODER=1` before launching
+`trunk-recorder` enables a static aggregator inside `software_imbe_decoder`
+that collects per-frame stats across every P25 call handled by every
+recorder. Every 60 seconds (`TELEMETRY_WINDOW_SEC`) it writes a summary to
+stderr, like:
+
+```
+[VOCODER STATS] 60s window  audio=42s  frames=2103  uv->v=87
+  frames    : muted=1.3%  repeated=3.2%
+  voicing   : 6.4 band-flips/sec
+  pitch     : 1.1% of frames with |dw0|/w0 > 0.25
+  ER        : mean=0.0091  p95=0.0334   (mute threshold 0.0875)
+  model     : L mean=22.4 (range 11-43)  Luv mean=7.2
+  output    : crest=5.13  SFM=0.184
+  hints     : (metrics in healthy ranges)
+```
+
+Use the two together: the WAV analyzer is great for A/B-comparing builds
+on the same recording; the live telemetry tells you what your system is
+actually decoding day-to-day. Both surface the same metrics so suggestions
+map to the same knobs.
+
+The telemetry is off by default and zero-cost when the env var isn't set
+(one `getenv` on the first frame, then an early-return).
+
+---
+
 ## References
 
 - **US5241650** (Motorola, expired ~2009) — Digital speech decoder having a postfilter with reduced spectral distortion. <https://patents.google.com/patent/US5241650>
