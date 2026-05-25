@@ -74,6 +74,7 @@ private:
 	float phi[57][2];
 	uint32_t u[211];
 	uint32_t voiced_phase_seed;	// xorshift32 state for per-frame voiced phase regen
+	int vee_history[57][4];		// past voicing decisions per harmonic (newest at [0])
 
 	int Old;
 	int New;
@@ -95,6 +96,7 @@ private:
 	void decode_vuv(int );
 	void adaptive_smoothing(float, float );
 	void apply_formant_postfilter();
+	void smooth_voicing_decisions();
 	void fft(float i[], float q[]);
 	void enhance_spectral_amplitudes(float&);
 	void ifft(float i[], float q[], float[]);
