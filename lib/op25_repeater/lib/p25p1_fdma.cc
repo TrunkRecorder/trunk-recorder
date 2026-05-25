@@ -278,6 +278,7 @@ namespace gr {
 		}
 		void p25p1_fdma::clear() {
 			p1voice_decode.clear();
+			software_decoder.clear();   // was leaking ER/state across calls -> silent recordings
 			d_imbe_er = 0.0f;
 			d_imbe_rpt_ctr = 0;
 			memset(d_imbe_last_vec, 0, sizeof(d_imbe_last_vec));

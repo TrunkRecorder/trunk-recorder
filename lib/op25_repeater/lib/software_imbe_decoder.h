@@ -45,6 +45,14 @@ public:
 	virtual ~software_imbe_decoder();
 
 	/**
+	 * Reset all cross-frame state so a new call starts from a clean slate.
+	 * Must be called between calls; otherwise stale ER, vee_history, phase,
+	 * and spectral state from the previous call leak in and can leave the
+	 * gating stuck in mute (producing fully-silent output files).
+	 */
+	void clear();
+
+	/**
 	 * Decode the compressed audio.
 	 *
 	 * \cw in IMBE codeword (including parity check bits).
