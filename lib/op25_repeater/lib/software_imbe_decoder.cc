@@ -1067,33 +1067,56 @@ static const float woaa[105] = {
 
 software_imbe_decoder::software_imbe_decoder()
 {
-   int i,j;
-	//initialize
-   ER = 0;
+   voiced_phase_seed = 0xDEADBEEFu;
+   clear();
+}
+
+void
+software_imbe_decoder::clear()
+{
+   // Reset every piece of cross-frame state. Must be called between calls;
+   // otherwise the previous call's tail (high ER from a noisy ending, the
+   // stuck rpt_ctr, last vee_history) leaks into the next call and pins the
+   // gating into permanent mute - which produces fully-silent output files.
+   ER = 0.0f;
    rpt_ctr = 0;
    OldL = 0;
    L = 9;
    Old = 1; New = 0;
-   psi1 = 0.0;
-   voiced_phase_seed = 0xDEADBEEFu;
+   psi1 = 0.0f;
+   Oldw0 = 0.0f;
+   w0 = 0.0f;
+   Luv = 0.0f;
+   ErFlag = 0;
+
    memset(vee_history, 0, sizeof(vee_history));
-   for(i=0; i < 58; i++) {
-      for(j=0; j < 2; j++) {
-         log2Mu[i][j] = 0.0;
+
+   for (int i = 0; i < 58; i++) {
+      for (int j = 0; j < 2; j++) log2Mu[i][j] = 0.0f;
+   }
+   for (int i = 0; i < 57; i++) {
+      for (int j = 0; j < 2; j++) {
+         phi[i][j] = 0.0f;
+         M[i][j]   = 0.0f;
+         Mu[i][j]  = 0.0f;
+         vee[i][j] = 0;
       }
    }
-   for(i=0; i < 57; i++) {
-      for(j=0; j < 2; j++) {
-         phi[i][j] = 0.0;
-      }
-   }
-   for(i=0; i < 256; i++) {
-      Olduw[i] = 0.0;
-   }
+   memset(Olduw, 0, sizeof(Olduw));
+   memset(sv,    0, sizeof(sv));
+   memset(suv,   0, sizeof(suv));
+
+   // Re-seed unvoiced excitation. Same starting point as the constructor so
+   // every call begins with the same noise sequence; that's deterministic and
+   // perceptually indistinguishable from the previous tail of noise.
    u[0] = 3147;
-   for(i=1; i < 211; i++) {
+   for (int i = 1; i < 211; i++) {
       u[i] = next_u(u[i-1]);
    }
+
+   // voiced_phase_seed is intentionally NOT reset - xorshift32 with a fixed
+   // initial seed would make every call's voiced-phase noise identical
+   // (low-grade comb artifact). Let it evolve naturally across calls.
 }
 
 uint32_t

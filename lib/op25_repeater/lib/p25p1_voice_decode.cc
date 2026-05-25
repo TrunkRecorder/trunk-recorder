@@ -76,6 +76,7 @@ p25p1_voice_decode::p25p1_voice_decode(bool verbose_flag, const op25_audio& udp,
 
 void p25p1_voice_decode::clear() {
   vocoder.clear();
+  software_decoder.clear();      // critical: was leaking ER/state across calls
   d_er = 0.0f;
   d_rpt_ctr = 0;
   memset(d_last_vec, 0, sizeof(d_last_vec));
