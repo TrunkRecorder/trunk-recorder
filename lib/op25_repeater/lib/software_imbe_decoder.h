@@ -73,6 +73,7 @@ private:
 	float psi1;
 	float phi[57][2];
 	uint32_t u[211];
+	uint32_t voiced_phase_seed;	// xorshift32 state for per-frame voiced phase regen
 
 	int Old;
 	int New;
