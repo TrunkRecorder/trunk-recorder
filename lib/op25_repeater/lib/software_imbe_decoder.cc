@@ -1615,7 +1615,7 @@ software_imbe_decoder::synth_voiced()
    const int D = 19;
    const float gamma = 0.72f;
    const float c_env = 0.75f;        // scaling for envelope phase; ~2/pi - from 0.65f orig
-   const float w_rand = 0.1f;       // residual random weight (small) from 0.25f orig
+   const float w_rand = 0.0f;       // residual random weight (small) from 0.25f orig
    float B[2 * D + 57];               // index B[l + D] for l in [-D, 56+D]
    for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
    for (int l = 1; l <= L; l++) {
