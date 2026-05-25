@@ -1614,7 +1614,7 @@ software_imbe_decoder::synth_voiced()
    // B[L+k] = B[L] * gamma^k with gamma=0.72 (geometric decay).
    const int D = 19;
    const float gamma = 0.72f;
-   const float c_env = 0.5f;        // scaling for envelope phase; ~2/pi - from 0.65f orig
+   const float c_env = 0.75f;        // scaling for envelope phase; ~2/pi - from 0.65f orig
    const float w_rand = 0.0f;       // residual random weight (small) from 0.25f orig
    float B[2 * D + 57];               // index B[l + D] for l in [-D, 56+D]
    for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
@@ -1651,7 +1651,7 @@ software_imbe_decoder::synth_voiced()
       if (ell <= L/4) {
          // Preserve glottal-pulse alignment for low harmonics; envelope phase
          // mixed in lightly so smooth spectra still get a touch of phase shape.
-         phi[ell][ New] = psi1 * ell + 0.5f * c_env * env_phase;
+         phi[ell][ New] = psi1 * ell + 0.5f * c_env * env_phase;  // orig 0.5f
       } else {
          phi[ell][ New] = psi1 * ell + c_env * env_phase + w_rand * rho * z;
       }
