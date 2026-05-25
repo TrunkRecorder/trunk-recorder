@@ -895,6 +895,7 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	}
 	if (!muted) {
 		adaptive_smoothing(SE, ET);
+		apply_formant_postfilter();
 
 		// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
@@ -945,6 +946,7 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 	// decode_spectral_amplitudes(Start3, Start8);
 	enhance_spectral_amplitudes(SE);
 	adaptive_smoothing(SE, ET);
+	apply_formant_postfilter();
 
 	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
@@ -1302,6 +1304,66 @@ software_imbe_decoder::enhance_spectral_amplitudes(float& SE)
 	// update SE
    SE = .95 * SE + .05 * RM0; if(SE < 10000) SE = 10000;
 
+}
+
+void
+software_imbe_decoder::apply_formant_postfilter()
+{
+   // Adaptive formant postfilter, conceptually after US5241650 (Motorola, 1989,
+   // expired 2009). Commercial parametric vocoders run a postfilter at the
+   // decoder output to emphasize formants and attenuate inter-formant valleys -
+   // that's most of the difference between "synthetic" and "natural" sounding
+   // low-bitrate speech. The patent uses a bandwidth-expanded LPC postfilter
+   // H(z) = B(z)/A(z/v); we use the equivalent magnitude-domain transform that
+   // fits MBE naturally (harmonics already sample the spectral envelope, so
+   // there's nothing to recover via LPC):
+   //
+   //     M'[l] = M[l] * exp(alpha * (log2 M[l] - log2 M_smooth[l]))
+   //
+   // log M_smooth is a (2W+1)-tap centered moving average over harmonics. Any
+   // harmonic above its local average (formant peak) is boosted; any below
+   // (valley) is attenuated. Total energy is re-normalized so overall loudness
+   // is preserved - the patent's main innovation was solving exactly the
+   // "time-varying brightness modulation" that naive postfilters introduce.
+   //
+   // alpha: 0.0 disables, 0.25 mild, 0.5 aggressive (tends toward tinny).
+   const float alpha = 0.25f;
+   const int W = 3;          // 7-tap smoothing - ~3 harmonic widths, ~1 formant
+
+   if (L < 4) return;
+
+   float logM[57] = {0};
+   for (int l = 1; l <= L; l++) {
+      float m = M[l][New];
+      logM[l] = (m > 1e-6f) ? log2f(m) : -20.0f;
+   }
+
+   float logM_smooth[57] = {0};
+   for (int l = 1; l <= L; l++) {
+      float sum = 0.0f;
+      int count = 0;
+      for (int j = l - W; j <= l + W; j++) {
+         int jc = (j < 1) ? 1 : (j > L ? L : j);
+         sum += logM[jc];
+         count++;
+      }
+      logM_smooth[l] = sum / (float)count;
+   }
+
+   float energy_before = 0.0f, energy_after = 0.0f;
+   for (int l = 1; l <= L; l++) {
+      energy_before += M[l][New] * M[l][New];
+      float scale = exp2f(alpha * (logM[l] - logM_smooth[l]));
+      M[l][New] = M[l][New] * scale;
+      energy_after += M[l][New] * M[l][New];
+   }
+
+   if (energy_after > 1e-6f) {
+      float norm = sqrtf(energy_before / energy_after);
+      for (int l = 1; l <= L; l++) {
+         M[l][New] = M[l][New] * norm;
+      }
+   }
 }
 
 void
