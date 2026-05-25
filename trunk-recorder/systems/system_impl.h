@@ -100,10 +100,10 @@ public:
   int audio_bandreject_hz;
   int audio_bandreject_width_hz;
   bool audio_loudnorm;
-  bool audio_loudnorm_two_pass;
   double audio_loudnorm_i;
   double audio_loudnorm_tp;
   double audio_loudnorm_lra;
+  bool audio_final_limiter;
   std::string audio_ffmpeg_filter;
   bool audio_output_raw_audio;
 
@@ -153,9 +153,6 @@ public:
   bool get_audio_loudnorm() override;
   void set_audio_loudnorm(bool enabled) override;
 
-  bool get_audio_loudnorm_two_pass() override;
-  void set_audio_loudnorm_two_pass(bool enabled) override;
-
   double get_audio_loudnorm_i() override;
   void set_audio_loudnorm_i(double value) override;
 
@@ -164,6 +161,9 @@ public:
 
   double get_audio_loudnorm_lra() override;
   void set_audio_loudnorm_lra(double value) override;
+
+  bool get_audio_final_limiter() override;
+  void set_audio_final_limiter(bool enabled) override;
 
   std::string get_audio_ffmpeg_filter() override;
   void set_audio_ffmpeg_filter(std::string filter) override;

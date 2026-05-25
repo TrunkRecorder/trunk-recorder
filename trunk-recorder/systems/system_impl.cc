@@ -109,14 +109,6 @@ void System_impl::set_audio_loudnorm(bool enabled) {
   this->audio_loudnorm = enabled;
 }
 
-bool System_impl::get_audio_loudnorm_two_pass() {
-  return this->audio_loudnorm_two_pass;
-}
-
-void System_impl::set_audio_loudnorm_two_pass(bool enabled) {
-  this->audio_loudnorm_two_pass = enabled;
-}
-
 double System_impl::get_audio_loudnorm_i() {
   return this->audio_loudnorm_i;
 }
@@ -139,6 +131,14 @@ double System_impl::get_audio_loudnorm_lra() {
 
 void System_impl::set_audio_loudnorm_lra(double value) {
   this->audio_loudnorm_lra = value;
+}
+
+bool System_impl::get_audio_final_limiter() {
+  return this->audio_final_limiter;
+}
+
+void System_impl::set_audio_final_limiter(bool enabled) {
+  this->audio_final_limiter = enabled;
 }
 
 std::string System_impl::get_audio_ffmpeg_filter() {
@@ -213,10 +213,10 @@ System_impl::System_impl(int sys_num) {
   audio_bandreject_hz = 0;
   audio_bandreject_width_hz = 0;
   audio_loudnorm = false;
-  audio_loudnorm_two_pass = true;
   audio_loudnorm_i = -16.0;
-  audio_loudnorm_tp = -0.1;
-  audio_loudnorm_lra = 11.0;
+  audio_loudnorm_tp = -1.5;
+  audio_loudnorm_lra = 7.0;
+  audio_final_limiter = true;
   audio_ffmpeg_filter = "";
   audio_output_raw_audio = false;
 }

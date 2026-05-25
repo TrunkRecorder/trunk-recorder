@@ -401,10 +401,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         int audio_bandreject_hz = 0;
         int audio_bandreject_width_hz = 0;
         bool audio_loudnorm = true;
-        bool audio_loudnorm_two_pass = true;
         double audio_loudnorm_i = -16.0;
-        double audio_loudnorm_tp = -0.1;
-        double audio_loudnorm_lra = 11.0;
+        double audio_loudnorm_tp = -1.5;
+        double audio_loudnorm_lra = 7.0;
+        bool audio_final_limiter = true;
         std::string audio_ffmpeg_filter = "";
         bool audio_output_raw_audio = false;
 
@@ -418,10 +418,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           audio_bandreject_width_hz = audio_post.value("bandreject_width_hz", 0);
 
           audio_loudnorm = audio_post.value("loudnorm", true);
-          audio_loudnorm_two_pass = audio_post.value("loudnorm_two_pass", true);
           audio_loudnorm_i = audio_post.value("loudnorm_i", -16.0);
-          audio_loudnorm_tp = audio_post.value("loudnorm_tp", -0.1);
-          audio_loudnorm_lra = audio_post.value("loudnorm_lra", 11.0);
+          audio_loudnorm_tp = audio_post.value("loudnorm_tp", -1.5);
+          audio_loudnorm_lra = audio_post.value("loudnorm_lra", 7.0);
+          audio_final_limiter = audio_post.value("final_limiter", true);
 
           audio_ffmpeg_filter = audio_post.value("ffmpeg_filter", "");
           audio_output_raw_audio = audio_post.value("outputRawAudio", false);
@@ -453,10 +453,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_audio_bandreject_hz(audio_bandreject_hz);
         system->set_audio_bandreject_width_hz(audio_bandreject_width_hz);
         system->set_audio_loudnorm(audio_loudnorm);
-        system->set_audio_loudnorm_two_pass(audio_loudnorm_two_pass);
         system->set_audio_loudnorm_i(audio_loudnorm_i);
         system->set_audio_loudnorm_tp(audio_loudnorm_tp);
         system->set_audio_loudnorm_lra(audio_loudnorm_lra);
+        system->set_audio_final_limiter(audio_final_limiter);
         system->set_audio_ffmpeg_filter(audio_ffmpeg_filter);
         system->set_audio_output_raw_audio(audio_output_raw_audio);
 
@@ -466,10 +466,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Audio Bandreject (Hz): " << system->get_audio_bandreject_hz();
         BOOST_LOG_TRIVIAL(info) << "Audio Bandreject Width (Hz): " << system->get_audio_bandreject_width_hz();
         BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm: " << system->get_audio_loudnorm();
-        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm Two Pass: " << system->get_audio_loudnorm_two_pass();
         BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm I: " << system->get_audio_loudnorm_i();
         BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm TP: " << system->get_audio_loudnorm_tp();
         BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm LRA: " << system->get_audio_loudnorm_lra();
+        BOOST_LOG_TRIVIAL(info) << "Audio Final Limiter: " << system->get_audio_final_limiter();
 
         if (!system->get_audio_ffmpeg_filter().empty()) {
           BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: " << system->get_audio_ffmpeg_filter();

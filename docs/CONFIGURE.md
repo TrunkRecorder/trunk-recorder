@@ -330,10 +330,10 @@ Each system can optionally define an `audio_postprocess` object to control clean
 "bandreject_hz": 0,
 "bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": true,
 "loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"loudnorm_tp": -1.5,
+"loudnorm_lra": 7.0,
+"final_limiter": true,
 "ffmpeg_filter": ""
 }
 ```
@@ -348,61 +348,70 @@ Each system can optionally define an `audio_postprocess` object to control clean
 | lowpass_hz          |          | 0             | number                | Adds an FFmpeg lowpass filter when greater than 0. |
 | bandreject_hz       |          | 0             | number                | Adds an FFmpeg bandreject filter center frequency when greater than 0. |
 | bandreject_width_hz |          | 0             | number                | Width for the FFmpeg bandreject filter. Must be greater than 0 to be used. |
-| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization independently of `enabled`. |
-| loudnorm_two_pass   |          | true          | **true** / **false**  | When `true`, attempts two-pass loudnorm and falls back to single-pass when unavailable. When `false`, uses single-pass loudnorm directly. |
-| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target. |
-| loudnorm_tp         |          | -0.1          | number                | FFmpeg loudnorm true peak target. |
-| loudnorm_lra        |          | 11.0          | number                | FFmpeg loudnorm loudness range target. |
-| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain used as the base filter chain when `enabled=true`. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
+| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization independently of `enabled`. Loudnorm is applied **per transmission** (not per call) so individual transmissions land at the same target loudness regardless of capture level. |
+| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target (LUFS). |
+| loudnorm_tp         |          | -1.5          | number                | FFmpeg loudnorm true peak target (dBFS). Also determines the final limiter ceiling, which sits 0.5 dB above this value. |
+| loudnorm_lra        |          | 7.0           | number                | FFmpeg loudnorm loudness range target (LU). 7 is voice-optimized; raise it (toward 11) to preserve more dynamics, lower it (toward 5) to crush them further. |
+| final_limiter       |          | true          | **true** / **false**  | Applies a brick-wall `alimiter` after concatenation as a safety net against clipping. Ceiling is derived from `loudnorm_tp + 0.5` dB. |
+| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain used as the per-transmission base filter chain when `enabled=true`. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
 
 
 ### How it works
 
-`audio_postprocess.enabled` only controls the base cleanup filter chain. It does **not** enable or disable loudness normalization.
+Each call typically contains several transmissions, captured back-to-back as units key up and down on the channel. Trunk Recorder renders the final call audio in a single FFmpeg invocation that processes each transmission **independently** before joining them:
 
-When `enabled` is `true`, Trunk Recorder builds a base filter chain from the structured cleanup settings below:
+```
+[tx1]→cleanup→loudnorm─┐
+[tx2]→cleanup→loudnorm─┼→ concat → alimiter → final audio
+[tx3]→cleanup→loudnorm─┘
+```
+
+Because loudnorm runs per transmission, a quiet transmission and a loud transmission in the same call both end up at the same target loudness — listeners no longer hear "whisper then shout" within one call. The final limiter is a brick-wall safety net that prevents any peaks from clipping the digital ceiling.
+
+`audio_postprocess.enabled` only controls the base cleanup filter chain. It does **not** enable or disable loudnorm or the limiter. Loudnorm is controlled by `loudnorm`; the limiter is controlled by `final_limiter`. Both default to `true` independently of `enabled`.
+
+When `enabled` is `true`, Trunk Recorder builds the per-transmission cleanup chain from:
 
 - `highpass_hz`
 - `lowpass_hz`
 - `bandreject_hz`
 - `bandreject_width_hz`
 
-If `ffmpeg_filter` is provided and `enabled` is `true`, that string is used as the base filter chain instead of the structured cleanup filters.
-
-Loudness normalization is controlled separately by `loudnorm`. It defaults to `true`, even when `audio_postprocess.enabled` is `false`.
+If `ffmpeg_filter` is provided and `enabled` is `true`, that string **replaces** the structured cleanup filters and is applied per transmission.
 
 ### Loudnorm behavior
 
-When `loudnorm` is enabled, Trunk Recorder applies FFmpeg loudnorm using these defaults:
+When `loudnorm` is enabled, Trunk Recorder applies FFmpeg `loudnorm` to each transmission using these defaults:
 
-- `I=-16.0`
-- `TP=-0.1`
-- `LRA=11.0`
+- `I=-16.0` (integrated loudness target, LUFS)
+- `TP=-1.5` (true peak target, dBFS)
+- `LRA=7.0` (loudness range target, LU — tuned for voice)
 
-If `loudnorm_two_pass` is `true`, Trunk Recorder first attempts loudnorm analysis and then renders using two-pass loudnorm.
+The defaults are voice-tuned: `TP=-1.5` leaves headroom for the final limiter, and `LRA=7` compresses the dynamic range more aggressively than the broadcast default (LRA=11) so quiet speech and loud speech end up closer together.
 
-If two-pass loudnorm cannot be used for a call, such as when the call is too short or the first-pass analysis fails, Trunk Recorder automatically falls back to single-pass loudnorm rendering.
+### Final limiter
 
-If `loudnorm_two_pass` is `false`, Trunk Recorder skips the analysis pass and uses single-pass loudnorm directly.
+When `final_limiter` is enabled (default), Trunk Recorder applies an `alimiter` filter after concatenation. The limit ceiling is `loudnorm_tp + 0.5 dB` in linear scale — for the default `TP=-1.5`, that's about -1.0 dBFS (linear 0.8913). Attack is 1 ms and release is 50 ms.
+
+This catches any inter-sample peaks that loudnorm's true-peak estimator misses, guaranteeing the final file never clips.
 
 ### Filter order
 
-The final audio filter chain is built in this order:
+The full filter graph for each call is:
 
-1. Base cleanup filter chain or `ffmpeg_filter` override
-2. Built-in loudnorm, if enabled
+1. **Per-transmission**: structured cleanup (or `ffmpeg_filter` override) → built-in loudnorm
+2. **Concat** of all transmissions
+3. **Final limiter** (if enabled)
 
 ### Fallback behavior
 
-If a render using loudnorm fails, Trunk Recorder retries using the cleanup-only filter chain.
-
-If that also fails, Trunk Recorder falls back to unfiltered rendering.
+If the full render fails, Trunk Recorder retries without loudnorm (cleanup + concat + limiter). If that fails too, it falls back to unfiltered rendering (just concat + limiter).
 
 ### Important notes
 
-- `audio_postprocess.enabled=false` does **not** disable loudnorm
-- `ffmpeg_filter` may still be combined with built-in loudnorm
-- if `ffmpeg_filter` already contains `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization
+- `audio_postprocess.enabled=false` does **not** disable loudnorm or the final limiter
+- `ffmpeg_filter` is applied **per transmission** in the new pipeline (in the old pipeline it was applied once to the concatenated stream)
+- if `ffmpeg_filter` already contains `loudnorm`, the user's loudnorm runs per transmission and the built-in loudnorm settings are skipped
 - the old implicit `dynaudnorm` fallback is no longer used
 
 ### Raw Audio Output
@@ -424,7 +433,7 @@ The debug file is produced by concatenating the raw transmission recordings usin
 
 ### Example configurations
 
-#### Cleanup filters only
+#### Cleanup filters only (no loudnorm, no limiter)
 
 ```json
 "audio_postprocess": {
@@ -434,68 +443,52 @@ The debug file is produced by concatenating the raw transmission recordings usin
 "bandreject_hz": 4000,
 "bandreject_width_hz": 180,
 "loudnorm": false,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"final_limiter": false,
 "ffmpeg_filter": ""
 }
 ```
 
-#### Loudnorm only
+#### Loudnorm + limiter only (the default behavior)
 
 ```json
 "audio_postprocess": {
 "enabled": false,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": true,
 "loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"loudnorm_tp": -1.5,
+"loudnorm_lra": 7.0,
+"final_limiter": true,
 "ffmpeg_filter": "",
 "outputRawAudio": false
 }
 ```
 
-#### Custom filter chain plus built-in loudnorm
+#### Custom cleanup chain plus built-in loudnorm
+
+The custom `ffmpeg_filter` is applied per transmission, then built-in loudnorm runs per transmission, then transmissions are concatenated and the limiter is applied.
 
 ```json
 "audio_postprocess": {
 "enabled": true,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": false,
 "loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"loudnorm_tp": -1.5,
+"loudnorm_lra": 7.0,
+"final_limiter": true,
 "ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
 }
 ```
 
 #### Fully custom loudnorm in `ffmpeg_filter`
 
-If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped.
+If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped — but your custom chain still runs per transmission, and the final limiter still applies (unless you disable it).
 
 ```json
 "audio_postprocess": {
 "enabled": true,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
+"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-1.5:LRA=7",
+"final_limiter": true
 }
 ```
 

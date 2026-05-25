@@ -67,10 +67,15 @@ struct Audio_Postprocess_Config {
   int bandreject_width_hz = 0;
 
   bool loudnorm = true;
-  bool loudnorm_two_pass = true;
   double loudnorm_i = -16.0;
-  double loudnorm_tp = -0.1;
-  double loudnorm_lra = 11.0;
+  double loudnorm_tp = -1.5;
+  double loudnorm_lra = 7.0;
+
+  // Brick-wall true-peak limiter applied after per-transmission loudnorm and
+  // the concat filter. Hardcoded ceiling is derived from loudnorm_tp + 0.5 dB
+  // of headroom so loudnorm has room to work and the limiter just catches
+  // accidental overshoots.
+  bool final_limiter = true;
 
   std::string ffmpeg_filter = "";
 
