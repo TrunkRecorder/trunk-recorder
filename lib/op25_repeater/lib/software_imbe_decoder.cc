@@ -118,9 +118,9 @@ static constexpr int   FMT_W     = 3;
 // PHASE_KERNEL_GAMMA - geometric decay applied to extrapolated B[l] for l>L
 // (so the kernel doesn't run off the end of the harmonic array). Patent's
 // value is 0.72; rarely needs tuning.
-static constexpr float PHASE_C_ENV         = 0.75f;
-static constexpr float PHASE_W_RAND        = 0.0f;
-static constexpr float PHASE_LOW_BLEND     = 0.40f;
+static constexpr float PHASE_C_ENV         = 0.65f;
+static constexpr float PHASE_W_RAND        = 0.05f;
+static constexpr float PHASE_LOW_BLEND     = 0.50f;
 static constexpr int   PHASE_KERNEL_D      = 19;
 static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 
