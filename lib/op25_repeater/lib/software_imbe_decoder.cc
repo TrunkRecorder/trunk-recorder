@@ -77,7 +77,7 @@
 //   2 -> 5-tap, narrower formants get more boost
 //   3 -> 7-tap, ~1 formant wide (recommended default)
 //   5 -> 11-tap, smoother result, less emphasis per peak
-static constexpr float FMT_ALPHA = 0.25f;
+static constexpr float FMT_ALPHA = 0.18f;
 static constexpr int   FMT_W     = 3;
 
 // -----------------------------------------------------------------------------
@@ -124,9 +124,9 @@ static constexpr int   FMT_W     = 3;
 // PHASE_KERNEL_GAMMA - geometric decay applied to extrapolated B[l] for l>L
 // (so the kernel doesn't run off the end of the harmonic array). Patent's
 // value is 0.72; rarely needs tuning.
-static constexpr float PHASE_C_ENV         = 0.65f;
+static constexpr float PHASE_C_ENV         = 0.90f;
 static constexpr float PHASE_W_RAND        = 0.05f;
-static constexpr float PHASE_LOW_BLEND     = 0.50f;
+static constexpr float PHASE_LOW_BLEND     = 0.55f;
 static constexpr int   PHASE_KERNEL_D      = 19;
 static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 
@@ -145,7 +145,7 @@ static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 //   1 -> off (no smoothing)
 //   3 -> 3-tap median, drops single-frame outliers (recommended default)
 //   5 -> 5-tap median, smoother but voicing changes lag 2 frames
-static constexpr int VOICING_SMOOTH_TAPS = 3;
+static constexpr int VOICING_SMOOTH_TAPS = 5;
 
 // -----------------------------------------------------------------------------
 // UV->V phase reset (synth_voiced, after US6963833, expired Mar 2022)
@@ -207,7 +207,14 @@ static constexpr float INTERP_PITCH_TOL  = 0.15f;
 //   - L (#harmonics) range/mean, Luv mean
 //   - output crest factor and spectral flatness (from M[l])
 //   - one-line tuning hint string based on those metrics
-static constexpr int TELEMETRY_WINDOW_SEC = 60;
+static constexpr int    TELEMETRY_WINDOW_SEC      = 60;
+
+// Only frames whose own RMS exceeds this threshold contribute to the crest /
+// RMS aggregates. Dispatch audio is mostly between-utterance silence with
+// occasional bursts; including silence makes peak/RMS misleading vs the
+// WAV-file analyzer (which trims silence). 200 ≈ -44 dBFS, below normal
+// speech RMS but well above noise floor.
+static constexpr double TELEMETRY_CREST_RMS_MIN   = 200.0;
 
 namespace {
 
@@ -238,13 +245,25 @@ public:
       }
       Luv_sum_ += Luv_val;
       if (sfm > 0.0f) { sfm_sum_ += sfm; sfm_n_++; }
+
+      // Gate crest/RMS aggregates on per-frame RMS so between-utterance
+      // silence doesn't inflate peak-over-mean-RMS for sparse dispatch audio.
+      int    frame_peak  = 0;
+      double frame_sumsq = 0.0;
       for (int i = 0; i < n; i++) {
          int v = samples[i] < 0 ? -samples[i] : samples[i];
-         if (v > peak_) peak_ = v;
+         if (v > frame_peak) frame_peak = v;
          double s = (double)samples[i];
-         sumsq_ += s * s;
+         frame_sumsq += s * s;
       }
-      n_samp_ += n;
+      audio_frames_total_++;
+      double frame_rms = (n > 0) ? std::sqrt(frame_sumsq / (double)n) : 0.0;
+      if (frame_rms > TELEMETRY_CREST_RMS_MIN) {
+         if (frame_peak > peak_) peak_ = frame_peak;
+         sumsq_  += frame_sumsq;
+         n_samp_ += n;
+         audio_frames_active_++;
+      }
 
       maybe_print_();
    }
@@ -288,6 +307,9 @@ private:
       const double rms = std::sqrt(sumsq_ / (double)std::max((uint64_t)1, n_samp_));
       const float crest = (rms > 0) ? (float)((double)peak_ / rms) : 0.0f;
       const float sfm_mean = sfm_n_ ? (float)(sfm_sum_ / (double)sfm_n_) : 0.0f;
+      const float pct_active = audio_frames_total_
+         ? (100.0f * (float)audio_frames_active_ / (float)audio_frames_total_)
+         : 0.0f;
 
       std::fprintf(stderr,
          "\n[VOCODER STATS] %ds window  audio=%.0fs  frames=%llu  uv->v=%llu\n"
@@ -296,7 +318,7 @@ private:
          "  pitch     : %.1f%% of frames with |dw0|/w0 > 0.25\n"
          "  ER        : mean=%.4f  p95=%.4f   (mute threshold 0.0875)\n"
          "  model     : L mean=%.1f (range %d-%d)  Luv mean=%.1f\n"
-         "  output    : crest=%.2f  SFM=%.3f\n",
+         "  output    : crest=%.2f  SFM=%.3f   (crest from %.0f%% of frames above RMS gate)\n",
          TELEMETRY_WINDOW_SEC, audio_sec,
          (unsigned long long)frames_, (unsigned long long)uv_to_v_,
          pct_mute, pct_rep,
@@ -304,7 +326,7 @@ private:
          pct_jump,
          er_mean, er_p95,
          L_mean, (L_min_ == INT_MAX ? 0 : L_min_), L_max_, Luv_mean,
-         crest, sfm_mean);
+         crest, sfm_mean, pct_active);
 
       std::string hints;
       auto add = [&](const char* h) {
@@ -328,6 +350,7 @@ private:
       L_min_ = INT_MAX; L_max_ = 0; L_sum_ = 0; L_n_ = 0; Luv_sum_ = 0;
       peak_ = 0; sumsq_ = 0.0; n_samp_ = 0;
       sfm_sum_ = 0.0; sfm_n_ = 0;
+      audio_frames_total_ = 0; audio_frames_active_ = 0;
    }
 
    std::mutex mtx_;
@@ -346,6 +369,8 @@ private:
    uint64_t n_samp_ = 0;
    double sfm_sum_ = 0.0;
    uint64_t sfm_n_ = 0;
+   uint64_t audio_frames_total_ = 0;   // every frame
+   uint64_t audio_frames_active_ = 0;  // frames whose RMS passed the gate
 };
 
 static VocoderTelemetry g_vocoder_telem;
