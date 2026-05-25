@@ -33,3 +33,4 @@ debug_recorder.py
 /.cache/
 .gitmodules
 user_plugins/*/
+.claude/settings.json
