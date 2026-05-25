@@ -77,7 +77,7 @@
 //   2 -> 5-tap, narrower formants get more boost
 //   3 -> 7-tap, ~1 formant wide (recommended default)
 //   5 -> 11-tap, smoother result, less emphasis per peak
-static constexpr float FMT_ALPHA = 0.18f;
+static constexpr float FMT_ALPHA = 0.13f;
 static constexpr int   FMT_W     = 3;
 
 // -----------------------------------------------------------------------------
@@ -125,8 +125,8 @@ static constexpr int   FMT_W     = 3;
 // (so the kernel doesn't run off the end of the harmonic array). Patent's
 // value is 0.72; rarely needs tuning.
 static constexpr float PHASE_C_ENV         = 0.90f;
-static constexpr float PHASE_W_RAND        = 0.05f;
-static constexpr float PHASE_LOW_BLEND     = 0.55f;
+static constexpr float PHASE_W_RAND        = 0.15f;
+static constexpr float PHASE_LOW_BLEND     = 0.70f;
 static constexpr int   PHASE_KERNEL_D      = 19;
 static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 
