@@ -59,18 +59,27 @@ TARGETS = {
 
 
 def load_audio(path):
-    """Load WAV file, mix to mono, trim leading/trailing silence."""
+    """Load WAV file, mix to mono, trim leading/trailing silence.
+
+    Returns an empty array for files that are fully silent or essentially
+    silent (peak below 0.05 % of full scale, ~ -66 dBFS). Caller should
+    treat empty audio as 'skip' so an all-zero leftover file doesn't
+    pollute the aggregate with crest=inf etc.
+    """
     fs, audio = wavfile.read(path)
     if audio.ndim > 1:
         audio = audio.mean(axis=1)
     audio = audio.astype(np.float64)
-    if len(audio):
-        peak = max(1.0, float(np.max(np.abs(audio))))
-        mask = np.abs(audio) > peak * 0.005
-        if mask.any():
-            first = int(mask.argmax())
-            last = len(audio) - int(mask[::-1].argmax())
-            audio = audio[first:last]
+    if len(audio) == 0:
+        return fs, audio
+    peak = float(np.max(np.abs(audio)))
+    if peak < 16.0:                       # ~ -66 dBFS - file is silent
+        return fs, np.array([], dtype=np.float64)
+    mask = np.abs(audio) > peak * 0.005
+    if mask.any():
+        first = int(mask.argmax())
+        last = len(audio) - int(mask[::-1].argmax())
+        audio = audio[first:last]
     return fs, audio
 
 
