@@ -94,6 +94,7 @@ private:
 	void decode_spectral_amplitudes(int, int );
 	void decode_vuv(int );
 	void adaptive_smoothing(float, float );
+	void apply_formant_postfilter();
 	void fft(float i[], float q[]);
 	void enhance_spectral_amplitudes(float&);
 	void ifft(float i[], float q[], float[]);
