@@ -1107,6 +1107,8 @@ software_imbe_decoder::clear()
    ErFlag = 0;
 
    memset(vee_history, 0, sizeof(vee_history));
+   memset(vee_override_, 0, sizeof(vee_override_));
+   vee_override_active_ = false;
 
    for (int i = 0; i < 58; i++) {
       for (int j = 0; j < 2; j++) log2Mu[i][j] = 0.0f;
@@ -1123,12 +1125,13 @@ software_imbe_decoder::clear()
    memset(sv,    0, sizeof(sv));
    memset(suv,   0, sizeof(suv));
 
-   // Re-seed unvoiced excitation. Same starting point as the constructor so
-   // every call begins with the same noise sequence; that's deterministic and
-   // perceptually indistinguishable from the previous tail of noise.
-   u[0] = 3147;
+   // Re-seed unvoiced excitation. The full 32-bit xorshift32 state lives in
+   // unvoiced_noise_state so its period is 2^32 - 1; the u[] array just
+   // caches per-frame noise samples in the LCG-era output range [0, 53124].
+   unvoiced_noise_state = 0xC0FFEEu;
+   u[0] = next_u(0);
    for (int i = 1; i < 211; i++) {
-      u[i] = next_u(u[i-1]);
+      u[i] = next_u(0);
    }
 
    // voiced_phase_seed is intentionally NOT reset - xorshift32 with a fixed
@@ -1137,17 +1140,20 @@ software_imbe_decoder::clear()
 }
 
 uint32_t
-software_imbe_decoder::next_u(uint32_t u) {
-   // Original LCG (171*u + 11213) mod 53125 has a period under 53125 samples
-   // (~6.6 s of unvoiced excitation), which is audible as repeating noise on
-   // long sibilants/fricatives. Drive an xorshift32 step and fold to the same
-   // 0..53124 output range so downstream scaling is unchanged. The xorshift
-   // state seed of 0 is degenerate, so guard against it.
-   if (u == 0) u = 0xC0FFEE;
-   u ^= u << 13;
-   u ^= u >> 17;
-   u ^= u << 5;
-   return u % 53125;
+software_imbe_decoder::next_u(uint32_t /*unused*/) {
+   // Long-period unvoiced noise. Original LCG (171*u + 11213) mod 53125 had a
+   // FULL period of 53125 samples (Hull-Dobell conditions all hold). An earlier
+   // version of this code stepped xorshift32 then folded mod 53125 with the
+   // *folded* value used as the next state - that capped the cycle structure
+   // at 53125 again with no guarantee of full period. Keep a real 32-bit
+   // xorshift32 state separately from the modulo output; period = 2^32 - 1.
+   //
+   // The input arg is kept for caller compatibility but ignored.
+   if (unvoiced_noise_state == 0) unvoiced_noise_state = 0xC0FFEEu;
+   unvoiced_noise_state ^= unvoiced_noise_state << 13;
+   unvoiced_noise_state ^= unvoiced_noise_state >> 17;
+   unvoiced_noise_state ^= unvoiced_noise_state << 5;
+   return unvoiced_noise_state % 53125;
 }
 
 software_imbe_decoder::~software_imbe_decoder()
@@ -1309,7 +1315,17 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		} else {
 			adaptive_smoothing(SE, ET);
 			smooth_voicing_decisions();
+			compute_envelope_phases();   // BEFORE postfilter - sees raw M
 			apply_formant_postfilter();
+		}
+
+		// Optional offline / multi-pass voicing override (one-shot). Applied
+		// AFTER decode_vuv + smoothing + envelope phase, BEFORE synth - so
+		// imbe_tune in --multipass can re-decode with externally-smoothed
+		// voicing without disturbing the rest of the per-frame state.
+		if (vee_override_active_) {
+			for (int l = 1; l <= 56; l++) vee[l][New] = vee_override_[l];
+			vee_override_active_ = false;
 		}
 
 		// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
@@ -1410,6 +1426,7 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 	enhance_spectral_amplitudes(SE);
 	adaptive_smoothing(SE, ET);
 	smooth_voicing_decisions();
+	compute_envelope_phases();   // BEFORE postfilter - sees raw M
 	apply_formant_postfilter();
 
 	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
@@ -1776,9 +1793,17 @@ software_imbe_decoder::smooth_voicing_decisions()
    // Voicing-decision median smoothing, after US6912496 (DVSI, expired Mar
    // 2023). For each harmonic l, replace vee[l][New] with the majority across
    // VOICING_SMOOTH_TAPS frames (current + (N-1) past). Cleans up V/UV
-   // chattering at phoneme boundaries. The original (pre-smoothing) decisions
-   // are pushed into vee_history so smoothing doesn't compound over time.
+   // chattering at phoneme boundaries. Per-frame pre-smoothing originals are
+   // pushed into vee_history so smoothing doesn't compound over time.
    if (params_.voicing_smooth_taps < 2) return;
+
+   // History must still be updated (so when smoothing later kicks in, it has
+   // recent frames to median across). But the actual median writeback is
+   // skipped on low-error frames - the patent applies smoothing only to
+   // "erroneously coded" frames; smoothing clean frames costs latency on
+   // legitimate fast V/UV transitions for no benefit.
+   const bool apply = (ER >= params_.voicing_smooth_er_threshold);
+
    const int TAPS = (params_.voicing_smooth_taps > 4) ? 4 : params_.voicing_smooth_taps;
    const int PAST = TAPS - 1;
    const int majority = (TAPS / 2) + 1;
@@ -1788,18 +1813,168 @@ software_imbe_decoder::smooth_voicing_decisions()
       original[l] = (l <= L) ? vee[l][New] : 0;
    }
 
-   for (int l = 1; l <= L; l++) {
-      int sum = original[l];
-      for (int p = 0; p < PAST; p++) sum += vee_history[l][p];
-      vee[l][New] = (sum >= majority) ? 1 : 0;
+   if (apply) {
+      for (int l = 1; l <= L; l++) {
+         int sum = original[l];
+         for (int p = 0; p < PAST; p++) sum += vee_history[l][p];
+         vee[l][New] = (sum >= majority) ? 1 : 0;
+      }
    }
 
-   // Shift history (newest first) and store this frame's original
+   // Always shift history with the raw (pre-smoothing) value so future-frame
+   // medians look at unaltered input.
    for (int l = 1; l <= 56; l++) {
       for (int p = PAST - 1; p > 0; p--) {
          vee_history[l][p] = vee_history[l][p - 1];
       }
       vee_history[l][0] = original[l];
+   }
+}
+
+void
+software_imbe_decoder::get_decoded_voicing(int out[57]) const
+{
+   // After decode_fullrate completes, the just-finished frame's voicing
+   // sits in vee[l][Old] (Old/New swap moved it there).
+   out[0] = 0;
+   for (int l = 1; l <= 56; l++) {
+      out[l] = vee[l][Old];
+   }
+}
+
+void
+software_imbe_decoder::set_voicing_override(const int in[57])
+{
+   for (int l = 1; l <= 56; l++) {
+      vee_override_[l] = in[l] ? 1 : 0;
+   }
+   vee_override_[0] = 0;
+   vee_override_active_ = true;
+}
+
+void
+software_imbe_decoder::compute_envelope_phases()
+{
+   // Voiced phase regeneration per US5701390 (DVSI, expired Feb 2015).
+   //
+   // Three corrections vs the older inline version that lived in synth_voiced:
+   //   - Reads M (the enhanced spectral magnitudes) BEFORE apply_formant_postfilter
+   //     has run, so the Hilbert kernel sees the un-postfiltered envelope.
+   //     Called from decode_fullrate prior to the postfilter.
+   //   - Uses the proper discrete Hilbert kernel  h(n) = 2/(pi*n) for odd n
+   //     (and 0 for even n) instead of the simple 1/m fallback. That's the
+   //     actual log-magnitude -> minimum-phase transform; the 1/m version was
+   //     a rough approximation that exaggerated low-order terms.
+   //   - Subtracts the in-band mean of B = log2(M) before convolving, so the
+   //     boundary extensions (symmetric for l<=0, geometric decay for l>L)
+   //     don't leak DC into the phase output. The Hilbert transform has no
+   //     DC response; this restores that property under truncation.
+
+   // UV->V transition phase reset, after US6963833 (DVSI, expired Mar 2022).
+   // Patent specifies "phases for each harmonic are initialized with a fixed
+   // set of values" - i.e. a per-harmonic table of predetermined offsets that
+   // are deliberately misaligned so the harmonics don't sum coherently at
+   // sample 0. Earlier version of this code just set psi1=0 on UV->V, which
+   // could leave harmonics aligned if the envelope-phase term was small
+   // (smooth spectrum at onset) - exactly the saturation the patent defends
+   // against.
+   //
+   // The table below is 56 phase offsets drawn from a fixed permutation of
+   // {0, pi/3, 2pi/3, pi, 4pi/3, 5pi/3} so adjacent harmonics never share a
+   // phase value, computed once. Setting psi1=0 then adding these offsets
+   // gives the patent's "balanced output waveforms preventing saturation
+   // distortions."
+   static const float uv_to_v_phase_table[57] = {
+      0.000f,
+      0.000f,   2.094f,   4.189f,   1.047f,   3.142f,   5.236f,   2.094f,   4.189f,
+      0.000f,   3.142f,   1.047f,   5.236f,   2.094f,   0.000f,   4.189f,   3.142f,
+      1.047f,   5.236f,   0.000f,   2.094f,   4.189f,   3.142f,   1.047f,   5.236f,
+      2.094f,   0.000f,   3.142f,   4.189f,   1.047f,   5.236f,   2.094f,   3.142f,
+      0.000f,   4.189f,   1.047f,   5.236f,   3.142f,   2.094f,   0.000f,   4.189f,
+      1.047f,   3.142f,   5.236f,   2.094f,   0.000f,   4.189f,   1.047f,   3.142f,
+      5.236f,   0.000f,   2.094f,   4.189f,   1.047f,   3.142f,   5.236f,   2.094f
+   };
+
+   if (params_.uv_to_v_reset) {
+      bool prev_any_voiced = false;
+      for (int l = 1; l <= OldL && !prev_any_voiced; l++) {
+         if (vee[l][Old]) prev_any_voiced = true;
+      }
+      bool cur_any_voiced = false;
+      for (int l = 1; l <= L && !cur_any_voiced; l++) {
+         if (vee[l][New]) cur_any_voiced = true;
+      }
+      if (!prev_any_voiced && cur_any_voiced) {
+         psi1 = 0.0f;
+         // Pre-seed phi[][Old] from the table so the synthesizer's interp
+         // path (which reads phi[Old]) sees the misaligned values too on
+         // the very first synthesis after onset.
+         for (int l = 1; l <= 56; l++) {
+            phi[l][Old] = uv_to_v_phase_table[l];
+         }
+      }
+   }
+
+   psi1 = psi1 + (Oldw0 + w0) * 80;
+   psi1 = remainderf(psi1, 2 * M_PI);
+
+   const int MAX_D = 19;
+   const int D = (params_.phase_kernel_d > MAX_D) ? MAX_D : params_.phase_kernel_d;
+
+   // Build log-magnitude vector B[1..L] and subtract its mean (DC removal).
+   float B[2 * 19 + 57];   // index B[l + MAX_D] for l in [-MAX_D, 56+MAX_D]
+   for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
+
+   double mean_B = 0.0;
+   int    n_B    = 0;
+   for (int l = 1; l <= L; l++) {
+      float mag = M[l][New];
+      float bl  = (mag > 1e-6f) ? log2f(mag) : -20.0f;
+      B[l + MAX_D] = bl;
+      mean_B += bl;
+      n_B++;
+   }
+   if (n_B > 0) mean_B /= (double)n_B;
+   for (int l = 1; l <= L; l++) {
+      B[l + MAX_D] -= (float)mean_B;
+   }
+   // Boundary extensions: B[0]=0 already; symmetric reflection for l<0,
+   // geometric decay for l>L. All operating on zero-mean B now.
+   for (int l = 1; l <= D; l++) {
+      B[-l + MAX_D] = B[l + MAX_D];
+   }
+   {
+      float decay = 1.0f;
+      float B_L = B[L + MAX_D];
+      for (int l = L + 1; l <= L + D && l < 56 + MAX_D; l++) {
+         decay *= params_.phase_kernel_gamma;
+         B[l + MAX_D] = B_L * decay;
+      }
+   }
+
+   // Proper discrete Hilbert kernel weights, precomputed once per call.
+   // h(m) = 2/(pi*m) for odd m, h(m) = 0 for even m.
+   const float two_over_pi = 2.0f / (float)M_PI;
+
+   float rho = (L > 0) ? ((float)Luv / (float)L) : 0.0f;
+   const int MaxL = (L > OldL) ? L : OldL;
+   for (int ell = 1; ell <= MaxL; ell++) {
+      float env_phase = 0.0f;
+      for (int m = 1; m <= D; m += 2) {  // odd-only per Hilbert kernel
+         env_phase += two_over_pi * (B[ell + m + MAX_D] - B[ell - m + MAX_D]) / (float)m;
+      }
+      uint32_t s = voiced_phase_seed;
+      s ^= s << 13; s ^= s >> 17; s ^= s << 5;
+      voiced_phase_seed = s;
+      float z = ((float)s * (2.0f / 4294967296.0f) - 1.0f) * (float)M_PI;
+      if (ell <= L/4) {
+         phi[ell][New] = psi1 * ell
+                       + params_.phase_low_blend * params_.phase_c_env * env_phase;
+      } else {
+         phi[ell][New] = psi1 * ell
+                       + params_.phase_c_env * env_phase
+                       + params_.phase_w_rand * rho * z;
+      }
    }
 }
 
@@ -1817,27 +1992,48 @@ software_imbe_decoder::apply_formant_postfilter()
       logM[l] = (m > 1e-6f) ? log2f(m) : -20.0f;
    }
 
+   // (2W+1)-tap smoothing of log magnitudes with symmetric reflection at
+   // the band edges (gap 5a). Clamp-to-edge biased the smoothed value at
+   // l=1 and l=L to itself, which over-emphasized those harmonics relative
+   // to mid-band; reflection gives them a real neighborhood.
    const int W_local = params_.fmt_w;
    float logM_smooth[57] = {0};
    for (int l = 1; l <= L; l++) {
       float sum = 0.0f;
       int count = 0;
       for (int j = l - W_local; j <= l + W_local; j++) {
-         int jc = (j < 1) ? 1 : (j > L ? L : j);
-         sum += logM[jc];
+         int jr;
+         if (j < 1) {
+            jr = 2 - j;          // 0 -> 2, -1 -> 3, ...
+            if (jr > L) jr = L;  // very short L safety
+         } else if (j > L) {
+            jr = 2 * L - j;      // L+1 -> L-1, L+2 -> L-2, ...
+            if (jr < 1) jr = 1;
+         } else {
+            jr = j;
+         }
+         sum += logM[jr];
          count++;
       }
       logM_smooth[l] = sum / (float)count;
    }
 
+   // Apply contrast emphasis only to voiced harmonics (gap 5b). Unvoiced
+   // bands carry noise-like content where there's no formant peak to
+   // emphasize; running the postfilter on them just makes noise sharper.
    float energy_before = 0.0f, energy_after = 0.0f;
    for (int l = 1; l <= L; l++) {
       energy_before += M[l][New] * M[l][New];
-      float scale = exp2f(params_.fmt_alpha * (logM[l] - logM_smooth[l]));
-      M[l][New] = M[l][New] * scale;
+      if (vee[l][New]) {
+         float scale = exp2f(params_.fmt_alpha * (logM[l] - logM_smooth[l]));
+         M[l][New] = M[l][New] * scale;
+      }
       energy_after += M[l][New] * M[l][New];
    }
 
+   // Renormalize TOTAL energy (voiced bands modified, unvoiced unchanged).
+   // Preserves overall loudness so the postfilter doesn't shift balance
+   // between voiced and unvoiced regions in mixed-voicing frames.
    if (energy_after > 1e-6f) {
       float norm = sqrtf(energy_before / energy_after);
       for (int l = 1; l <= L; l++) {
@@ -2136,76 +2332,11 @@ software_imbe_decoder::synth_voiced()
       MaxL = OldL;
    }
 
-   // UV->V transition phase reset, after US6963833 (DVSI, expired Mar 2022).
-   // If the previous frame had no voiced harmonics and this one does, the
-   // running psi1 carries stale phase from before whatever silence/fricative
-   // preceded this onset; that stale phase can land harmonics in alignment
-   // and cause a click. Reset to a clean state so the envelope-phase term
-   // below provides the only per-harmonic offsets at onset.
-   if (params_.uv_to_v_reset) {
-      bool prev_any_voiced = false;
-      for (int l = 1; l <= OldL && !prev_any_voiced; l++) {
-         if (vee[l][Old]) prev_any_voiced = true;
-      }
-      bool cur_any_voiced = false;
-      for (int l = 1; l <= L && !cur_any_voiced; l++) {
-         if (vee[l][New]) cur_any_voiced = true;
-      }
-      if (!prev_any_voiced && cur_any_voiced) {
-         psi1 = 0.0f;
-      }
-   }
-
-   psi1 = psi1 +(Oldw0 + w0) * 80;
-   psi1 = remainderf(psi1, 2 * M_PI); // ToDo: decide if its 2pi or pi^2 // YEP it should be 2pi
-
-   // Voiced phase regeneration combining glottal-pulse linear phase, the
-   // US5701390 envelope-derived phase (Hilbert of log-magnitude), and a small
-   // optional residual random term. Tuning lives in VocoderParams.
-   // Array size uses a compile-time max (19, the patent's value); runtime D
-   // is clamped to that ceiling.
-   const int MAX_D = 19;
-   const int D = (params_.phase_kernel_d > MAX_D) ? MAX_D : params_.phase_kernel_d;
-   float B[2 * MAX_D + 57];   // index B[l + MAX_D] for l in [-MAX_D, 56+MAX_D]
-   for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
-   for (int l = 1; l <= L; l++) {
-      float mag = M[l][New];
-      B[l + MAX_D] = (mag > 1e-6f) ? log2f(mag) : -20.0f;
-   }
-   // Symmetric reflection for l <= 0 (B[0] already zero)
-   for (int l = 1; l <= D; l++) {
-      B[-l + MAX_D] = B[l + MAX_D];
-   }
-   // Geometric decay for l > L
-   {
-      float decay = 1.0f;
-      float B_L = B[L + MAX_D];
-      for (int l = L + 1; l <= L + D && l < 56 + MAX_D; l++) {
-         decay *= params_.phase_kernel_gamma;
-         B[l + MAX_D] = B_L * decay;
-      }
-   }
-
-   float rho = (L > 0) ? ((float)Luv / (float)L) : 0.0f;
-   for(ell = 1; ell <= MaxL; ell++) {
-      // Envelope-based phase via 1/m kernel
-      float env_phase = 0.0f;
-      for (int m = 1; m <= D; m++) {
-         env_phase += (B[ell + m + MAX_D] - B[ell - m + MAX_D]) / (float)m;
-      }
-      // Fresh random per harmonic per frame (xorshift32)
-      uint32_t s = voiced_phase_seed;
-      s ^= s << 13; s ^= s >> 17; s ^= s << 5;
-      voiced_phase_seed = s;
-      float z = ((float)s * (2.0f / 4294967296.0f) - 1.0f) * (float)M_PI;
-      if (ell <= L/4) {
-         // Preserve glottal-pulse alignment for low harmonics; envelope phase
-         // mixed in lightly so smooth spectra still get a touch of phase shape.
-         phi[ell][ New] = psi1 * ell + params_.phase_low_blend * params_.phase_c_env * env_phase;
-      } else {
-         phi[ell][ New] = psi1 * ell + params_.phase_c_env * env_phase + params_.phase_w_rand * rho * z;
-      }
-   }
+   // Phase regeneration was moved to compute_envelope_phases(), which is
+   // called by decode_fullrate BEFORE apply_formant_postfilter runs. That way
+   // the Hilbert kernel sees the pre-postfilter magnitudes - the postfilter
+   // and the phase regen don't fight each other through M[l][New]. See the
+   // "Implementation gaps and assumptions" section of VOCODER-IMPROVEMENTS.md.
 
    for(en = 0; en <= 159; en++) {
       sv[en] = 0;

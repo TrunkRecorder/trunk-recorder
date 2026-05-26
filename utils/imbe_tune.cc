@@ -133,6 +133,7 @@ static bool apply_knob(VocoderParams& p, const std::string& name, const json& v)
     else if (name == "phase_kernel_d")         p.phase_kernel_d = v.get<int>();
     else if (name == "phase_kernel_gamma")     p.phase_kernel_gamma = v.get<float>();
     else if (name == "voicing_smooth_taps")    p.voicing_smooth_taps = v.get<int>();
+    else if (name == "voicing_smooth_er_threshold") p.voicing_smooth_er_threshold = v.get<float>();
     else if (name == "uv_to_v_reset")          p.uv_to_v_reset = v.get<bool>();
     else if (name == "interp_max_l")           p.interp_max_l = v.get<int>();
     else if (name == "interp_pitch_tol")       p.interp_pitch_tol = v.get<float>();
@@ -183,16 +184,54 @@ static std::string json_csv(const json& v)
 }
 
 // -----------------------------------------------------------------------------
+// 5-tap centered median across a per-frame voicing sequence. Used by
+// --multipass to smooth voicing across the WHOLE captured call using future
+// frames - something the live decoder can't do without a frame buffer.
+static void median_smooth_voicing(std::vector<std::array<int, 57>>& seq, int half_w)
+{
+    if (half_w < 1 || (int)seq.size() < 2 * half_w + 1) return;
+    std::vector<std::array<int, 57>> out = seq;
+    const int N = (int)seq.size();
+    for (int i = 0; i < N; i++) {
+        for (int l = 1; l <= 56; l++) {
+            int sum = 0, count = 0;
+            for (int k = -half_w; k <= half_w; k++) {
+                int j = i + k;
+                if (j < 0 || j >= N) continue;
+                sum   += seq[j][l];
+                count += 1;
+            }
+            out[i][l] = (sum * 2 > count) ? 1 : 0;   // majority
+        }
+        out[i][0] = 0;
+    }
+    seq = out;
+}
+
 int main(int argc, char** argv)
 {
     std::string input_path, sweep_path, output_dir;
+    bool multipass = false;
+    int  voicing_lookahead = 2;   // 5-tap centered window default
     for (int i = 1; i < argc; i++) {
         std::string a = argv[i];
         if      (a == "--input"      && i + 1 < argc) input_path  = argv[++i];
         else if (a == "--sweep"      && i + 1 < argc) sweep_path  = argv[++i];
         else if (a == "--output-dir" && i + 1 < argc) output_dir  = argv[++i];
+        else if (a == "--multipass") multipass = true;
+        else if (a == "--lookahead"  && i + 1 < argc) voicing_lookahead = std::atoi(argv[++i]);
         else if (a == "-h" || a == "--help") {
-            std::cout << "imbe_tune --input call.imbe --sweep sweep.json --output-dir DIR\n";
+            std::cout <<
+              "imbe_tune --input call.imbe --sweep sweep.json --output-dir DIR\n"
+              "          [--multipass] [--lookahead N]\n"
+              "\n"
+              "--multipass    Decode each combo twice. Pass 1 captures the raw\n"
+              "               per-frame voicing; the sequence is smoothed with a\n"
+              "               (2*lookahead+1)-tap centered median; pass 2 re-\n"
+              "               decodes using set_voicing_override per frame. Uses\n"
+              "               future frames, which the live decoder can't.\n"
+              "--lookahead N  Half-width of the centered voicing-smoothing\n"
+              "               window (default 2 -> 5-tap median).\n";
             return 0;
         }
         else {
@@ -242,20 +281,67 @@ int main(int argc, char** argv)
             apply_knob(params, dims[i].name, dims[i].values[idx[i]]);
         }
 
-        // Decode
-        software_imbe_decoder dec;
-        dec.set_params(params);
-        dec.clear();
-
+        // Decode. With --multipass we run twice per combo:
+        //   pass 1: capture raw per-frame voicing (with the same params, so
+        //           the smoothing-disabled voicing is what each combo actually
+        //           sees for this content), then median-smooth across the
+        //           whole call with future-frame context.
+        //   pass 2: re-decode with set_voicing_override per frame so synthesis
+        //           uses the centered-smoothed voicing.
         std::vector<int16_t> samples;
         samples.reserve(frames.size() * 160);
         int16_t buf[160];
-        for (const auto& fr : frames) {
-            dec.decode_fullrate(buf,
-                fr.u[0], fr.u[1], fr.u[2], fr.u[3],
-                fr.u[4], fr.u[5], fr.u[6], fr.u[7],
-                fr.E0, fr.ET);
-            for (int i = 0; i < 160; i++) samples.push_back(buf[i]);
+
+        if (multipass) {
+            // Pass 1 — disable internal voicing smoothing so we capture the
+            // raw per-frame decision; we'll do the centered smoothing below.
+            VocoderParams pass1 = params;
+            pass1.voicing_smooth_taps = 1;        // off
+            software_imbe_decoder dec1;
+            dec1.set_params(pass1);
+            dec1.clear();
+
+            std::vector<std::array<int, 57>> voicing_seq(frames.size());
+            for (size_t i = 0; i < frames.size(); i++) {
+                const auto& fr = frames[i];
+                dec1.decode_fullrate(buf,
+                    fr.u[0], fr.u[1], fr.u[2], fr.u[3],
+                    fr.u[4], fr.u[5], fr.u[6], fr.u[7],
+                    fr.E0, fr.ET);
+                dec1.get_decoded_voicing(voicing_seq[i].data());
+            }
+            // Centered median smoothing with future-frame context.
+            median_smooth_voicing(voicing_seq, voicing_lookahead);
+
+            // Pass 2 — re-decode with the smoothed voicing as override.
+            // Disable internal smoothing in pass 2 as well so the only
+            // smoothing applied is the centered one we just computed.
+            VocoderParams pass2 = params;
+            pass2.voicing_smooth_taps = 1;
+            software_imbe_decoder dec2;
+            dec2.set_params(pass2);
+            dec2.clear();
+
+            for (size_t i = 0; i < frames.size(); i++) {
+                dec2.set_voicing_override(voicing_seq[i].data());
+                const auto& fr = frames[i];
+                dec2.decode_fullrate(buf,
+                    fr.u[0], fr.u[1], fr.u[2], fr.u[3],
+                    fr.u[4], fr.u[5], fr.u[6], fr.u[7],
+                    fr.E0, fr.ET);
+                for (int j = 0; j < 160; j++) samples.push_back(buf[j]);
+            }
+        } else {
+            software_imbe_decoder dec;
+            dec.set_params(params);
+            dec.clear();
+            for (const auto& fr : frames) {
+                dec.decode_fullrate(buf,
+                    fr.u[0], fr.u[1], fr.u[2], fr.u[3],
+                    fr.u[4], fr.u[5], fr.u[6], fr.u[7],
+                    fr.E0, fr.ET);
+                for (int i = 0; i < 160; i++) samples.push_back(buf[i]);
+            }
         }
 
         // Quick in-tool metrics (full set via analyze_vocoder.py on the .wav)

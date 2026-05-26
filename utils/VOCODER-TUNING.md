@@ -91,8 +91,24 @@ producing one `.wav` and one `.json` sidecar per combination plus a
     --output-dir /tmp/sw1
 ```
 
+For audio-quality-focused tuning that uses **future-frame voicing context**
+(the live decoder can't do this — it's the offline-only win), add
+`--multipass`:
+
+```bash
+./build/imbe_tune --multipass --lookahead 2 \
+    --input call.imbe --sweep utils/sweep.json --output-dir /tmp/sw1
+```
+
+Each combo is decoded twice. Pass 1 captures raw per-frame voicing; the
+sequence is smoothed with a centered (2·lookahead+1)-tap median (default
+5-tap); pass 2 re-decodes with the smoothed voicing as a per-frame
+override. Costs ~2× decode time but gives noticeably cleaner V→UV
+transitions on noisy content. See `docs/Notes/VOCODER-IMPROVEMENTS.md`
+"Multi-pass / offline mode" for details.
+
 Decodes are fast — a 10 s call swept across 24 combos finishes in well
-under a minute. Output structure:
+under a minute (~2 min with `--multipass`). Output structure:
 
 ```
 /tmp/sw1/

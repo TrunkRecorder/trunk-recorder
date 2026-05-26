@@ -53,7 +53,11 @@ struct VocoderParams {
 	float phase_kernel_gamma    = 0.72f;
 
 	// Voicing-decision median smoothing (US6912496, expired Mar 2023).
-	int   voicing_smooth_taps   = 3;
+	// Only applied when smoothed ER >= voicing_smooth_er_threshold, so clean
+	// audio gets snappy V/UV transitions and only noisy audio gets de-
+	// chattered. Set threshold to 0.0 for always-on (legacy behavior).
+	int   voicing_smooth_taps        = 3;
+	float voicing_smooth_er_threshold = 0.01f;
 
 	// UV->V phase reset (US6963833, expired Mar 2022).
 	bool  uv_to_v_reset         = true;
@@ -99,6 +103,25 @@ public:
 	const VocoderParams& get_params() const { return params_; }
 
 	/**
+	 * Multi-pass / offline support: capture the per-band voicing decision
+	 * of the last decoded frame (post-smoothing, post-override). out[1..56]
+	 * are populated; out[0] = 0.
+	 */
+	void get_decoded_voicing(int out[57]) const;
+
+	/**
+	 * Multi-pass / offline support: pre-set the voicing decision for the
+	 * NEXT call to decode_fullrate. Override is applied AFTER
+	 * smooth_voicing_decisions and BEFORE compute_envelope_phases /
+	 * postfilter / synth, so it controls what the synthesizer sees.
+	 * Consumed (cleared) after one decode call. Use in a pass-2 decode
+	 * with externally-smoothed voicing from a pass-1 capture.
+	 *
+	 * in[1..56] are read; in[0] is ignored.
+	 */
+	void set_voicing_override(const int in[57]);
+
+	/**
 	 * Decode the compressed audio.
 	 *
 	 * \cw in IMBE codeword (including parity check bits).
@@ -128,7 +151,10 @@ private:
 	float phi[57][2];
 	uint32_t u[211];
 	uint32_t voiced_phase_seed;	// xorshift32 state for per-frame voiced phase regen
+	uint32_t unvoiced_noise_state;	// full 32-bit xorshift32 state for unvoiced excitation
 	int vee_history[57][4];		// past voicing decisions per harmonic (newest at [0])
+	int vee_override_[57];		// one-shot override of vee[][New] for offline multi-pass
+	bool vee_override_active_;	// one-shot flag; consumed by decode_fullrate
 	VocoderParams params_;		// runtime tuning; defaults set in struct
 
 	int Old;
@@ -152,6 +178,7 @@ private:
 	void adaptive_smoothing(float, float );
 	void apply_formant_postfilter();
 	void smooth_voicing_decisions();
+	void compute_envelope_phases();
 	void fft(float i[], float q[]);
 	void enhance_spectral_amplitudes(float&);
 	void ifft(float i[], float q[], float[]);
