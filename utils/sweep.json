@@ -1,0 +1,8 @@
+{
+  "_comment": "Default sweep spec for imbe_tune. Each top-level key is a VocoderParams field; its array is the values to sweep. Cartesian product of all listed dimensions is run. Keys starting with '_' are ignored.",
+  "_size": "3 * 3 * 2 = 18 combos. Add more knobs/values to widen the sweep.",
+
+  "fmt_alpha":       [0.15, 0.22, 0.30],
+  "phase_low_blend": [0.55, 0.70, 0.85],
+  "fmt_w":           [3, 5]
+}

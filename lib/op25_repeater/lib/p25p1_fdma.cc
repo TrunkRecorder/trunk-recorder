@@ -245,7 +245,10 @@ namespace gr {
 				error_history[i] = -1;
 			// Pick up env-var-based IMBE capture directory. Cleared on dtor.
 			const char* env_cap = std::getenv("OP25_IMBE_CAPTURE_DIR");
-			if (env_cap && env_cap[0]) capture_dir_ = env_cap;
+			if (env_cap && env_cap[0]) {
+				capture_dir_ = env_cap;
+				fprintf(stderr, "[IMBE capture] enabled, dir=%s\n", env_cap);
+			}
 		}
 
 		void p25p1_fdma::reset_rx_status() {
@@ -866,12 +869,19 @@ namespace gr {
                                      (unsigned long long)ms);
                             capture_file_ = fopen(fname, "wb");
                             if (capture_file_) {
+                                fprintf(stderr, "[IMBE capture] -> %s\n", fname);
                                 // 16-byte header: "P25IMBE\0" magic + uint32 version + uint32 reserved
                                 const char magic[8] = {'P','2','5','I','M','B','E','\0'};
                                 uint32_t ver = 1, reserved = 0;
                                 fwrite(magic, 1, 8, capture_file_);
                                 fwrite(&ver, 4, 1, capture_file_);
                                 fwrite(&reserved, 4, 1, capture_file_);
+                            } else {
+                                // Disable further attempts so we don't spam errors
+                                // every 20 ms; user can re-enable by restarting.
+                                fprintf(stderr, "[IMBE capture] fopen failed for %s: %s — disabling capture\n",
+                                        fname, std::strerror(errno));
+                                capture_dir_.clear();
                             }
                         }
                         if (capture_file_) {
