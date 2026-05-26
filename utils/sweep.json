@@ -1,8 +1,14 @@
 {
-  "_comment": "Default sweep spec for imbe_tune. Each top-level key is a VocoderParams field; its array is the values to sweep. Cartesian product of all listed dimensions is run. Keys starting with '_' are ignored.",
-  "_size": "3 * 3 * 2 = 18 combos. Add more knobs/values to widen the sweep.",
+  "_about": "Sweep spec for imbe_tune. Each top-level key (except those starting with _) is a VocoderParams field name; its array is the list of values to try. The tool runs the cartesian product of all listed dimensions. Knobs not listed keep their VocoderParams defaults from software_imbe_decoder.h.",
 
-  "fmt_alpha":       [0.15, 0.22, 0.30],
-  "phase_low_blend": [0.55, 0.70, 0.85],
-  "fmt_w":           [3, 5]
+  "_size": "3 x 2 x 2 x 2 = 24 combos. Each combo decodes the whole input .imbe in well under a second, so the full sweep runs in ~10-30 s. The size is chosen so blind_compare.py at 60 rounds gets ~5 judgments per combo — enough for a noisy ranking. For a quick single-knob test, drop all but one dimension.",
+
+  "_centered_on": "The current best-known values (fmt_alpha=0.22, fmt_w=5, phase_low_blend=0.85, repeat_amplitude_decay=0.85). Each listed dimension brackets one step above and below.",
+
+  "_other_knobs": "Other tunable VocoderParams fields you can add as keys: phase_c_env, phase_w_rand, phase_kernel_d, phase_kernel_gamma, voicing_smooth_taps, uv_to_v_reset, interp_max_l, interp_pitch_tol. Adding any extra dimension multiplies the combo count — keep the total under ~30 if you plan to blind-A/B them.",
+
+  "fmt_alpha":              [0.18, 0.22, 0.28],
+  "fmt_w":                  [3, 5],
+  "phase_low_blend":        [0.70, 0.85],
+  "repeat_amplitude_decay": [0.85, 0.95]
 }
