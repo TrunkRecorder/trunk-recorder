@@ -56,6 +56,7 @@ namespace gr {
 
         p25p1_fdma::~p25p1_fdma()
         {
+            if (capture_file_) { fclose(capture_file_); capture_file_ = nullptr; }
             delete framer;
         }
 
@@ -242,6 +243,9 @@ namespace gr {
 			rx_status.last_update = time(NULL);
 			for (int i=0; i<20; i++)
 				error_history[i] = -1;
+			// Pick up env-var-based IMBE capture directory. Cleared on dtor.
+			const char* env_cap = std::getenv("OP25_IMBE_CAPTURE_DIR");
+			if (env_cap && env_cap[0]) capture_dir_ = env_cap;
 		}
 
 		void p25p1_fdma::reset_rx_status() {
@@ -282,6 +286,8 @@ namespace gr {
 			d_imbe_er = 0.0f;
 			d_imbe_rpt_ctr = 0;
 			memset(d_imbe_last_vec, 0, sizeof(d_imbe_last_vec));
+			// Close any active IMBE capture file - next call will open a fresh one.
+			if (capture_file_) { fclose(capture_file_); capture_file_ = nullptr; }
 		}
 
         void p25p1_fdma::process_duid(uint32_t const duid, uint32_t const nac, const uint8_t* buf, const int len) {
@@ -844,6 +850,39 @@ namespace gr {
                     uint16_t imbe_error = 0;
 
                     errs = imbe_header_decode(cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
+
+                    // IMBE frame capture for offline tuning. Open a per-call
+                    // file the first time we see a frame after a clear(), and
+                    // append one fixed-size record per frame.
+                    if (!capture_dir_.empty()) {
+                        if (capture_file_ == nullptr) {
+                            // Filename: <dir>/p25imbe_<tgid>_<epoch_ms>.imbe
+                            char fname[1024];
+                            uint64_t ms = (uint64_t)(time(NULL)) * 1000ULL;
+                            snprintf(fname, sizeof(fname),
+                                     "%s/p25imbe_tg%u_%llu.imbe",
+                                     capture_dir_.c_str(),
+                                     (unsigned)vf_tgid,
+                                     (unsigned long long)ms);
+                            capture_file_ = fopen(fname, "wb");
+                            if (capture_file_) {
+                                // 16-byte header: "P25IMBE\0" magic + uint32 version + uint32 reserved
+                                const char magic[8] = {'P','2','5','I','M','B','E','\0'};
+                                uint32_t ver = 1, reserved = 0;
+                                fwrite(magic, 1, 8, capture_file_);
+                                fwrite(&ver, 4, 1, capture_file_);
+                                fwrite(&reserved, 4, 1, capture_file_);
+                            }
+                        }
+                        if (capture_file_) {
+                            // 40-byte record: u[0..7] (8 u32) + E0 (u32) + ET (u32)
+                            uint32_t rec[10] = {
+                                u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
+                                E0, ET
+                            };
+                            fwrite(rec, 4, 10, capture_file_);
+                        }
+                    }
 
                     if (d_debug >= 9) {
                         packed_codeword p_cw;

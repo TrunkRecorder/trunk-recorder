@@ -122,12 +122,20 @@ namespace gr {
                 int   d_imbe_rpt_ctr = 0;
                 int16_t d_imbe_last_vec[8] = {0};
 
+                // IMBE frame capture for offline tuning. When capture_dir_ is
+                // non-empty (set via OP25_IMBE_CAPTURE_DIR env var or via
+                // set_imbe_capture_dir()), every IMBE frame's u[0..7], E0, ET
+                // is written to a per-call binary file. See imbe_tune utility.
+                std::string capture_dir_;
+                FILE*       capture_file_ = nullptr;
+
                 typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
                 voice_codec_cb_t voice_codec_cb_;
                 void *voice_codec_cb_data_;
 
             public:
                 void set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) { voice_codec_cb_ = cb; voice_codec_cb_data_ = user_data; }
+                void set_imbe_capture_dir(const std::string& dir) { capture_dir_ = dir; }
                 void set_debug(int debug);
                 void set_nac(int nac);
                 void reset_timer();

@@ -29,6 +29,44 @@
 #include <stdint.h>
 
 /**
+ * Runtime-tunable knobs for the trunk-recorder-specific quality improvements
+ * layered on the TIA-102.BABA-A IMBE reference decoder. Defaults match the
+ * "best so far" values established empirically; pass a modified instance to
+ * software_imbe_decoder::set_params() to override at runtime (used by the
+ * imbe_tune utility for parameter sweeps).
+ *
+ * See docs/Notes/VOCODER-IMPROVEMENTS.md and the AUDIO TUNING PARAMETERS
+ * comment block at the top of software_imbe_decoder.cc for the patent-derived
+ * rationale, target ranges, and effect of each field.
+ */
+struct VocoderParams {
+	// Formant postfilter (US5241650, expired ~2009).
+	//   alpha 0=off, 0.25 mild, 0.5 aggressive; w = (2*w+1)-tap smoothing.
+	float fmt_alpha             = 0.22f;
+	int   fmt_w                 = 5;
+
+	// Voiced phase regeneration (US5701390, expired Feb 2015).
+	float phase_c_env           = 0.90f;
+	float phase_w_rand          = 0.15f;
+	float phase_low_blend       = 0.85f;
+	int   phase_kernel_d        = 19;
+	float phase_kernel_gamma    = 0.72f;
+
+	// Voicing-decision median smoothing (US6912496, expired Mar 2023).
+	int   voicing_smooth_taps   = 3;
+
+	// UV->V phase reset (US6963833, expired Mar 2022).
+	bool  uv_to_v_reset         = true;
+
+	// Subframe-style amp/freq/phase interpolation (US6131084, expired ~2017).
+	int   interp_max_l          = 12;
+	float interp_pitch_tol      = 0.15f;
+
+	// Repeated-frame amplitude decay (compounds across repeats).
+	float repeat_amplitude_decay = 0.85f;
+};
+
+/**
  * A software implementation of the imbe_decoder interface.
  */
 class software_imbe_decoder : public imbe_decoder {
@@ -51,6 +89,14 @@ public:
 	 * gating stuck in mute (producing fully-silent output files).
 	 */
 	void clear();
+
+	/**
+	 * Replace the tuning parameters used by synthesis. Does not reset
+	 * cross-frame state; call clear() too if you want a clean slate. Safe
+	 * to call between frames; takes effect on the next decoded frame.
+	 */
+	void set_params(const VocoderParams& p) { params_ = p; }
+	const VocoderParams& get_params() const { return params_; }
 
 	/**
 	 * Decode the compressed audio.
@@ -83,6 +129,7 @@ private:
 	uint32_t u[211];
 	uint32_t voiced_phase_seed;	// xorshift32 state for per-frame voiced phase regen
 	int vee_history[57][4];		// past voicing decisions per harmonic (newest at [0])
+	VocoderParams params_;		// runtime tuning; defaults set in struct
 
 	int Old;
 	int New;
