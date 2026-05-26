@@ -145,7 +145,7 @@ static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 //   1 -> off (no smoothing)
 //   3 -> 3-tap median, drops single-frame outliers (recommended default)
 //   5 -> 5-tap median, smoother but voicing changes lag 2 frames
-static constexpr int VOICING_SMOOTH_TAPS = 5;
+static constexpr int VOICING_SMOOTH_TAPS = 3;
 
 // -----------------------------------------------------------------------------
 // UV->V phase reset (synth_voiced, after US6963833, expired Mar 2022)
@@ -190,6 +190,32 @@ static constexpr bool UV_TO_V_RESET = true;
 //   0.20 -> includes mild vibrato; risks smearing real pitch jumps
 static constexpr int   INTERP_MAX_L      = 12;
 static constexpr float INTERP_PITCH_TOL  = 0.15f;
+
+// -----------------------------------------------------------------------------
+// Repeated-frame amplitude decay (decode_fullrate, repeat path)
+// -----------------------------------------------------------------------------
+// When a frame is gated to "repeat the last good frame's parameters" (b0>207,
+// E0>=2, or ET >= 10+40*ER, but rpt_ctr < 4), the synth re-renders the
+// previous good frame's spectral envelope. Without any decay, several
+// consecutive repeats produce a sustained tone at the last formant
+// configuration - audible as ringing / warble / buzz at the end of phonemes
+// whenever a tail of marginal frames triggers a few repeats before the
+// 4-frame mute threshold hits. A small linear decay per repeat fades the
+// held formants out naturally so the transition to silence is gradual
+// instead of "tone for 60 ms then a hard cut to zero".
+//
+// Applied only to M[l][New] (the magnitudes the synth reads). Mu/log2Mu are
+// left at full value - they're decoder memory used for parameter prediction
+// in the NEXT non-repeat frame, and decaying them would distort later
+// amplitude decoding.
+//
+// REPEAT_AMPLITUDE_DECAY - multiplier applied to M each repeat. Compounds
+// across consecutive repeats because [Old] = previous [New] after the swap.
+//   1.00 -> no decay (sustained tones, prior behavior)
+//   0.85 -> recommended; ~72% after 2 repeats, ~61% after 3
+//   0.70 -> aggressive; ~49% after 2, ~34% after 3
+//   0.50 -> very aggressive; ~25% after 2, near-silent after 3
+static constexpr float REPEAT_AMPLITUDE_DECAY = 0.85f;
 
 // =============================================================================
 // TELEMETRY
@@ -1275,9 +1301,14 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 			// frame; adaptive_smoothing / smooth_voicing / postfilter are
 			// also skipped because their effects are already baked into the
 			// [Old] values (re-applying would compound).
+			//
+			// Apply REPEAT_AMPLITUDE_DECAY to M only - compounds across
+			// consecutive repeats to fade held formants out before the mute
+			// threshold hits. See the REPEAT_AMPLITUDE_DECAY notes at the
+			// top of this file.
 			for (int l = 0; l < 57; l++) {
 				vee[l][New] = vee[l][Old];
-				M[l][New]   = M[l][Old];
+				M[l][New]   = REPEAT_AMPLITUDE_DECAY * M[l][Old];
 				Mu[l][New]  = Mu[l][Old];
 				phi[l][New] = phi[l][Old];
 			}
