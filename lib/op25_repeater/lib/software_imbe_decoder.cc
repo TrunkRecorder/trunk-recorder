@@ -43,13 +43,16 @@
 #include <vector>
 
 // =============================================================================
-// AUDIO TUNING PARAMETERS
+// AUDIO TUNING PARAMETERS  (reference documentation)
 // =============================================================================
 //
-// Knobs for the trunk-recorder-specific quality improvements layered on top of
-// the TIA-102.BABA-A IMBE reference decoder. Each block names a single stage of
-// the synthesis pipeline; defaults reflect the values that sounded best on the
-// WMATA (P25 Phase 1) test recording. Edit values here, rebuild, listen.
+// As of Phase 2 these knobs live in the VocoderParams struct in
+// software_imbe_decoder.h - this block is just the long-form documentation
+// for what each one does. Edit the defaults in the struct (or override at
+// runtime via software_imbe_decoder::set_params()) and rebuild.
+//
+// Each block names a single stage of the synthesis pipeline; defaults reflect
+// the values that sounded best on the WMATA (P25 Phase 1) test recording.
 //
 // Pipeline order:
 //   decode_spectral_amplitudes -> enhance_spectral_amplitudes (TIA spec)
@@ -77,8 +80,6 @@
 //   2 -> 5-tap, narrower formants get more boost
 //   3 -> 7-tap, ~1 formant wide (recommended default)
 //   5 -> 11-tap, smoother result, less emphasis per peak
-static constexpr float FMT_ALPHA = 0.22f;
-static constexpr int   FMT_W     = 5;
 
 // -----------------------------------------------------------------------------
 // Voiced phase regeneration (synth_voiced)
@@ -124,11 +125,6 @@ static constexpr int   FMT_W     = 5;
 // PHASE_KERNEL_GAMMA - geometric decay applied to extrapolated B[l] for l>L
 // (so the kernel doesn't run off the end of the harmonic array). Patent's
 // value is 0.72; rarely needs tuning.
-static constexpr float PHASE_C_ENV         = 0.90f;
-static constexpr float PHASE_W_RAND        = 0.15f;
-static constexpr float PHASE_LOW_BLEND     = 0.85f;
-static constexpr int   PHASE_KERNEL_D      = 19;
-static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 
 // -----------------------------------------------------------------------------
 // Voicing-decision smoothing (smooth_voicing_decisions, after US6912496,
@@ -145,7 +141,6 @@ static constexpr float PHASE_KERNEL_GAMMA  = 0.72f;
 //   1 -> off (no smoothing)
 //   3 -> 3-tap median, drops single-frame outliers (recommended default)
 //   5 -> 5-tap median, smoother but voicing changes lag 2 frames
-static constexpr int VOICING_SMOOTH_TAPS = 3;
 
 // -----------------------------------------------------------------------------
 // UV->V phase reset (synth_voiced, after US6963833, expired Mar 2022)
@@ -161,7 +156,6 @@ static constexpr int VOICING_SMOOTH_TAPS = 3;
 // UV_TO_V_RESET - enable the reset.
 //   false -> off (keeps prior psi1 across silence)
 //   true  -> reset psi1=0 at voicing onset (recommended default)
-static constexpr bool UV_TO_V_RESET = true;
 
 // -----------------------------------------------------------------------------
 // Subframe-style amplitude/phase interpolation (synth_voiced, after US6131084,
@@ -188,8 +182,6 @@ static constexpr bool UV_TO_V_RESET = true;
 //   0.10 -> TIA spec default
 //   0.15 -> recommended, catches normal pitch wobble
 //   0.20 -> includes mild vibrato; risks smearing real pitch jumps
-static constexpr int   INTERP_MAX_L      = 12;
-static constexpr float INTERP_PITCH_TOL  = 0.15f;
 
 // -----------------------------------------------------------------------------
 // Repeated-frame amplitude decay (decode_fullrate, repeat path)
@@ -215,7 +207,6 @@ static constexpr float INTERP_PITCH_TOL  = 0.15f;
 //   0.85 -> recommended; ~72% after 2 repeats, ~61% after 3
 //   0.70 -> aggressive; ~49% after 2, ~34% after 3
 //   0.50 -> very aggressive; ~25% after 2, near-silent after 3
-static constexpr float REPEAT_AMPLITUDE_DECAY = 0.85f;
 
 // =============================================================================
 // TELEMETRY
@@ -1308,7 +1299,7 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 			// top of this file.
 			for (int l = 0; l < 57; l++) {
 				vee[l][New] = vee[l][Old];
-				M[l][New]   = REPEAT_AMPLITUDE_DECAY * M[l][Old];
+				M[l][New]   = params_.repeat_amplitude_decay * M[l][Old];
 				Mu[l][New]  = Mu[l][Old];
 				phi[l][New] = phi[l][Old];
 			}
@@ -1787,8 +1778,8 @@ software_imbe_decoder::smooth_voicing_decisions()
    // VOICING_SMOOTH_TAPS frames (current + (N-1) past). Cleans up V/UV
    // chattering at phoneme boundaries. The original (pre-smoothing) decisions
    // are pushed into vee_history so smoothing doesn't compound over time.
-   if (VOICING_SMOOTH_TAPS < 2) return;
-   const int TAPS = (VOICING_SMOOTH_TAPS > 4) ? 4 : VOICING_SMOOTH_TAPS;
+   if (params_.voicing_smooth_taps < 2) return;
+   const int TAPS = (params_.voicing_smooth_taps > 4) ? 4 : params_.voicing_smooth_taps;
    const int PAST = TAPS - 1;
    const int majority = (TAPS / 2) + 1;
 
@@ -1826,11 +1817,12 @@ software_imbe_decoder::apply_formant_postfilter()
       logM[l] = (m > 1e-6f) ? log2f(m) : -20.0f;
    }
 
+   const int W_local = params_.fmt_w;
    float logM_smooth[57] = {0};
    for (int l = 1; l <= L; l++) {
       float sum = 0.0f;
       int count = 0;
-      for (int j = l - FMT_W; j <= l + FMT_W; j++) {
+      for (int j = l - W_local; j <= l + W_local; j++) {
          int jc = (j < 1) ? 1 : (j > L ? L : j);
          sum += logM[jc];
          count++;
@@ -1841,7 +1833,7 @@ software_imbe_decoder::apply_formant_postfilter()
    float energy_before = 0.0f, energy_after = 0.0f;
    for (int l = 1; l <= L; l++) {
       energy_before += M[l][New] * M[l][New];
-      float scale = exp2f(FMT_ALPHA * (logM[l] - logM_smooth[l]));
+      float scale = exp2f(params_.fmt_alpha * (logM[l] - logM_smooth[l]));
       M[l][New] = M[l][New] * scale;
       energy_after += M[l][New] * M[l][New];
    }
@@ -2150,7 +2142,7 @@ software_imbe_decoder::synth_voiced()
    // preceded this onset; that stale phase can land harmonics in alignment
    // and cause a click. Reset to a clean state so the envelope-phase term
    // below provides the only per-harmonic offsets at onset.
-   if (UV_TO_V_RESET) {
+   if (params_.uv_to_v_reset) {
       bool prev_any_voiced = false;
       for (int l = 1; l <= OldL && !prev_any_voiced; l++) {
          if (vee[l][Old]) prev_any_voiced = true;
@@ -2169,26 +2161,28 @@ software_imbe_decoder::synth_voiced()
 
    // Voiced phase regeneration combining glottal-pulse linear phase, the
    // US5701390 envelope-derived phase (Hilbert of log-magnitude), and a small
-   // optional residual random term. Tuning lives in the PHASE_* block at the
-   // top of this file.
-   const int D = PHASE_KERNEL_D;
-   float B[2 * PHASE_KERNEL_D + 57];   // index B[l + D] for l in [-D, 56+D]
+   // optional residual random term. Tuning lives in VocoderParams.
+   // Array size uses a compile-time max (19, the patent's value); runtime D
+   // is clamped to that ceiling.
+   const int MAX_D = 19;
+   const int D = (params_.phase_kernel_d > MAX_D) ? MAX_D : params_.phase_kernel_d;
+   float B[2 * MAX_D + 57];   // index B[l + MAX_D] for l in [-MAX_D, 56+MAX_D]
    for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
    for (int l = 1; l <= L; l++) {
       float mag = M[l][New];
-      B[l + D] = (mag > 1e-6f) ? log2f(mag) : -20.0f;
+      B[l + MAX_D] = (mag > 1e-6f) ? log2f(mag) : -20.0f;
    }
    // Symmetric reflection for l <= 0 (B[0] already zero)
    for (int l = 1; l <= D; l++) {
-      B[-l + D] = B[l + D];
+      B[-l + MAX_D] = B[l + MAX_D];
    }
    // Geometric decay for l > L
    {
       float decay = 1.0f;
-      float B_L = B[L + D];
-      for (int l = L + 1; l <= L + D && l < 56 + D; l++) {
-         decay *= PHASE_KERNEL_GAMMA;
-         B[l + D] = B_L * decay;
+      float B_L = B[L + MAX_D];
+      for (int l = L + 1; l <= L + D && l < 56 + MAX_D; l++) {
+         decay *= params_.phase_kernel_gamma;
+         B[l + MAX_D] = B_L * decay;
       }
    }
 
@@ -2197,7 +2191,7 @@ software_imbe_decoder::synth_voiced()
       // Envelope-based phase via 1/m kernel
       float env_phase = 0.0f;
       for (int m = 1; m <= D; m++) {
-         env_phase += (B[ell + m + D] - B[ell - m + D]) / (float)m;
+         env_phase += (B[ell + m + MAX_D] - B[ell - m + MAX_D]) / (float)m;
       }
       // Fresh random per harmonic per frame (xorshift32)
       uint32_t s = voiced_phase_seed;
@@ -2207,9 +2201,9 @@ software_imbe_decoder::synth_voiced()
       if (ell <= L/4) {
          // Preserve glottal-pulse alignment for low harmonics; envelope phase
          // mixed in lightly so smooth spectra still get a touch of phase shape.
-         phi[ell][ New] = psi1 * ell + PHASE_LOW_BLEND * PHASE_C_ENV * env_phase;
+         phi[ell][ New] = psi1 * ell + params_.phase_low_blend * params_.phase_c_env * env_phase;
       } else {
-         phi[ell][ New] = psi1 * ell + PHASE_C_ENV * env_phase + PHASE_W_RAND * rho * z;
+         phi[ell][ New] = psi1 * ell + params_.phase_c_env * env_phase + params_.phase_w_rand * rho * z;
       }
    }
 
@@ -2237,7 +2231,7 @@ software_imbe_decoder::synth_voiced()
             // ~2017): extend smooth amp/freq/phase interpolation higher in
             // the spectrum and across mild pitch wobble. Tuning in
             // INTERP_MAX_L / INTERP_PITCH_TOL at top of file.
-            if(ell < INTERP_MAX_L && fabsf(w0 - Oldw0) < INTERP_PITCH_TOL * w0) { // (fine transition)
+            if(ell < params_.interp_max_l && fabsf(w0 - Oldw0) < params_.interp_pitch_tol * w0) { // (fine transition)
                Dpl = phi[ell][ New] - phi[ell][ Old] -(Oldw0 + w0) * ell * 80;
                Dwl = .00625 * (Dpl - 2 * M_PI * floorf((Dpl + M_PI) / (2 * M_PI)));
                THa = (Oldw0 * (float)ell + Dwl);
