@@ -7,8 +7,8 @@
 
   "_other_knobs": "Other tunable VocoderParams fields you can add as keys: phase_c_env, phase_w_rand, phase_kernel_d, phase_kernel_gamma, voicing_smooth_taps, uv_to_v_reset, interp_max_l, interp_pitch_tol. Adding any extra dimension multiplies the combo count — keep the total under ~30 if you plan to blind-A/B them.",
 
-  "fmt_alpha":              [0.18, 0.22, 0.28],
-  "fmt_w":                  [3, 5],
-  "phase_low_blend":        [0.70, 0.85],
-  "repeat_amplitude_decay": [0.85, 0.95]
+  "fmt_alpha":     [0.30, 0.35, 0.40],
+  "fmt_w":         [3, 5],
+  "phase_c_env":   [0.85, 1.00, 1.20],
+  "phase_w_rand":  [0.05, 0.10, 0.15]
 }
