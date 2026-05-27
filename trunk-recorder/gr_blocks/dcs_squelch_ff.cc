@@ -180,8 +180,9 @@ dcs_squelch_ff::dcs_squelch_ff(double sample_rate,
       d_decim_count(0),
       d_lpf_state_idx(0),
       d_decim_step(DCS_BIT_RATE / 1000.0),
-      d_configured_class_key_n(0),
-      d_configured_class_key_i(0),
+      d_configured_class_key(0),
+      d_configured_match_count(0),
+      d_first_decode_match_logged(false),
       d_locked_code(0),
       d_locked_inverted(false),
       d_best_code(0),
@@ -220,9 +221,7 @@ dcs_squelch_ff::dcs_squelch_ff(double sample_rate,
   BOOST_LOG_TRIVIAL(debug)
       << "dcs_squelch_ff: configured DCS = " << cfg_buf
       << " gate_audio=" << (d_gate_audio ? "true" : "false")
-      << " (cyclic class keys: N=0x" << std::hex << d_configured_class_key_n
-      << " I=0x" << d_configured_class_key_i << std::dec
-      << " — gate opens on either)";
+      << " cyclic_key=0x" << std::hex << d_configured_class_key << std::dec;
 }
 
 dcs_squelch_ff::~dcs_squelch_ff() = default;
@@ -242,15 +241,14 @@ void dcs_squelch_ff::build_dcs_table() {
     d_class_key[ {code, false} ] = smallest_rotation_23(pN);
     d_class_key[ {code, true } ] = smallest_rotation_23(pI);
   }
-  // Capture BOTH polarity class keys for the configured code. The gate
-  // will open on a match against either, since on-air polarity is a
-  // transmitter-hardware artifact (TIA-603-E §1.3.5.9 Modulation Type A
-  // vs Type B) and not part of the code the operator selected.
+  // Single polarity-strict class key. Cyclic rotations at the configured
+  // polarity are accepted (e.g. D047I when configured D023N because they
+  // are the same physical bit sequence at different frame offsets).
+  // The complementary polarity class is a distinct code set — intentionally
+  // rejected. See d_configured_class_key in the header.
   if (d_configured_code != 0) {
-    auto it_n = d_class_key.find( {d_configured_code, false} );
-    auto it_i = d_class_key.find( {d_configured_code, true } );
-    if (it_n != d_class_key.end()) d_configured_class_key_n = it_n->second;
-    if (it_i != d_class_key.end()) d_configured_class_key_i = it_i->second;
+    auto it = d_class_key.find( {d_configured_code, d_configured_inverted} );
+    if (it != d_class_key.end()) d_configured_class_key = it->second;
   }
 }
 
@@ -293,8 +291,10 @@ void dcs_squelch_ff::reset() {
   d_best_inverted       = false;
   d_best_matches        = 0;
   d_best_phases         = 0;
-  d_post_lock_matches   = 0;
-  d_samples_since_last_match = 0;
+  d_post_lock_matches           = 0;
+  d_configured_match_count      = 0;
+  d_first_decode_match_logged   = false;
+  d_samples_since_last_match    = 0;
   d_open                = false;
   d_samples_since_match = 0;
   d_gate                = 0.0;
@@ -361,62 +361,44 @@ void dcs_squelch_ff::try_dcs_match(phase_state &p) {
     p.match_run         = 1;
   }
 
-  // Fast-lock for sub-1s DCS bursts: exact (dist=0) match to a code in
-  // the same cyclic class as the configured one is conclusive. False-
-  // match probability for any random 23-bit pattern hitting a specific
-  // codeword exactly is ~1/8.4M. We accept either polarity's class key
-  // (see header comment near d_configured_class_key_*).
-  bool fast_lock = false;
-  if (best_dist == 0 && d_configured_code != 0) {
+  // Fast-lock for decode mode: any match within the acceptance threshold
+  // (dist ≤ DCS_DIST_THRESH = 1) against the configured cyclic class
+  // immediately elevates this phase to gate-open eligible without waiting
+  // for a second consecutive frame.  In decode mode the code is already
+  // known, so a single dist≤1 frame is strong evidence (~2.9×10⁻⁶
+  // false-positive probability per frame for a random 23-bit window).
+  // This guarantees gate-open within one frame period (~171 ms) — well
+  // under the ETSI TS 103 236 §4.3 350 ms DCS decoder response limit.
+  // Search mode uses the two-frame accumulator below (no fast-lock) so
+  // the stricter DCS_RUN_REQUIRED_SEARCH guard still applies there.
+  if (best_dist <= DCS_DIST_THRESH && d_configured_code != 0) {
     auto it = d_class_key.find( {best_code, best_inverted} );
-    if (it != d_class_key.end() &&
-        (it->second == d_configured_class_key_n ||
-         it->second == d_configured_class_key_i)) {
-      fast_lock = true;
+    if (it != d_class_key.end() && it->second == d_configured_class_key) {
+      p.match_run = DCS_RUN_REQUIRED;  // gate-open eligible this tick
     }
   }
-  // Stricter run-required threshold in search mode — see DCS_RUN_REQUIRED_SEARCH.
-  const int run_required = (d_configured_code == 0)
-                               ? DCS_RUN_REQUIRED_SEARCH
-                               : DCS_RUN_REQUIRED;
-  if ((fast_lock || p.match_run >= run_required) && d_locked_code == 0) {
-    // Diagnostic one-shot per transmission: log the RAW match so we can see
-    // what the detector actually identified, regardless of whether the
-    // configured-class disambiguation below rewrites the labels. This is
-    // the only place inside the block where "first lock event" is
-    // unambiguously detectable (d_locked_code is still zero), and it
-    // fires at most once per reset(). Cheap, useful for tuning.
+
+  // Search mode: latch the first confirmed code so the gate can open and
+  // post-lock re-confirmation tracking can begin.  Decode mode uses a
+  // live phase scan in process_one() — no latch needed or used here.
+  if (d_configured_code != 0) return;
+
+  if (p.match_run >= DCS_RUN_REQUIRED_SEARCH && d_locked_code == 0) {
     BOOST_LOG_TRIVIAL(debug)
-        << "dcs_squelch_ff: first lock on D" << std::setw(3) << std::setfill('0')
+        << "dcs_squelch_ff[search]: first lock on D" << std::setw(3) << std::setfill('0')
         << p.detected_code << (p.detected_inverted ? "I" : "N")
         << " (sync=" << (sync_inverted ? "011/inverted" : "100/normal")
         << ", dist=" << best_dist
         << ", run=" << p.match_run
-        << ", fast=" << (fast_lock ? "yes" : "no")
-        << ", configured=D" << std::setw(3) << std::setfill('0')
-        << d_configured_code << (d_configured_inverted ? "I" : "N")
         << ")" << std::setfill(' ');
 
-    // Cyclic-class disambiguation:
-    //   With operator hint: if the detected pair is cyclically equivalent
-    //   to the configured code in EITHER polarity, report the configured
-    //   form (so D627N on air matches "D031I" channel cleanly, AND so a
-    //   Type-B-modulated D023N transmission — which is bit-for-bit equal
-    //   to D023I — still reports "D023N" when the channel is configured
-    //   for D023N).
-    //   Without hint (search mode): pick the N member of the cyclic
-    //   class — matches Uniden BCD scanner display convention.
+    // N-canonical disambiguation for search-mode display (matches
+    // Uniden BCD scanner convention: always report the N-polarity member
+    // of the cyclic class).
     int  out_code     = p.detected_code;
     bool out_inverted = p.detected_inverted;
     auto it = d_class_key.find( {p.detected_code, p.detected_inverted} );
-    if (d_configured_code != 0) {
-      if (it != d_class_key.end() &&
-          (it->second == d_configured_class_key_n ||
-           it->second == d_configured_class_key_i)) {
-        out_code     = d_configured_code;
-        out_inverted = d_configured_inverted;
-      }
-    } else if (it != d_class_key.end()) {
+    if (it != d_class_key.end()) {
       const uint32_t key = it->second;
       for (const auto &kv : d_class_key) {
         if (kv.second == key && !kv.first.second) {
@@ -516,7 +498,7 @@ void dcs_squelch_ff::process_one(float sample, bool &gate_should_open) {
   d_hpf_prev_y = hpf_y;
 
   // Distribute to every parallel bit-clock phase.
-  bool any_match_this_tick = false;
+  bool cfg_match_this_tick = false;  // decode mode gate trigger
   for (auto &p : d_phases) {
     p.bit_integ   += hpf_y;
     p.bit_integ_n += 1;
@@ -542,54 +524,47 @@ void dcs_squelch_ff::process_one(float sample, bool &gate_should_open) {
     const int  phase_code_before = p.detected_code;
     const bool phase_inv_before  = p.detected_inverted;
     try_dcs_match(p);
-    if (d_locked_code != 0 && d_locked_code != locked_before) {
-      any_match_this_tick = true;
-      // Initial lock: prime the watchdog so the first interval gets a
-      // fresh full timeout before it can expire.
-      d_samples_since_last_match = 0;
-    } else if (d_locked_code != 0
-               && p.match_run > phase_run_before
-               && p.detected_code == phase_code_before
-               && p.detected_inverted == phase_inv_before) {
-      // This phase ACTUALLY incremented match_run on this tick for the
-      // SAME (code, polarity) it was already tracking — i.e. a genuine
-      // re-confirmation of the locked code at a new 23-bit frame boundary.
-      // The previous version compared p.match_run > 0 which was true on
-      // every per-phase tick after that phase ever had any match, so
-      // d_post_lock_matches incremented at the per-detect-rate cadence
-      // (~134 ticks/sec/phase summed over phases) instead of once per
-      // frame. The buggy old behaviour drove confidence to 1.00 in
-      // milliseconds for any lock — including spurious CTCSS-tone-aliased
-      // false positives — so the search-mode tiebreak in analog_recorder
-      // could never prefer a CTCSS verdict (capped at ~0.95) over a one-
-      // shot DCS lock. With this fix the counter actually reflects how
-      // many genuine frames the locked code re-confirmed on, so a real
-      // DCS stream climbs to 1.0 over its first second of audio while a
-      // single-frame false lock stays at 0.
-      any_match_this_tick = true;
-      ++d_post_lock_matches;
-      // Fresh re-confirmation — reset the stale-lock watchdog.
-      d_samples_since_last_match = 0;
+    if (d_configured_code == 0) {
+      // Search mode: track d_locked_code changes for confidence + watchdog.
+      if (d_locked_code != 0 && d_locked_code != locked_before) {
+        d_samples_since_last_match = 0;
+      } else if (d_locked_code != 0
+                 && p.match_run > phase_run_before
+                 && p.detected_code == phase_code_before
+                 && p.detected_inverted == phase_inv_before) {
+        ++d_post_lock_matches;
+        d_samples_since_last_match = 0;
+      }
+    } else {
+      // Decode mode: check if this phase now confirms the configured class.
+      if (p.match_run >= DCS_RUN_REQUIRED) {
+        auto ck = d_class_key.find({p.detected_code, p.detected_inverted});
+        if (ck != d_class_key.end() && ck->second == d_configured_class_key)
+          cfg_match_this_tick = true;
+      }
     }
   }
 
-  // Gate decision:
-  //   Configured mode: gate opens when latched code's cyclic class
-  //                    matches the configured class in EITHER polarity
-  //                    (handles TIA-603-E Type A vs Type B transmitters
-  //                    — see d_configured_class_key_* in the header).
-  //   Search mode (configured_code == 0): gate opens on ANY lock.
-  if (d_locked_code != 0) {
-    if (d_configured_code == 0) {
-      gate_should_open = true;
-    } else {
-      auto it = d_class_key.find( {d_locked_code, d_locked_inverted} );
-      if (it != d_class_key.end() &&
-          (it->second == d_configured_class_key_n ||
-           it->second == d_configured_class_key_i)) {
-        gate_should_open = true;
-      }
+  if (cfg_match_this_tick) {
+    ++d_configured_match_count;
+    if (!d_first_decode_match_logged) {
+      d_first_decode_match_logged = true;
+      BOOST_LOG_TRIVIAL(debug)
+          << "dcs_squelch_ff[decode]: first gate-open match for D"
+          << std::setw(3) << std::setfill('0') << d_configured_code
+          << (d_configured_inverted ? 'I' : 'N') << std::setfill(' ');
     }
+  }
+
+  // Gate decision.
+  //   Decode mode: live phase scan — does any phase currently confirm a
+  //     code in the configured cyclic class? No latch, no state from a
+  //     prior tick; just: "is the configured code present right now?"
+  //   Search mode: gate follows d_locked_code (any confirmed code).
+  if (d_configured_code != 0) {
+    if (cfg_match_this_tick) gate_should_open = true;
+  } else {
+    if (d_locked_code != 0) gate_should_open = true;
   }
 }
 
@@ -639,9 +614,28 @@ dcs_squelch_verdict dcs_squelch_ff::get_verdict() const {
   boost::mutex::scoped_lock lock(d_mutex);
   dcs_squelch_verdict v{};
 
-  // Composite DCS confidence with two independent factors so it's directly
-  // comparable to the CTCSS detector's wins/total ratio at the search-mode
-  // tiebreak in analog_recorder::stop().
+  // Decode mode: the gate either opened (d_configured_match_count > 0) or
+  // did not.  Confidence scales with how many detection ticks confirmed the
+  // configured class, analogous to ctcss_squelch_ff's win_ticks / total ratio.
+  if (d_configured_code != 0) {
+    if (d_configured_match_count > 0) {
+      v.detected_code     = d_configured_code;
+      v.detected_inverted = d_configured_inverted;
+      v.confidence        = std::min(1.0f,
+          static_cast<float>(d_configured_match_count) /
+          static_cast<float>(DCS_CONFIDENCE_FULL_MATCHES));
+      auto it = d_class_key.find({d_configured_code, d_configured_inverted});
+      if (it != d_class_key.end()) {
+        const uint32_t key = it->second;
+        for (const auto &kv : d_class_key) {
+          if (kv.second == key) v.aliases.push_back(kv.first);
+        }
+      }
+    }
+    return v;
+  }
+
+  // Search mode: composite confidence from phase diversity + match rate.
   //
   //   phase_diversity = min(1, locked_phases / EFFECTIVE_PHASES)
   //     A real DCS NRZ transmission only engages ~half the 16 polyphase

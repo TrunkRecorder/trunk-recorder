@@ -361,24 +361,17 @@ void analog_recorder::stop() {
   } else if (tone_config.mode == TONE_DCS) {
     if (!dcs_det.empty()) { tone_result.detected = dcs_det; tone_result.confidence = dcs_conf; }
   } else if (tone_config.mode == TONE_SEARCH) {
-    // Search-mode tiebreak: simple max-confidence comparison. With the
-    // phase-diversity DCS confidence now in place, a CTCSS-aliased false
-    // DCS lock scores ~0.05-0.15 while a real DCS lock scores ~0.9-1.0;
-    // a CTCSS detector lock with all four verdict guards passed scores
-    // ~0.85-0.95. So whichever returns the higher confidence is genuinely
-    // the better identification — no need for a CTCSS priority override
-    // (an earlier version had one, which incorrectly forced CTCSS to win
-    // even when a real DCS keyup was correctly identified at conf 1.0).
+    // Search-mode tiebreak: DCS wins unconditionally when detected.
+    // CTCSS (continuous sub-audio tone) and DCS (134.4 baud NRZ digital)
+    // are mutually exclusive at the transmitter — a radio uses one or the
+    // other, never both. Any valid DCS detection therefore supersedes a
+    // CTCSS candidate, which must be a false positive caused by the 134.4
+    // baud DCS baseband signal bleeding into the sub-audio frequency range.
     const bool have_ctcss = !ctcss_det.empty();
     const bool have_dcs   = !dcs_det.empty();
     if (have_ctcss && have_dcs) {
-      if (ctcss_conf >= dcs_conf) {
-        tone_result.detected   = ctcss_det;
-        tone_result.confidence = ctcss_conf;
-      } else {
-        tone_result.detected   = dcs_det;
-        tone_result.confidence = dcs_conf;
-      }
+      tone_result.detected   = dcs_det;
+      tone_result.confidence = dcs_conf;
     } else if (have_ctcss) {
       tone_result.detected   = ctcss_det;
       tone_result.confidence = ctcss_conf;

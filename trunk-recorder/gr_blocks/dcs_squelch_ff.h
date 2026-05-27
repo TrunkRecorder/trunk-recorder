@@ -182,21 +182,13 @@ private:
   // share a key iff their on-air bit patterns are rotations of each
   // other — i.e. they look identical on-air at different sync alignments.
   std::map<std::pair<int, bool>, uint32_t> d_class_key;
-  // Class keys of the configured code for BOTH polarities. TIA-603-E
-  // §1.3.5.9 Table 6 defines two equally-valid CDCSS Modulation senses:
-  //   Type A: data 1 → +Δf, data 0 → −Δf
-  //   Type B: data 1 → −Δf, data 0 → +Δf
-  // A radio with a "D023" channel will key Type A OR Type B depending on
-  // its hardware/firmware. From the receiver's point of view a Type-B
-  // D023N transmission is indistinguishable from a Type-A D023I one
-  // (every bit on the wire is flipped). Real-world scanners treat
-  // polarity as transmitter-determined and gate on EITHER. We do the
-  // same: keep both class keys so the gate opens for D023 regardless of
-  // which sense the transmitter is using. The raw detected polarity is
-  // still reported in the verdict (and the first-lock log line) so the
-  // operator can tell which sense their radio actually uses.
-  uint32_t d_configured_class_key_n; // {configured_code, false}
-  uint32_t d_configured_class_key_i; // {configured_code, true}
+  // Polarity-strict cyclic equivalence class key for the configured
+  // (code, polarity) pair.  Two on-air patterns share this key iff they
+  // are rotations of each other at the SAME polarity.  D023N and D047I
+  // share one key; D023I and D047N share a different key.  The gate
+  // opens only for matches against this single key — the complementary
+  // polarity class is a distinct code set and is intentionally rejected.
+  uint32_t d_configured_class_key;
 
   // Latched detection — once any phase confirms a code, we keep it for
   // the rest of the recording window so a brief mid-call signal dropout
@@ -219,12 +211,21 @@ private:
   long d_best_matches;
   int  d_best_phases;
 
-  // Confidence counter: every tick where any phase's match_run >= 2
-  // re-confirms the latched lock, this increments. Reset to 0 by reset().
-  // get_verdict() converts to a [0,1] confidence using
-  // DCS_CONFIDENCE_FULL_MATCHES. A spurious one-shot lock (CTCSS
-  // bit-clock aliasing) stays at 0 because no second match_run forms.
+  // Search-mode confidence counter: increments once per detection tick
+  // where a phase re-confirms the latched d_locked_code.  Unused in
+  // decode mode.  get_verdict() converts to [0,1] via
+  // DCS_CONFIDENCE_FULL_MATCHES.
   long d_post_lock_matches;
+
+  // Decode-mode match counter: increments once per detection tick where
+  // any phase confirms a code in the configured cyclic class.  Analogous
+  // to ctcss_squelch_ff::win_ticks.  Zero in search mode.
+  long d_configured_match_count;
+  // One-shot diagnostic log guard for decode mode. Member (not
+  // thread_local static) so each block instance has its own flag and
+  // GR's thread-pool scheduler cannot cause one recorder to suppress
+  // another's first-match log. Reset by reset().
+  bool d_first_decode_match_logged;
 
   // Stale-lock watchdog (search mode only). Counts detection-rate ticks
   // since the last successful re-confirmation while locked. If it exceeds
