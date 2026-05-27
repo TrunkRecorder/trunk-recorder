@@ -51,7 +51,7 @@ struct VocoderParams {
 
 	// Emphasis strength. 0 = off, 0.25 = mild (recommended baseline),
 	// 0.35 = noticeable formant shape, 0.5+ = tinny / sibilant.
-	float fmt_alpha             = 0.35f;
+	float fmt_alpha             = 0.40f;
 	// Half-width of the smoothing window (window = 2W+1 harmonics).
 	// 3 = 7-tap (narrow), 5 = 11-tap = ~1 formant wide (recommended), 7 = wider.
 	int   fmt_w                 = 5;
@@ -77,7 +77,7 @@ struct VocoderParams {
 	//   1.0 = same envelope weight as high harmonics, least glottal
 	float phase_low_blend       = 0.85f;
 	// Kernel half-length (full length = 2*D+1 taps). Patent's preferred.
-	int   phase_kernel_d        = 19;
+	int   phase_kernel_d        = 13;
 	// Boundary-extension geometric decay outside [1, L]. Patent value.
 	float phase_kernel_gamma    = 0.72f;
 
