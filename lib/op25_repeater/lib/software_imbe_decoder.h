@@ -51,10 +51,10 @@ struct VocoderParams {
 
 	// Emphasis strength. 0 = off, 0.25 = mild (recommended baseline),
 	// 0.35 = noticeable formant shape, 0.5+ = tinny / sibilant.
-	float fmt_alpha             = 0.28f;
+	float fmt_alpha             = 0.35f;
 	// Half-width of the smoothing window (window = 2W+1 harmonics).
 	// 3 = 7-tap (narrow), 5 = 11-tap = ~1 formant wide (recommended), 7 = wider.
-	int   fmt_w                 = 3;
+	int   fmt_w                 = 5;
 
 	// -- Voiced phase regeneration (US5701390, expired Feb 2015) ---------------
 	// Phase from discrete Hilbert transform of log-magnitude:
@@ -65,11 +65,11 @@ struct VocoderParams {
 	// additional multiplier. 0 = falls back to pure linear phase (buzzy).
 	// 0.65 = patent's natural scale (recommended baseline), 1.0+ = stronger
 	// shaping (risks "echoey" on sustained vowels).
-	float phase_c_env           = 0.65f;
+	float phase_c_env           = 1.00f;
 	// Residual TIA-eq.142 random phase weight. 0 = pure deterministic per
 	// the patent (recommended baseline). Raise to 0.05-0.15 if some random
 	// jitter helps on locally-flat spectra.
-	float phase_w_rand          = 0.0f;
+	float phase_w_rand          = 0.10f;
 	// Envelope-phase weight on LOW harmonics (l <= L/4). Low harmonics carry
 	// glottal-pulse alignment that makes voiced speech sound "alive".
 	//   0   = pure linear phase, most glottal/buzzy
