@@ -1,0 +1,25 @@
+{
+  "_about": "No-assumptions sweep across every tunable VocoderParams field. Each knob has 2 values bracketing its documented useful range. 2^13 = 8192 combos total. Use rank_sweep.py to find the top performers objectively; then blind-A/B the top ~10 to confirm.",
+
+  "_runtime": "imbe_tune decodes at roughly 50x realtime per combo on modern hardware. For a 10-second .imbe input: ~0.2 s per combo single-pass, ~0.5 s per combo with --multipass. Full 8192-combo sweep = ~25-30 minutes single-pass, ~60-90 minutes with --multipass. Across N source files, multiply by N (rank_sweep.py averages metrics across same-combo across sources).",
+
+  "_disk": "Each combo produces a .wav + .json sidecar. For a 10-second input, ~16 KB per .wav + ~0.5 KB sidecar -> ~135 MB total. Per source. Plan accordingly if sweeping many sources.",
+
+  "_workflow": "1) ./build/imbe_tune --multipass --input-dir /tmp/imbe --sweep utils/sweep-all.json --output-dir /tmp/sw_all\n2) python3 utils/rank_sweep.py --top 20 --csv /tmp/sw_all/ranking.csv /tmp/sw_all/*\n3) Look at the top 10 in the CSV - which knob values keep appearing? Those are the high-impact knobs for your audio. The ones that scatter randomly across the top 10 are not high-impact (or are in their good range already).\n4) Build a focused 20-30-combo sweep on the 2-4 high-impact knobs with 3-4 values each. Use that for blind_compare.py.",
+
+  "_endpoints_chosen_to_be": "Wide enough that each knob's effect is fully exercised, narrow enough to avoid wasting combos on values you'd never ship. See the inline comments in software_imbe_decoder.h for what each pair brackets.",
+
+  "fmt_alpha":                   [0.20, 0.45],
+  "fmt_w":                       [3, 7],
+  "phase_c_env":                 [0.50, 1.30],
+  "phase_w_rand":                [0.00, 0.25],
+  "phase_low_blend":             [0.40, 1.00],
+  "phase_kernel_d":              [9, 19],
+  "phase_kernel_gamma":          [0.60, 0.85],
+  "voicing_smooth_taps":         [1, 5],
+  "voicing_smooth_er_threshold": [0.00, 0.03],
+  "uv_to_v_reset":               [false, true],
+  "interp_max_l":                [8, 16],
+  "interp_pitch_tol":            [0.10, 0.20],
+  "repeat_amplitude_decay":      [0.75, 1.00]
+}

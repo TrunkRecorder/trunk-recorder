@@ -31,6 +31,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -208,70 +209,33 @@ static void median_smooth_voicing(std::vector<std::array<int, 57>>& seq, int hal
     seq = out;
 }
 
-int main(int argc, char** argv)
+// Run the full parameter sweep for one .imbe input, writing results to the
+// given output directory (which is created if missing). Returns 0 on success,
+// non-zero if the input couldn't be read or had no frames.
+static int run_sweep_for_input(
+    const std::string& input_path,
+    const std::vector<SweepDim>& dims,
+    const std::string& output_dir,
+    bool multipass,
+    int voicing_lookahead)
 {
-    std::string input_path, sweep_path, output_dir;
-    bool multipass = false;
-    int  voicing_lookahead = 2;   // 5-tap centered window default
-    for (int i = 1; i < argc; i++) {
-        std::string a = argv[i];
-        if      (a == "--input"      && i + 1 < argc) input_path  = argv[++i];
-        else if (a == "--sweep"      && i + 1 < argc) sweep_path  = argv[++i];
-        else if (a == "--output-dir" && i + 1 < argc) output_dir  = argv[++i];
-        else if (a == "--multipass") multipass = true;
-        else if (a == "--lookahead"  && i + 1 < argc) voicing_lookahead = std::atoi(argv[++i]);
-        else if (a == "-h" || a == "--help") {
-            std::cout <<
-              "imbe_tune --input call.imbe --sweep sweep.json --output-dir DIR\n"
-              "          [--multipass] [--lookahead N]\n"
-              "\n"
-              "--multipass    Decode each combo twice. Pass 1 captures the raw\n"
-              "               per-frame voicing; the sequence is smoothed with a\n"
-              "               (2*lookahead+1)-tap centered median; pass 2 re-\n"
-              "               decodes using set_voicing_override per frame. Uses\n"
-              "               future frames, which the live decoder can't.\n"
-              "--lookahead N  Half-width of the centered voicing-smoothing\n"
-              "               window (default 2 -> 5-tap median).\n";
-            return 0;
-        }
-        else {
-            std::cerr << "unknown arg: " << a << "\n";
-            return 1;
-        }
-    }
-    if (input_path.empty() || sweep_path.empty() || output_dir.empty()) {
-        std::cerr << "usage: imbe_tune --input <file.imbe> --sweep <file.json> --output-dir <dir>\n";
-        return 1;
-    }
-
     std::vector<ImbeFrame> frames;
     if (!read_imbe_file(input_path, frames) || frames.empty()) {
-        std::cerr << "no frames read\n";
+        std::cerr << "  skipping: no frames read from " << input_path << "\n";
         return 1;
     }
-    std::cerr << "read " << frames.size() << " IMBE frames ("
-              << (frames.size() * 0.020) << " s of audio) from " << input_path << "\n";
+    std::cerr << "  " << frames.size() << " IMBE frames ("
+              << (frames.size() * 0.020) << " s)\n";
 
-    std::vector<SweepDim> dims;
-    load_sweep_spec(sweep_path, dims);
-    if (dims.empty()) {
-        std::cerr << "sweep spec is empty — nothing to do\n";
-        return 1;
-    }
+    std::filesystem::create_directories(output_dir);
 
-    size_t total = 1;
-    for (auto& d : dims) total *= d.values.size();
-    std::cerr << "sweep: " << dims.size() << " dim(s), " << total << " combinations\n";
-    for (auto& d : dims) std::cerr << "  " << d.name << ": " << d.values.size() << " values\n";
-
-    // Make output dir
-    ::mkdir(output_dir.c_str(), 0755);
-
-    // CSV header
     std::ofstream csv(output_dir + "/summary.csv");
     csv << "combo,wav,frames,duration_s,crest,rms,peak";
     for (auto& d : dims) csv << "," << d.name;
     csv << "\n";
+
+    size_t total = 1;
+    for (auto& d : dims) total *= d.values.size();
 
     std::vector<size_t> idx(dims.size(), 0);
     for (size_t combo = 0; combo < total; combo++) {
@@ -401,10 +365,144 @@ int main(int argc, char** argv)
     }
 
     csv.close();
+    std::cerr << "  -> " << total << " combos written to " << output_dir << "\n";
+    return 0;
+}
 
-    std::cerr << "\ndone. " << total << " combos in " << output_dir << "\n";
-    std::cerr << "next steps:\n";
-    std::cerr << "  python3 utils/analyze_vocoder.py " << output_dir << "/*.wav\n";
-    std::cerr << "  python3 utils/blind_compare.py "  << output_dir << "    # (Phase 4)\n";
+// Expand a directory into a sorted list of *.imbe paths inside it.
+static std::vector<std::string> list_imbe_in_dir(const std::string& dir)
+{
+    std::vector<std::string> out;
+    std::error_code ec;
+    for (auto& e : std::filesystem::directory_iterator(dir, ec)) {
+        if (!e.is_regular_file()) continue;
+        if (e.path().extension() == ".imbe") {
+            out.push_back(e.path().string());
+        }
+    }
+    if (ec) {
+        std::cerr << "warning: --input-dir " << dir << ": " << ec.message() << "\n";
+    }
+    std::sort(out.begin(), out.end());
+    return out;
+}
+
+static void usage()
+{
+    std::cout <<
+      "imbe_tune --sweep sweep.json --output-dir DIR\n"
+      "          [--input FILE] [--input-dir DIR] [POSITIONAL_FILES...]\n"
+      "          [--multipass] [--lookahead N]\n"
+      "\n"
+      "Input selection (combinable; all listed files are processed):\n"
+      "  --input FILE        Decode FILE (repeatable for multiple files).\n"
+      "  --input-dir DIR     Decode every *.imbe under DIR (non-recursive).\n"
+      "  POSITIONAL FILES    Any non-flag args at end are treated as inputs,\n"
+      "                      so `imbe_tune --sweep ... --output-dir D *.imbe`\n"
+      "                      works via shell wildcard expansion.\n"
+      "\n"
+      "Output:\n"
+      "  When given ONE input, results go directly into --output-dir as\n"
+      "  before. When given multiple inputs, each becomes its own subdirectory\n"
+      "  named after the input file's stem - layout that rank_sweep.py and\n"
+      "  blind_compare.py both consume directly.\n"
+      "\n"
+      "Modes:\n"
+      "  --multipass         Two-pass decode per combo: pass 1 captures raw\n"
+      "                      voicing, sequence is centered-median-smoothed\n"
+      "                      across the whole call using FUTURE frames, pass 2\n"
+      "                      decodes with set_voicing_override per frame.\n"
+      "  --lookahead N       Half-width of the centered voicing-smoothing\n"
+      "                      window (default 2 -> 5-tap median).\n";
+}
+
+int main(int argc, char** argv)
+{
+    std::vector<std::string> input_paths;
+    std::string sweep_path, output_dir;
+    bool multipass = false;
+    int  voicing_lookahead = 2;
+
+    for (int i = 1; i < argc; i++) {
+        std::string a = argv[i];
+        if      (a == "--input"      && i + 1 < argc) input_paths.push_back(argv[++i]);
+        else if (a == "--input-dir"  && i + 1 < argc) {
+            auto files = list_imbe_in_dir(argv[++i]);
+            input_paths.insert(input_paths.end(), files.begin(), files.end());
+        }
+        else if (a == "--sweep"      && i + 1 < argc) sweep_path = argv[++i];
+        else if (a == "--output-dir" && i + 1 < argc) output_dir = argv[++i];
+        else if (a == "--multipass") multipass = true;
+        else if (a == "--lookahead"  && i + 1 < argc) voicing_lookahead = std::atoi(argv[++i]);
+        else if (a == "-h" || a == "--help") {
+            usage();
+            return 0;
+        }
+        else if (!a.empty() && a[0] != '-') {
+            // Positional: shell-expanded wildcard or explicit file path.
+            input_paths.push_back(a);
+        }
+        else {
+            std::cerr << "unknown arg: " << a << "\n";
+            return 1;
+        }
+    }
+
+    if (input_paths.empty() || sweep_path.empty() || output_dir.empty()) {
+        usage();
+        return 1;
+    }
+
+    std::vector<SweepDim> dims;
+    load_sweep_spec(sweep_path, dims);
+    if (dims.empty()) {
+        std::cerr << "sweep spec is empty - nothing to do\n";
+        return 1;
+    }
+
+    size_t total = 1;
+    for (auto& d : dims) total *= d.values.size();
+    std::cerr << "sweep: " << dims.size() << " dim(s), " << total << " combinations\n";
+    for (auto& d : dims) std::cerr << "  " << d.name << ": " << d.values.size() << " values\n";
+    std::cerr << "inputs: " << input_paths.size() << " file(s)\n";
+
+    std::filesystem::create_directories(output_dir);
+
+    const bool single = (input_paths.size() == 1);
+    int n_ok = 0, n_fail = 0;
+    for (size_t i = 0; i < input_paths.size(); i++) {
+        std::string sub_dir;
+        if (single) {
+            sub_dir = output_dir;
+        } else {
+            std::filesystem::path p(input_paths[i]);
+            sub_dir = output_dir + "/" + p.stem().string();
+        }
+
+        std::cerr << "\n[" << (i + 1) << "/" << input_paths.size() << "] "
+                  << input_paths[i] << "\n";
+        std::cerr << "  -> " << sub_dir << "\n";
+
+        if (run_sweep_for_input(input_paths[i], dims, sub_dir,
+                                multipass, voicing_lookahead) == 0) {
+            n_ok++;
+        } else {
+            n_fail++;
+        }
+    }
+
+    std::cerr << "\ndone. " << n_ok << "/" << input_paths.size() << " input(s) processed";
+    if (n_fail) std::cerr << " (" << n_fail << " skipped)";
+    std::cerr << "\n";
+
+    if (single) {
+        std::cerr << "next steps:\n"
+                  << "  python3 utils/rank_sweep.py "  << output_dir << "\n"
+                  << "  python3 utils/blind_compare.py " << output_dir << "\n";
+    } else {
+        std::cerr << "next steps:\n"
+                  << "  python3 utils/rank_sweep.py "  << output_dir << "/*\n"
+                  << "  python3 utils/blind_compare.py " << output_dir << "/*\n";
+    }
     return 0;
 }

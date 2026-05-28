@@ -51,10 +51,10 @@ struct VocoderParams {
 
 	// Emphasis strength. 0 = off, 0.25 = mild (recommended baseline),
 	// 0.35 = noticeable formant shape, 0.5+ = tinny / sibilant.
-	float fmt_alpha             = 0.40f;
+	float fmt_alpha             = 0.45f;
 	// Half-width of the smoothing window (window = 2W+1 harmonics).
 	// 3 = 7-tap (narrow), 5 = 11-tap = ~1 formant wide (recommended), 7 = wider.
-	int   fmt_w                 = 5;
+	int   fmt_w                 = 7;
 
 	// -- Voiced phase regeneration (US5701390, expired Feb 2015) ---------------
 	// Phase from discrete Hilbert transform of log-magnitude:
@@ -65,21 +65,21 @@ struct VocoderParams {
 	// additional multiplier. 0 = falls back to pure linear phase (buzzy).
 	// 0.65 = patent's natural scale (recommended baseline), 1.0+ = stronger
 	// shaping (risks "echoey" on sustained vowels).
-	float phase_c_env           = 1.00f;
+	float phase_c_env           = 1.30f;
 	// Residual TIA-eq.142 random phase weight. 0 = pure deterministic per
 	// the patent (recommended baseline). Raise to 0.05-0.15 if some random
 	// jitter helps on locally-flat spectra.
-	float phase_w_rand          = 0.10f;
+	float phase_w_rand          = 0.25f;
 	// Envelope-phase weight on LOW harmonics (l <= L/4). Low harmonics carry
 	// glottal-pulse alignment that makes voiced speech sound "alive".
 	//   0   = pure linear phase, most glottal/buzzy
 	//   0.5 = balanced (recommended baseline)
 	//   1.0 = same envelope weight as high harmonics, least glottal
-	float phase_low_blend       = 0.85f;
+	float phase_low_blend       = 0.4f;
 	// Kernel half-length (full length = 2*D+1 taps). Patent's preferred.
-	int   phase_kernel_d        = 13;
+	int   phase_kernel_d        = 19;
 	// Boundary-extension geometric decay outside [1, L]. Patent value.
-	float phase_kernel_gamma    = 0.72f;
+	float phase_kernel_gamma    = 0.6f;
 
 	// -- Voicing-decision median smoothing (US6912496, expired Mar 2023) ------
 	// N-tap majority median on vee[l][New] using current + past frames.
@@ -88,10 +88,10 @@ struct VocoderParams {
 
 	// Filter length. 1 = off, 3 = drop single-frame outliers (recommended),
 	// 5 = smoother but voicing-state changes lag 2 frames.
-	int   voicing_smooth_taps        = 3;
+	int   voicing_smooth_taps        = 1;
 	// Minimum smoothed ER for smoothing to fire. 0 = always-on, 0.01 = light
 	// gating (recommended), 0.03 = only fire on quite noisy frames.
-	float voicing_smooth_er_threshold = 0.01f;
+	float voicing_smooth_er_threshold = 0.00f;
 
 	// -- UV->V phase reset (US6963833, expired Mar 2022) ----------------------
 	// On fully-unvoiced -> voiced transition, reset psi1 to 0 and pre-seed
@@ -106,11 +106,11 @@ struct VocoderParams {
 	// Max harmonic eligible for fine transition. 8 = TIA spec, 12 =
 	// recommended (smoother sustained vowels), 16 = smoothest (may smear
 	// fast consonant transitions).
-	int   interp_max_l          = 12;
+	int   interp_max_l          = 8;
 	// Max |w0 - Oldw0| / w0 ratio for fine transition. 0.10 = TIA spec,
 	// 0.15 = recommended (catches normal pitch wobble), 0.20 = includes
 	// vibrato (risks smearing real pitch jumps).
-	float interp_pitch_tol      = 0.15f;
+	float interp_pitch_tol      = 0.1f;
 
 	// -- Repeated-frame amplitude decay ---------------------------------------
 	// On the repeat path, M[l][New] = decay * M[l][Old] each frame.
@@ -119,7 +119,7 @@ struct VocoderParams {
 	//   1.00 = no decay (sustained tones)
 	//   0.85 = recommended (~61% after 3 repeats)
 	//   0.70 = aggressive (~34% after 3)
-	float repeat_amplitude_decay = 0.95f;
+	float repeat_amplitude_decay = 1.0f;
 };
 
 /**
