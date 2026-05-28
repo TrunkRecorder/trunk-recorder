@@ -104,6 +104,25 @@ def composite_score(metrics):
     return total / used
 
 
+def worst_metric_distance(metrics):
+    """Returns (worst_distance, metric_name) - the single most-out-of-range
+    metric. Used by --strict to disqualify combos whose composite score is
+    only "good" because they massively flunked one metric while others
+    happen to land near target (Goodhart's law trade-off)."""
+    worst_d = 0.0
+    worst_k = None
+    for k in METRIC_WEIGHTS:
+        if k not in metrics:
+            continue
+        d = distance_from_range(metrics[k], *TARGETS[k])
+        if d != d:
+            continue
+        if d > worst_d:
+            worst_d = d
+            worst_k = k
+    return worst_d, worst_k
+
+
 # ---------------------------------------------------------------------------
 # Loading
 
@@ -164,12 +183,30 @@ def aggregate(per_wav):
                for kk in keys}
         rec["metrics_avg"] = avg
         rec["score"] = composite_score(avg)
+        rec["worst_d"], rec["worst_k"] = worst_metric_distance(avg)
         rec["n"] = len(rec["wavs"])
         rec["sources_n"] = len(rec["sources"])
         out.append(rec)
 
     out.sort(key=lambda r: (r["score"] if r["score"] == r["score"] else float("inf")))
     return out
+
+
+def apply_strict_filter(ranked, threshold):
+    """Split ranked list into (survivors, disqualified). A combo is
+    disqualified if any single metric's normalized distance exceeds
+    `threshold` (default 1.0 = "more than one range-width off"). This
+    prevents Goodhart's-law trades where a combo wins the composite
+    score by accepting a catastrophic value on one metric in exchange
+    for near-target values on others."""
+    survivors = []
+    disqualified = []
+    for r in ranked:
+        if r["worst_d"] > threshold:
+            disqualified.append(r)
+        else:
+            survivors.append(r)
+    return survivors, disqualified
 
 
 # ---------------------------------------------------------------------------
@@ -255,6 +292,14 @@ def main():
                    help="also write the full ranking to this CSV path")
     p.add_argument("--detail", action="store_true",
                    help="show per-metric grades for the best combo")
+    p.add_argument("--strict", action="store_true",
+                   help="disqualify combos whose worst single metric exceeds "
+                        "STRICT_THRESHOLD normalized distance from target "
+                        "(prevents Goodhart trades where one catastrophic "
+                        "metric is hidden by good-on-average composite)")
+    p.add_argument("--strict-threshold", type=float, default=1.0,
+                   help="threshold for --strict (default 1.0 = one full "
+                        "target-range-width outside target)")
     args = p.parse_args()
 
     # Collect every (wav, params, source) tuple
@@ -292,6 +337,24 @@ def main():
         sys.exit(1)
 
     ranked = aggregate(per_wav)
+
+    if args.strict:
+        survivors, disqualified = apply_strict_filter(ranked, args.strict_threshold)
+        if disqualified:
+            # Tally which metric most often disqualified
+            from collections import Counter
+            reason_counts = Counter(r["worst_k"] for r in disqualified if r["worst_k"])
+            print(f"\n--strict: {len(disqualified)} of {len(ranked)} combos "
+                  f"disqualified (worst-metric distance > {args.strict_threshold})")
+            print("  reason breakdown:")
+            for k, n in reason_counts.most_common():
+                tgt = TARGETS.get(k, ("?", "?"))
+                print(f"    {k:12s}  {n:>5d}  (target {tgt[0]} .. {tgt[1]})")
+        if not survivors:
+            print("\nerror: no combos passed --strict filter; loosen "
+                  "--strict-threshold or fix the input audio")
+            sys.exit(1)
+        ranked = survivors
 
     print_summary(ranked, args.top, args.detail)
     print_best(ranked)
