@@ -2,7 +2,7 @@
 #define SMARTNET_FSK2_DEMOD_H
 
 #include <boost/shared_ptr.hpp>
-#include <gnuradio/analog/quadrature_demod_cf.h>
+#include <gnuradio/analog/pll_freqdet_cf.h>
 #include <gnuradio/block.h>
 #include <gnuradio/hier_block2.h>
 #include <gnuradio/io_signature.h>
@@ -48,7 +48,7 @@ private:
   gr::msg_queue::sptr rx_queue;
   gr::msg_queue::sptr tune_queue;
   gr::filter::fir_filter_fff::sptr sym_filter;
-  gr::analog::quadrature_demod_cf::sptr fm_demod;
+  gr::analog::pll_freqdet_cf::sptr pll_demod;
   gr::op25_repeater::rmsagc_ff::sptr baseband_amp;
   gr::op25_repeater::fsk4_demod_ff::sptr fsk4_demod;
   gr::digital::binary_slicer_fb::sptr slicer;

@@ -87,7 +87,6 @@ void SmartnetParser::log_bandplan() {
 }
 
 std::vector<TrunkMessage> SmartnetParser::parse_message(gr::message::sptr msg, System *system) {
-    int sysnum = system->get_sys_num();
     time_t curr_time = time(NULL);
     std::vector<TrunkMessage> messages;
 
@@ -214,8 +213,6 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
              if (osw0.cmd == 0x30b && (osw0.addr & 0xfc00) == 0x6000) {
                  int system = osw2.addr;
                  int site = ((osw1.addr & 0xfc00) >> 10) + 1;
-                 int band = (osw1.addr & 0x380) >> 7;
-                 int feat = (osw1.addr & 0x3f);
                  int cc_rx_chan = osw0.addr & 0x3ff;
                  double cc_rx_freq = get_freq(cc_rx_chan);
                  double cc_tx_freq = osw2.f_tx;
@@ -426,7 +423,6 @@ std::vector<TrunkMessage> SmartnetParser::process_osws(time_t curr_time) {
                     if (this->debug_level >= 11) BOOST_LOG_TRIVIAL(info) << "[" << msgq_id << "] SMARTNET CC2 sys(" << std::hex << this->rx_sys_id << ") freq(" << osw0.f_rx << ")";
                 } else if ((osw1.addr & 0xFC00) == 0x6000) {
                     // System ID + adjacent/alternate control channel broadcast
-                    int site = ((osw1.addr & 0xFC00) >> 10) + 1;
                     int cc_rx_chan = osw1.addr & 0x3ff;
                     double cc_rx_freq = get_freq(cc_rx_chan);
                     double cc_tx_freq = osw2.f_tx;

@@ -30,11 +30,10 @@ struct stream_t {
 };
 
 class Simple_Stream : public Plugin_Api {
-  typedef boost::asio::io_service io_service;
-  io_service my_io_service;
-  io_service my_tcp_io_service;
+  boost::asio::io_context my_io_context;
+  boost::asio::io_context my_tcp_io_context;
   ip::udp::endpoint remote_endpoint;
-  ip::udp::socket my_socket{my_io_service};
+  ip::udp::socket my_socket{my_io_context};
   std::vector<stream_t> streams;
   long max_tcp_index = 0;
   public:
@@ -76,15 +75,14 @@ class Simple_Stream : public Plugin_Api {
       }
 
       if (!stream.tcp) {
-        ip::udp::resolver udp_resolver(my_io_service);
-        ip::udp::resolver::query udp_query(stream.address, std::to_string(stream.port));
+        ip::udp::resolver udp_resolver(my_io_context);
         boost::system::error_code ec;
-        ip::udp::resolver::iterator iter = udp_resolver.resolve(udp_query, ec);
-        if (ec) {
+        auto results = udp_resolver.resolve(stream.address, std::to_string(stream.port), ec);
+        if (ec || results.empty()) {
           BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve UDP address " << stream.address << ": " << ec.message();
           continue;
         }
-        stream.remote_endpoint = iter->endpoint();
+        stream.remote_endpoint = results.begin()->endpoint();
       }
 
       stream.sendTGID = element.value("sendTGID",false);
@@ -322,17 +320,16 @@ class Simple_Stream : public Plugin_Api {
   int start(){
     BOOST_FOREACH (auto& stream, streams){
       if (stream.tcp == true){
-        ip::tcp::socket *my_tcp_socket = new ip::tcp::socket{my_tcp_io_service};
+        ip::tcp::socket *my_tcp_socket = new ip::tcp::socket{my_tcp_io_context};
         stream.tcp_socket = my_tcp_socket;
-        ip::tcp::resolver tcp_resolver(my_tcp_io_service);
-        ip::tcp::resolver::query tcp_query(stream.address, std::to_string(stream.port));
+        ip::tcp::resolver tcp_resolver(my_tcp_io_context);
         boost::system::error_code ec;
-        ip::tcp::resolver::iterator iter = tcp_resolver.resolve(tcp_query, ec);
-        if (ec) {
+        auto results = tcp_resolver.resolve(stream.address, std::to_string(stream.port), ec);
+        if (ec || results.empty()) {
           BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve TCP address " << stream.address << ": " << ec.message();
           continue;
         }
-        stream.tcp_socket->connect(iter->endpoint(), ec);
+        stream.tcp_socket->connect(results.begin()->endpoint(), ec);
         if (ec) {
           BOOST_LOG_TRIVIAL(error) << "SimpleStream: TCP connect failed to " << stream.address << ":" << stream.port << ": " << ec.message();
         }

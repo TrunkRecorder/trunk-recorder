@@ -710,7 +710,9 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
     // For Loop
     if (system->get_system_type() == "smartnet") {
       system->smartnet_trunking->tune_freq(control_channel_freq);
-      //system->smartnet_trunking->reset();
+      // Clear demod tracking state so reacquisition isn't biased by whatever
+      // the loop converged to on the previous (possibly noise-only) channel.
+      system->smartnet_trunking->reset();
     } else if (system->get_system_type() == "p25") {
       system->p25_trunking->tune_freq(control_channel_freq);
     } else {
@@ -730,10 +732,13 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
+          // Release the old hier_block2 before constructing the new one so its
+          // sub-blocks (prefilter, fsk2_demod, framer) are torn down deterministically
+          // instead of overlapping with the replacement.
+          system->smartnet_trunking.reset();
           system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
           tb->unlock();
-          //system->smartnet_trunking->reset();
         } else if (system->get_system_type() == "p25") {
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
