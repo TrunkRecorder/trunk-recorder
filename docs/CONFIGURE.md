@@ -151,17 +151,18 @@ There is a list of available Plugins [here](./Plugins.md).
 | newCallFromUpdate            |          | true                                             | **true** / **false**                                         | Allow for UPDATE trunking messages to start a new Call, in addition to GRANT messages. This may result in more Calls with no transmisions, and use more Recorders. The flipside is that it may catch parts of a Call that would have otherwise been missed. Turn this off if you are running out of Recorders. |
 | softVocoder                  |          | false                                            | **true** / **false**                                         | Use the Software Decode vocoder from OP25 for P25 and DMR. Give it a try if you are hearing weird tones in your audio. Whether it makes your audio sound better or worse is a matter of preference. |
 | recordUUVCalls               |          | true                                             | **true** / **false**                                         | *P25 only* Record Unit to Unit Voice calls.        |
-| syslogFriendly               |          | false                                              | **true** / **false**                                         | Uses static filename `trunk-recorder.log` for use with syslog when `true`. |
+| filenameFormat               |          |                                                  | string                                                       | A format string that controls the directory structure and filename for recorded calls. When set at the instance level it applies to all systems. See the [Filename Format](#filename-format) section below for full details. |
+| syslogFriendly               |          | false                                            | **true** / **false**                                         | Uses static filename `trunk-recorder.log` for use with syslog when `true`. |
 
 
 ## Source Object
 
-### USRP or OSMOSDR Sources
+### USRP, OSMOSDR or IIO Sources
 
 | Key              | Required | Default Value | Type                        | Description                                                  |
 | :--------------- | :------: | :-----------: | --------------------------- | ------------------------------------------------------------ |
-| driver           |    ✓     |               | **"usrp"**,  **"osmosdr"** | The GNURadio block you wish to use for the SDR.              |
-| device           |          |               | **string**<br /> See the [osmosdr page](http://sdr.osmocom.org/trac/wiki/GrOsmoSDR) for supported devices and parameters. | Osmosdr device name and possibly serial number or index of the device. <br /> You only need to do add this key if there are more than one osmosdr devices being used.<br /> Example: `bladerf=00001` for BladeRF with serial 00001 or `rtl=00923838` for RTL-SDR with serial 00923838, just `airspy` for an airspy.<br />It seems that when you have 5 or more RTLSDRs on one system you need to decrease the buffer size. I think it has something to do with the driver. Try adding buflen: `"device": "rtl=serial_num,buflen=65536"`, there should be no space between the comma and `buflen`. |
+| driver           |    ✓     |               | **"usrp"**,  **"osmosdr"**, **"iio"** | The GNURadio block you wish to use for the SDR.              |
+| device           |          |               | **string**<br /> See the [osmosdr page](http://sdr.osmocom.org/trac/wiki/GrOsmoSDR) for supported devices and parameters. | Osmosdr device name and possibly serial number or index of the device. <br /> You only need to do add this key if there are more than one osmosdr devices being used.<br /> Example: `bladerf=00001` for BladeRF with serial 00001 or `rtl=00923838` for RTL-SDR with serial 00923838, just `airspy` for an airspy.<br />It seems that when you have 5 or more RTLSDRs on one system you need to decrease the buffer size. I think it has something to do with the driver. Try adding buflen: `"device": "rtl=serial_num,buflen=65536"`, there should be no space between the comma and `buflen`. <br/>For iio devices, `"ip:192.168.1.5,65536"` or `"usb:1.3.5,65536"` can be used, depending on if you are connecting over ethernet or USB. `iio_info -S` will scan for iio devices and give you the ip address or usb device number. The number after the comma is the buffer length.|
 | center           |    ✓     |               | number                      | The center frequency in Hz to tune the SDR to                |
 | rate             |    ✓     |               | number                      | The sampling rate to set the SDR to, in samples / second     |
 | error            |          |       0       | number                      | The tuning error for the SDR, in Hz. This is the difference between the target value and the actual value. So if you wanted to recv 856MHz but you had to tune your SDR to 855MHz (when set to 0ppm)  to actually receive it, you would set this to -1000000. You should also probably get a new SDR if it is off by this much. |
@@ -170,7 +171,7 @@ There is a list of available Plugins [here](./Plugins.md).
 | analogRecorders  |          |               | number                      | The number of Analog Recorder to have attached to this source. The same as Digital Recorders except for Analog Voice channels. *This is only required for Trunk systems. Channels in Conventional systems have dedicated recorders and do not need to be included here.* |
 | signalDetectorThreshold |       |           | number                      | If set, a static threshold will be used for the Signal Detector on all conventional recorder. Otherwise, the threshold value for the noise floor will be automatically be determined. Only set this is you are having problems. The value is in dB, but is generally higher than the Squelch value because the power is measured differently |
 | ppm              |          |       0       | number                      | The tuning error for the SDR in ppm (parts per million), as an alternative to `error` above. Use a program like GQRX to find an accurate value. |
-| agc              |          |     false     | **true** / **false**        | Whether or not to enable the SDR's automatic gain control (if supported). This is false by default. It is not recommended to set this as it often yields worse performance compared to a manual gain setting. |
+| agc              |          |     false     | **true** / **false**        | Whether or not to enable the SDR's automatic gain control (if supported). This is false by default. It is not recommended to set this as it often yields worse performance compared to a manual gain setting. On iio devices this will enable "fast_attack" agc mode. |
 | gainSettings     |          |               | { "stageName": value}       | Set the gain for any stage. The value for this setting should be passed as an object, where the key specifies the name of the gain stage and the value is the amount of gain in dB. For example:<br /> ````"gainSettings": { "IF": 10, "BB": 11.9},```` |
 | ifGain           |          |               | number                      | *AirSpy/hackrf only* sets the **IF** gain.                   |
 | bbGain           |          |               | number                      | *hackrf only* sets the **BB** gain.                          |
@@ -225,51 +226,54 @@ During the status display, each source will report the running average as well a
 
 ## System Object
 
-| Key                    | Required | Default Value              | Type                                                                         | Description                                                  |
-| ---------------------- | :------: | -------------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------ |
-| shortName              |    ✓     |                            | string                                                                       | This is a nickname for the system. It is used to help name and organize the recordings from this system. It should be 4-6 letters with no spaces. |
-| type                   |    ✓     |                            | **"smartnet"**, **"p25"**, **"conventional"**, **"conventionalDMR"** or **"conventionalP25"**, **"conventionalSIGMF"** | The type of radio system.                                    |
-| control_channels       |    ✓     |                            | array of numbers;<br />[496537500, 496437500]                                | *For trunked systems* The control channel frequencies for the system, in Hz. The frequencies will automatically be cycled through if the system moves to an alternate channel. |
-| channels               |    ✓     |                            | array of numbers;<br />[166725000, 166925000, 167075000, 166850000]          | *For conventional systems*  The channel frequencies, in Hz, used for the system. The channels get assigned a virtual talkgroup number based upon their position in the array. Squelch levels need to be specified for the Source(s) being used. |
-| channelFile            |    ✓     |                            | string                                                                       | *For conventional systems* The filename for a CSV file that provides information about the conventional channels. The format for the file is described below. Squelch levels need to be specified for the Source(s) being used. *Use channels or channelFile, not both*. |
-| modulation             |          | "qpsk"                     | **"qpsk"** or  **"fsk4"**                                                    | The type of digital modulation that the system uses. You do not need to specify this with **conventionalDMR** systems.          |
-| squelch                |          | -160                       | number                                                                       | Squelch in DB, this needs to be set for all conventional systems. The squelch setting is also used for analog talkgroups in a SmartNet system. I generally use -60 for my rtl-sdr. The closer the squelch is to 0, the stronger the signal has to be to unmute it. |
-| talkgroupsFile         |          |                            | string                                                                       | The filename for a CSV file that provides information about the talkgroups. It determines whether a talkgroup is analog or digital, and what priority it should have. This file should be located in the same directory as the trunk-recorder executable. |
-| apiKey                 |          |                            | string                                                                       | *if uploadServer is set* System-specific API key for uploading calls to OpenMHz.com. See the Config tab for your system in OpenMHz to find what the value should be. |
-| openmhzSystemId        |          | `shortName`                | string                                                                       | *if uploadServer is set* By default, the plugin will upload calls to the `shortName` OpenMHz system.  Setting this value will allow uploads to any specific OpenMHz system with its valid API key.  This is useful in a multi-site setup where multiple trunk-recorder systems may be aggregating calls to the same OpenMHz feed. | 
-| broadcastifyApiKey     |          |                            | string                                                                       | *if broadcastifyCallsServer is set* System-specific API key for Broadcastify Calls |
-| broadcastifySystemId   |          |                            | number                                                                       | *if broadcastifyCallsServer is set* System ID for Broadcastify Calls <br />(this is an integer, and different from the RadioReference system ID) |
-| broadcastifyAllow      |          |                            | array of string/number;<br />["507*", "12?45", 12345]                        | *if broadcastifyCallsServer is set* Optional allow-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), the talkgroup **must** match at least one entry or the upload is skipped. |
-| broadcastifyDeny       |          |                            | array of string/number;<br />["99*", "12345"]                                | *if broadcastifyCallsServer is set* Optional deny-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), any matching talkgroup is skipped. |
-| uploadScript           |          |                            | string                                                                       | The filename of a script that is called after each recording has finished. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` ( or `../`). |
-| compressWav            |          | true                       | bool                                                                         | Convert the recorded .wav file to an .m4a file. **This is required for both OpenMHz and Broadcastify!** The `sox` and `fdkaac` packages need to be installed for this command to work. |
-| unitScript             |          |                            | string                                                                       | The filename of a script that runs when a radio (unit) registers (is turned on), affiliates (joins a talk group), deregisters (is turned off), gets an acknowledgment response, transmits, gets a data channel grant, a unit-unit answer request or a Location Registration Response. Passed as parameters:  `shortName radioID on\|join\|off\|ackresp\|call\|data\|ans_req\|location`. On joins and transmissions, `talkgroup` is passed as a fourth parameter; on answer requests, the `source` is.  On joins and transmissions, `patchedTalkgroups`  (comma separated list of talkgroup IDs) is passed as a fifth parameter if the talkgroup is part of a patch on the system. See *examples/unit-script.sh* for a logging example. Note that for paths relative to trunk-recorder, this should start with `./`( or `../`). |
-| audioArchive           |          | true                       | **true** / **false**                                                         | Should the recorded audio files be kept after successfully uploading them? |
-| transmissionArchive    |          | false                      | **true** / **false**                                                         | Should each of the individual transmission be kept? These transmission are combined together with other recent ones to form a single call. |
-| callLog                |          | true                       | **true** / **false**                                                         | Should a json file with the call details be kept after successful uploads? |
-| analogLevels           |          | 8                          | number (1-32)                                                                | The amount of amplification that will be applied to the analog audio. |
-| maxDev                 |          | 5000                       | number                                                                       | The maximum deviation for analog channels. If you analog recordings sound good or if you have a completely digital system, then there is no need to touch this. |
-| digitalLevels          |          | 1                          | number (1-16)                                                                | The amount of amplification that will be applied to the digital audio. |
-| unitTagsFile           |          |                            | string                                                                       | The filename of a CSV file that provides information about the unit tags. The format for the file is described below. |
-| recordUnknown          |          | true                       | **true** / **false**                                                         | Record talkgroups if they are not listed in the Talkgroups File. |
-| hideEncrypted          |          | false                      | **true** / **false**                                                         | Hide encrypted talkgroups log entries                        |
-| hideUnknownTalkgroups  |          | false                      | **true** / **false**                                                         | Hide unknown talkgroups log entries                          |
-| minDuration            |          | 0<br />(which is disabled) | number                                                                       | The minimum call duration in seconds (decimals allowed), calls below this number will have recordings deleted and will not be uploaded. |
-| minTransmissionDuration|          | 0<br />(which is disabled) | number                                                                       | The minimum transmission duration in seconds (decimals allowed), transmissions below this number will not be added to their corresponding call. |
-| maxDuration            |          | 0<br />(which is disabled) | number                                                                       | The maximum call duration in seconds (decimals allowed), calls above this number will have recordings split into multiple parts. |
-| talkgroupDisplayFormat |          | "id"                       | **"id" "id_tag"** or **"tag_id"**                                            | The display format for talkgroups in the console and log file. (*id_tag* and *tag_id* is only valid if **talkgroupsFile** is specified) |
-| bandplan               |          | "800_standard"             | **"800_standard"**, **"800_reband"**, **"800_splinter"** or **"400_custom"** | *SmartNet only* The SmartNet bandplan that will be used. |
-| bandplanBase           |          |                            | number                                                                       | *400_custom only* The base frequency, specified in Hz. |
-| bandplanHigh           |          |                            | number                                                                       | *SmartNet, 400_custom only* The highest channel in the system, specified in Hz. |
-| bandplanSpacing        |          |                            | number                                                                       | *SmartNet, 400_custom only* The channel spacing, specified in Hz. Typically this is *25000*. |
-| bandplanOffset         |          |                            | number                                                                       | *SmartNet, 400_custom only* The offset used to calculate frequencies. |
-| customFrequencyTableFile|         |                            | string                                                                       | *P25 only* The filename for a CSV file that provides information about the P25 custom frequency tables. The format for the file is described below. |
-| decodeMDC              |          | false                      | **true** / **false**                                                         | *Conventional systems only* enable the MDC-1200 signaling decoder. |
-| decodeFSync            |          | false                      | **true** / **false**                                                         | *Conventional systems only* enable the Fleet Sync signaling decoder. |
-| decodeStar             |          | false                      | **true** / **false**                                                         | *Conventional systems only* enable the Star signaling decoder. |
-| decodeTPS              |          | false                      | **true** / **false**                                                         | *Conventional systems only* enable the Motorola Tactical Public Safety (aka FDNY Fireground) signaling decoder. |
-| deemphasisTau              |          | 0.000750                      | number                                                        | *Conventional systems only* configure the de-emphasis time constant. 750µs for NFM (default), 75µs for WFM North America, 50µs for WFM most other regions.   |
-| enabled                |          | true                       | **true** / **false**                                                         | control whether a configured system is enabled or disabled                 |
+| Key                      | Required | Default Value              | Type                                                                                                                   | Description                                                  |
+|--------------------------|:--------:|----------------------------|------------------------------------------------------------------------------------------------------------------------| ------------------------------------------------------------ |
+| shortName                |    ✓     |                            | string                                                                                                                 | This is a nickname for the system. It is used to help name and organize the recordings from this system. It should be 4-6 letters with no spaces. |
+| type                     |    ✓     |                            | **"smartnet"**, **"p25"**, **"conventional"**, **"conventionalDMR"** or **"conventionalP25"**, **"conventionalSIGMF"** | The type of radio system.                                    |
+| control_channels         |    ✓     |                            | array of numbers;<br />[496537500, 496437500]                                                                          | *For trunked systems* The control channel frequencies for the system, in Hz. The frequencies will automatically be cycled through if the system moves to an alternate channel. |
+| channels                 |    ✓     |                            | array of numbers;<br />[166725000, 166925000, 167075000, 166850000]                                                    | *For conventional systems*  The channel frequencies, in Hz, used for the system. The channels get assigned a virtual talkgroup number based upon their position in the array. Squelch levels need to be specified for the Source(s) being used. |
+| channelFile              |    ✓     |                            | string                                                                                                                 | *For conventional systems* The filename for a CSV file that provides information about the conventional channels. The format for the file is described below. Squelch levels need to be specified for the Source(s) being used. *Use channels or channelFile, not both*. |
+| modulation               |          | "qpsk"                     | **"qpsk"** or  **"fsk4"**                                                                                              | The type of digital modulation that the system uses. You do not need to specify this with **conventionalDMR** systems.          |
+| squelch                  |          | -160                       | number                                                                                                                 | Squelch in DB, this needs to be set for all conventional systems. The squelch setting is also used for analog talkgroups in a SmartNet system. I generally use -60 for my rtl-sdr. The closer the squelch is to 0, the stronger the signal has to be to unmute it. |
+| talkgroupsFile           |          |                            | string                                                                                                                 | The filename for a CSV file that provides information about the talkgroups. It determines whether a talkgroup is analog or digital, and what priority it should have. This file should be located in the same directory as the trunk-recorder executable. |
+| apiKey                   |          |                            | string                                                                                                                 | *if uploadServer is set* System-specific API key for uploading calls to OpenMHz.com. See the Config tab for your system in OpenMHz to find what the value should be. |
+| openmhzSystemId          |          | `shortName`                | string                                                                                                                 | *if uploadServer is set* By default, the plugin will upload calls to the `shortName` OpenMHz system.  Setting this value will allow uploads to any specific OpenMHz system with its valid API key.  This is useful in a multi-site setup where multiple trunk-recorder systems may be aggregating calls to the same OpenMHz feed. | 
+| broadcastifyApiKey       |          |                            | string                                                                                                                 | *if broadcastifyCallsServer is set* System-specific API key for Broadcastify Calls |
+| broadcastifySystemId     |          |                            | number                                                                                                                 | *if broadcastifyCallsServer is set* System ID for Broadcastify Calls <br />(this is an integer, and different from the RadioReference system ID) |
+| broadcastifyAllow        |          |                            | array of string/number;<br />["507*", "12?45", 12345]                                                                  | *if broadcastifyCallsServer is set* Optional allow-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), the talkgroup **must** match at least one entry or the upload is skipped. |
+| broadcastifyDeny         |          |                            | array of string/number;<br />["99*", "12345"]                                                                          | *if broadcastifyCallsServer is set* Optional deny-list for Broadcastify uploads, based on the talkgroup ID **as a string**. Supports glob wildcards: `*` (any length) and `?` (single character). If set (non-empty), any matching talkgroup is skipped. |
+| uploadScript             |          |                            | string                                                                                                                 | The filename of a script that is called after each call has finished processing. The script is passed the final `.wav` path as the first argument, the call JSON path as the second argument, and the `.m4a` path as the third argument. The `.wav` and JSON files always exist; the `.m4a` file is only created when `compressWav` is enabled. Checkout *encode-upload.sh.sample* as an example. Should probably start with `./` (or `../`). |
+| compressWav              |          | true                       | bool                                                                                                                   | Convert the final call `.wav` file to an `.m4a` file. **This is required for both OpenMHz and Broadcastify!** The `.wav` file is always created first; when `compressWav` is enabled, an additional `.m4a` file is created from that `.wav`. Requires `ffmpeg` to be installed. |
+| compressBitrate          |          | 32k                        | string                                                                                                                 | Sets the audio bitrate used when compressWav creates the final .m4a file with ffmpeg (for example 16k, 32k, 48k, or 64k). This setting only applies to the compressed .m4a output and does not affect the original .wav file. Ignored when compressWav is false. |
+| audio_postprocess        |          |                            | object                                                                                                                 | Optional per-system audio cleanup and loudness normalization settings applied when concluding calls. Cleanup filtering and loudnorm are configured independently. See the **Audio Post-Processing** section below for full details. |
+| unitScript               |          |                            | string                                                                                                                 | The filename of a script that runs when a radio (unit) registers (is turned on), affiliates (joins a talk group), deregisters (is turned off), gets an acknowledgment response, transmits, gets a data channel grant, a unit-unit answer request or a Location Registration Response. Passed as parameters:  `shortName radioID on\|join\|off\|ackresp\|call\|data\|ans_req\|location`. On joins and transmissions, `talkgroup` is passed as a fourth parameter; on answer requests, the `source` is.  On joins and transmissions, `patchedTalkgroups`  (comma separated list of talkgroup IDs) is passed as a fifth parameter if the talkgroup is part of a patch on the system. See *examples/unit-script.sh* for a logging example. Note that for paths relative to trunk-recorder, this should start with `./`( or `../`). |
+| audioArchive             |          | true                       | **true** / **false**                                                                                                   | Should the recorded audio files be kept after successfully uploading them? |
+| transmissionArchive      |          | false                      | **true** / **false**                                                                                                   | Should each of the individual transmission be kept? These transmission are combined together with other recent ones to form a single call. |
+| callLog                  |          | true                       | **true** / **false**                                                                                                   | Should a json file with the call details be kept after successful uploads? |
+| analogLevels             |          | 8                          | number (1-32)                                                                                                          | The amount of amplification that will be applied to the analog audio. |
+| maxDev                   |          | 5000                       | number                                                                                                                 | The maximum deviation for analog channels. If you analog recordings sound good or if you have a completely digital system, then there is no need to touch this. |
+| digitalLevels            |          | 1                          | number (1-16)                                                                                                          | The amount of amplification that will be applied to the digital audio. |
+| unitTagsFile             |          |                            | string                                                                                                                 | The filename of a CSV file that provides information about the unit tags. The format for the file is described below. |
+| recordUnknown            |          | true                       | **true** / **false**                                                                                                   | Record talkgroups if they are not listed in the Talkgroups File. |
+| hideEncrypted            |          | false                      | **true** / **false**                                                                                                   | Hide encrypted talkgroups log entries                        |
+| hideUnknownTalkgroups    |          | false                      | **true** / **false**                                                                                                   | Hide unknown talkgroups log entries                          |
+| minDuration              |          | 0<br />(which is disabled) | number                                                                                                                 | The minimum call duration in seconds (decimals allowed), calls below this number will have recordings deleted and will not be uploaded. |
+| minTransmissionDuration  |          | 0<br />(which is disabled) | number                                                                                                                 | The minimum transmission duration in seconds (decimals allowed), transmissions below this number will not be added to their corresponding call. |
+| maxDuration              |          | 0<br />(which is disabled) | number                                                                                                                 | The maximum call duration in seconds (decimals allowed), calls above this number will have recordings split into multiple parts. |
+| talkgroupDisplayFormat   |          | "id"                       | **"id" "id_tag"** or **"tag_id"**                                                                                      | The display format for talkgroups in the console and log file. (*id_tag* and *tag_id* is only valid if **talkgroupsFile** is specified) |
+| bandplan                 |          | "800_standard"             | **"800_standard"**, **"800_reband"**, **"800_splinter"** or **"400_custom"**                                           | *SmartNet only* The SmartNet bandplan that will be used. |
+| bandplanBase             |          |                            | number                                                                                                                 | *400_custom only* The base frequency, specified in Hz. |
+| bandplanHigh             |          |                            | number                                                                                                                 | *SmartNet, 400_custom only* The highest channel in the system, specified in Hz. |
+| bandplanSpacing          |          |                            | number                                                                                                                 | *SmartNet, 400_custom only* The channel spacing, specified in Hz. Typically this is *25000*. |
+| bandplanOffset           |          |                            | number                                                                                                                 | *SmartNet, 400_custom only* The offset used to calculate frequencies. |
+| customFrequencyTableFile |          |                            | string                                                                                                                 | *P25 only* The filename for a CSV file that provides information about the P25 custom frequency tables. The format for the file is described below. |
+| decodeMDC                |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the MDC-1200 signaling decoder. |
+| decodeFSync              |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the Fleet Sync signaling decoder. |
+| decodeStar               |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the Star signaling decoder. |
+| decodeTPS                |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the Motorola Tactical Public Safety (aka FDNY Fireground) signaling decoder. |
+| deemphasisTau            |          | 0.000750                   | number                                                                                                                 | *Conventional systems only* configure the de-emphasis time constant. 750µs for NFM (default), 75µs for WFM North America, 50µs for WFM most other regions.   |
+| enabled                  |          | true                       | **true** / **false**                                                                                                   | control whether a configured system is enabled or disabled                 |
+| filenameFormat           |          |                            | string                                                                                                                 | A format string that controls the directory structure and filename for recorded calls. When set at the system level it overrides the instance-level `filenameFormat`. See the [Filename Format](#filename-format) section below for full details. |
 
 ***
 
@@ -312,6 +316,331 @@ By default, Trunk Recorder will record the call from the first site to receive t
     ...
 }
 ```
+
+## Audio Post-Processing
+
+Each system can optionally define an `audio_postprocess` object to control cleanup filters and loudness normalization for saved call audio.
+
+```json
+"audio_postprocess": {
+"enabled": false,
+"outputRawAudio": false,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": ""
+}
+```
+
+### `audio_postprocess` Object
+
+| Key                 | Required | Default Value | Type                  | Description |
+| ------------------- | :------: | ------------- | --------------------- | ----------- |
+| enabled             |          | false         | **true** / **false**  | Enables the structured cleanup filter chain. This controls `highpass_hz`, `lowpass_hz`, `bandreject_hz`, `bandreject_width_hz`, and use of `ffmpeg_filter` as the base filter chain. It does **not** control loudnorm. |
+| outputRawAudio      |          | false         | **true** / **false**  | When enabled, saves an additional `.raw.wav` file alongside the normal call output. This file is a verbatim concatenation of the raw transmission recordings with no filtering, resampling, or loudness normalization applied — the original sample rate and bit depth are preserved exactly. Useful for comparing the effect of post-processing settings or diagnosing audio quality issues. See **Raw Audio Output** below. |
+| highpass_hz         |          | 0             | number                | Adds an FFmpeg highpass filter when greater than 0. |
+| lowpass_hz          |          | 0             | number                | Adds an FFmpeg lowpass filter when greater than 0. |
+| bandreject_hz       |          | 0             | number                | Adds an FFmpeg bandreject filter center frequency when greater than 0. |
+| bandreject_width_hz |          | 0             | number                | Width for the FFmpeg bandreject filter. Must be greater than 0 to be used. |
+| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization independently of `enabled`. |
+| loudnorm_two_pass   |          | true          | **true** / **false**  | When `true`, attempts two-pass loudnorm and falls back to single-pass when unavailable. When `false`, uses single-pass loudnorm directly. |
+| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target. |
+| loudnorm_tp         |          | -0.1          | number                | FFmpeg loudnorm true peak target. |
+| loudnorm_lra        |          | 11.0          | number                | FFmpeg loudnorm loudness range target. |
+| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain used as the base filter chain when `enabled=true`. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
+
+
+### How it works
+
+`audio_postprocess.enabled` only controls the base cleanup filter chain. It does **not** enable or disable loudness normalization.
+
+When `enabled` is `true`, Trunk Recorder builds a base filter chain from the structured cleanup settings below:
+
+- `highpass_hz`
+- `lowpass_hz`
+- `bandreject_hz`
+- `bandreject_width_hz`
+
+If `ffmpeg_filter` is provided and `enabled` is `true`, that string is used as the base filter chain instead of the structured cleanup filters.
+
+Loudness normalization is controlled separately by `loudnorm`. It defaults to `true`, even when `audio_postprocess.enabled` is `false`.
+
+### Loudnorm behavior
+
+When `loudnorm` is enabled, Trunk Recorder applies FFmpeg loudnorm using these defaults:
+
+- `I=-16.0`
+- `TP=-0.1`
+- `LRA=11.0`
+
+If `loudnorm_two_pass` is `true`, Trunk Recorder first attempts loudnorm analysis and then renders using two-pass loudnorm.
+
+If two-pass loudnorm cannot be used for a call, such as when the call is too short or the first-pass analysis fails, Trunk Recorder automatically falls back to single-pass loudnorm rendering.
+
+If `loudnorm_two_pass` is `false`, Trunk Recorder skips the analysis pass and uses single-pass loudnorm directly.
+
+### Filter order
+
+The final audio filter chain is built in this order:
+
+1. Base cleanup filter chain or `ffmpeg_filter` override
+2. Built-in loudnorm, if enabled
+
+### Fallback behavior
+
+If a render using loudnorm fails, Trunk Recorder retries using the cleanup-only filter chain.
+
+If that also fails, Trunk Recorder falls back to unfiltered rendering.
+
+### Important notes
+
+- `audio_postprocess.enabled=false` does **not** disable loudnorm
+- `ffmpeg_filter` may still be combined with built-in loudnorm
+- if `ffmpeg_filter` already contains `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization
+- the old implicit `dynaudnorm` fallback is no longer used
+
+### Raw Audio Output
+
+When `outputRawAudio` is `true`, Trunk Recorder writes an additional file named `<stem>.raw.wav` to the capture directory after each call concludes.
+
+The debug file is produced by concatenating the raw transmission recordings using an FFmpeg stream copy — no decoding, re-encoding, filtering, resampling, or loudness normalization is applied. The audio is bit-for-bit identical to what the recorder wrote, just joined into a single file.
+
+**File retention:**
+
+- The `.raw.wav` is always kept in the capture directory, even when `audioArchive` is `false`. When the normal processed audio is deleted after upload, the raw audio file remains.
+- If a call fails all plugin retry attempts and `archiveFilesOnFailure` is also `false`, the debug file is removed along with the other call artifacts.
+
+**Typical use cases:**
+
+- Comparing processed output against the unmodified source to evaluate filter or loudnorm settings.
+- Diagnosing audio artifacts introduced by post-processing.
+- Retaining a pristine archive copy while still distributing the normalized version.
+
+### Example configurations
+
+#### Cleanup filters only
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 200,
+"lowpass_hz": 0,
+"bandreject_hz": 4000,
+"bandreject_width_hz": 180,
+"loudnorm": false,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": ""
+}
+```
+
+#### Loudnorm only
+
+```json
+"audio_postprocess": {
+"enabled": false,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": "",
+"outputRawAudio": false
+}
+```
+
+#### Custom filter chain plus built-in loudnorm
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": false,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
+}
+```
+
+#### Fully custom loudnorm in `ffmpeg_filter`
+
+If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped.
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"bandreject_hz": 0,
+"bandreject_width_hz": 0,
+"loudnorm": true,
+"loudnorm_two_pass": true,
+"loudnorm_i": -16.0,
+"loudnorm_tp": -0.1,
+"loudnorm_lra": 11.0,
+"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
+}
+```
+
+#### Raw audio output alongside processed output
+
+Saves a verbatim `.raw.wav` next to the normal processed call files. All other post-processing settings still apply to the normal output.
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 200,
+"loudnorm": true,
+"outputRawAudio": true
+}
+```
+
+## Filename Format
+
+The `filenameFormat` setting lets you customise the directory layout and base filename used when saving recorded calls. It can be set at the **instance level** (top-level `config.json`) to apply to every system, or at the **system level** (inside a system object) to override the instance-level value for that specific system.
+
+When `filenameFormat` is **not set**, the default behaviour is preserved:
+
+```
+<captureDir>/<shortName>/YYYY/M/D/<talkgroup>-<epoch>_<freq>-call_<callNum>.wav
+```
+
+When a format string **is set**, it defines the path relative to `captureDir`. Any `/` characters in the format create subdirectories which are automatically created. The suffixes `-call_<callNum>.wav`, `-call_<callNum>.json`, and `-call_<callNum>.m4a` are always appended automatically.
+
+### Tokens
+
+Tokens are written as `{token_name}` and are replaced with the corresponding value at recording time. String-valued tokens are sanitised so that filesystem-unsafe characters (``\ / : * ? " < > |``) are replaced with underscores.
+
+#### Call Data Tokens
+
+| Token | Description | Example Value |
+|-------|-------------|---------------|
+| `{talkgroup}` | Talkgroup number | `12345` |
+| `{talkgroup_tag}` | Talkgroup group tag (e.g. "Fire Dispatch") | `Fire_Dispatch` |
+| `{talkgroup_alpha_tag}` | Talkgroup alpha tag (e.g. "FD Disp") | `FD_Disp` |
+| `{talkgroup_description}` | Talkgroup description | `Fire_Department_Dispatch` |
+| `{talkgroup_group}` | Talkgroup group name | `Fire` |
+| `{talkgroup_display}` | Formatted talkgroup display string | `12345` |
+| `{short_name}` | System short name | `dcsys` |
+| `{freq}` | Frequency in Hz (integer) | `851012500` |
+| `{freq_mhz}` | Frequency in MHz (4 decimal places) | `851.0125` |
+| `{call_num}` | Call number | `42` |
+| `{tdma_slot}` | TDMA slot number (empty string when not applicable) | `1` |
+| `{sys_num}` | System number | `0` |
+| `{epoch}` | Unix epoch timestamp in seconds | `1705337652` |
+| `{source_num}` | Source number | `0` |
+| `{recorder_num}` | Recorder number | `2` |
+| `{audio_type}` | Audio type | `digital` |
+| `{emergency}` | Emergency flag | `0` or `1` |
+| `{encrypted}` | Encrypted flag | `0` or `1` |
+| `{priority}` | Priority value | `3` |
+| `{signal}` | Signal level (integer) | `-45` |
+| `{noise}` | Noise level (integer) | `-80` |
+| `{color_code}` | Color code | `0` |
+
+#### Date / Time Tokens
+
+Time tokens use [strftime](https://man7.org/linux/man-pages/man3/strftime.3.html) formatting. Two variants are available:
+
+- **`{time:FORMAT}`** — formats using **local time**
+- **`{ztime:FORMAT}`** — formats using **UTC (Zulu) time**
+
+`FORMAT` is any valid strftime format string. Additionally, the custom specifier **`%f`** is supported for **milliseconds** (zero-padded to 3 digits).
+
+Common strftime specifiers:
+
+| Specifier | Meaning | Example |
+|-----------|---------|---------|
+| `%Y` | 4-digit year | `2025` |
+| `%m` | Month (01–12) | `11` |
+| `%d` | Day (01–31) | `21` |
+| `%H` | Hour (00–23) | `21` |
+| `%M` | Minute (00–59) | `19` |
+| `%S` | Second (00–59) | `39` |
+| `%f` | Milliseconds (000–999) | `250` |
+
+#### ISO 8601 Presets
+
+For convenience, shorthand presets are available that produce standard ISO 8601 formatted timestamps:
+
+| Token | Output Format | Example |
+|-------|---------------|---------|
+| `{time:iso}` | Local time | `2025-11-21T21:19:39` |
+| `{time:iso_ms}` | Local time with milliseconds | `2025-11-21T21:19:39.250` |
+| `{ztime:iso}` | UTC (Zulu) time | `2025-11-21T21:19:39Z` |
+| `{ztime:iso_ms}` | UTC (Zulu) time with milliseconds | `2025-11-21T21:19:39.000Z` |
+
+> **Note:** The ISO presets include colons in the time portion (e.g. `21:19:39`). Colons are not valid in filenames on macOS and Windows. If the timestamp will appear in the filename (not just the directory path), use a custom strftime format without colons instead, for example: `{ztime:%Y-%m-%dT%H%M%SZ}` which produces `2025-11-21T211939Z`.
+
+### Examples
+
+#### Instance-level format (applies to all systems)
+
+```json
+{
+  "filenameFormat": "{short_name}/{time:%Y}/{time:%m}/{time:%d}/{talkgroup}-{talkgroup_alpha_tag}-{epoch}_{freq}",
+  "systems": [{ "..." : "..." }]
+}
+```
+
+This would produce a path like:
+
+```
+<captureDir>/dcsys/2025/11/21/12345-FD_Disp-1732223979_851012500-call_42.wav
+```
+
+#### System-level override
+
+```json
+{
+  "filenameFormat": "{short_name}/{time:%Y}/{time:%m}/{time:%d}/{talkgroup}-{epoch}_{freq}",
+  "systems": [{
+    "shortName": "dcsys",
+    "filenameFormat": "{short_name}/{ztime:%Y-%m-%d}/{talkgroup_group}/{talkgroup}-{ztime:iso}_{freq_mhz}"
+  }]
+}
+```
+
+For system `dcsys`, the system-level format is used instead of the instance-level one:
+
+```
+<captureDir>/dcsys/2025-11-21/Fire/12345-2025-11-21T21:19:39Z_851.0125-call_42.wav
+```
+
+All other systems would still use the instance-level format.
+
+#### Using ISO Zulu time with milliseconds (filename-safe)
+
+```json
+{
+  "filenameFormat": "{short_name}/{ztime:%Y-%m-%d}/{talkgroup}-{ztime:%Y-%m-%dT%H%M%S.%fZ}_{freq}"
+}
+```
+
+Produces:
+
+```
+<captureDir>/dcsys/2025-11-21/12345-2025-11-21T211939.000Z_851012500-call_42.wav
+```
+
+***
 
 ## Plugin Object
 
@@ -379,15 +708,16 @@ This plugin does not, by itself, stream audio to any online services.  Because i
 
 | Key       | Required | Default Value | Type                 | Description                                                  |
 | --------- | :------: | ------------- | -------------------- | ------------------------------------------------------------ |
-| address   |    ✓     |               | string               | IP address to send this audio stream to.  Use "127.0.0.1" to send to the same computer that trunk-recorder is running on. |
-| port      |    ✓     |               | number               | UDP or TCP port that this stream will send audio to.         |
+| url       |          |               | string               | URL specifying the protocol, host, and port for this stream, e.g. `udp://hostname.tld:8600` or `tcp://192.168.1.10:9000`. When set, `address` and `port` are not required, and `useTCP` is ignored — the protocol is determined by the URL scheme. Supports both hostnames and literal IP addresses. |
+| address   |          |               | string               | **Deprecated.** Use `url` instead. IP address or hostname to send this audio stream to. |
+| port      |          |               | number               | **Deprecated.** Use `url` instead. UDP or TCP port that this stream will send audio to. |
 | TGID      |    ✓     |               | number               | Audio from this Talkgroup ID will be sent on this stream.  Set to 0 to stream all recorded talkgroups. |
 | sendJSON  |          |     false     | **true** / **false** | When set to true, JSON metadata will be prepended to the audio data each time a packet is sent.  JSON fields are talkgroup, patched_talkgroups, src, src_tag, freq, audio_sample_rate, short_name, event (set to "audio").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian). If this is set to **true**, the sendTGID field will be ignored. |
 | sendCallStart |      | false         | **true** / **false** | Only used if sendJSON is set to **true**.  When set to true, a JSON message will be sent at the start of each call that includes the following JSON fields: talkgroup, talkgroup_tag, patched_talkgroups, patched_talkgroup_tags, src, src_tag, freq, short_name, event (set to "call_start").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian).
 | sendCallEnd |      | false         | **true** / **false** | Only used if sendJSON is set to **true**.  When set to true, a JSON message will be sent at the end of each call that includes the following JSON fields: talkgroup, patched_talkgroups, freq, short_name, event (set to "call_end").  The length of the JSON metadata is prepended to the metadata in long integer format (4 bytes, little endian).
 | sendTGID  |          |     false     | **true** / **false** | Deprecated.  Recommend using sendJSON for metadata instead.  If sendJSON is set to true, this setting will be ignored.  When set to true, the TGID will be prepended in long integer format (4 bytes, little endian) to the audio data each time a packet is sent. |
 | shortName |          |               | string               | shortName of the System that audio should be streamed for.  This should match the shortName of a system that is defined in the main section of the config file.  When omitted, all Systems will be streamed to the address and port configured.  If TGIDs from Systems overlap, JSON metadata should be used to prevent interleaved audio for talkgroups from different Systems with the same TGID.
-|  useTCP   |          |     false     | **true** / **false** | When set to true, TCP will be used instead of UDP.
+|  useTCP   |          |     false     | **true** / **false** | **Deprecated.** Use `url` instead. When set to true, TCP will be used instead of UDP. Ignored if `url` is set — the protocol is determined by the URL scheme instead.
 
 ###### Plugin Object Example #1:
 This example will stream audio from talkgroup 58914 on system "CountyTrunked" to the local machine on UDP port 9123.
@@ -503,7 +833,7 @@ The columns are:
 | Hex       |       | The Talkgroup Number formatted as a hex number. This value is currently not used. |
 | Category |    |  The category for the Talkgroup |
 | Tag       |   |  The Service Tag for the Talkgroup |
-| Priority |    | The priority field specifies the number of recorders the system must have available to record a new call for the talkgroup. For example, a priority of 1, the highest means as long as at least a single recorder is available, the system will record the new call. If the priority is 2, the system would at least 2 free recorders to record the new call, and so on. If there is no priority set for a talkgroup entry, a prioity of 1 is assumed. <br/> Talkgroups assigned a priority of -1 will never be recorded, regardless of the number of available recorders. |
+| Priority |    | The priority field specifies the number of recorders the system must have available to record a new call for the talkgroup. For example, a priority of 1, the highest means as long as at least a single recorder is available, the system will record the new call. If the priority is 2, the system would need at least 2 free recorders to record the new call, and so on. If there is no priority set for a talkgroup entry, a prioity of 1 is assumed. <br/> Talkgroups assigned a priority of -1 will never be recorded, regardless of the number of available recorders. |
 | Preferred NAC |     | In Multi-Site mode, the preferred NAC (`nnnn`, e.g. `1234`), RFSS/SiteID (`RRRRssss`, e.g. `00010023`), or multiSiteSystemNumber to record a specific talkgroup.|
 | Comment |        | Use this field to capture comments about a talkgroup. It will be ignored by Trunk Recorder. |
 
@@ -545,7 +875,7 @@ A **Header Row** is required for the file, with a header provided for each of th
 
 This file allows for Unit IDs to be assigned a name. The format is 2 columns, the first being the decimal number of the Unit ID, the second is the Unit Name.
 
-Regex is also supported for the Unit ID, which can be used to match radio IDs of a specific pattern. By default, the regex must match the full string (`^pattern$`), however putting the pattern within `/` will allow partial matches. Within the unit name, `$1`, `$2`, etc. will be replaced by the corresponding capture group. For large radio systems, regex may be better instead of specifying a long list of radio IDs. In case a Unit ID will be matched by regex but you do not want to use the associated unit name, you can put the specific unit ID and unit name before the regex, so it will be chosen before reaching the regex.
+Regex is also supported for the Unit ID, which can be used to match radio IDs of a specific pattern. By default, the regex must match the full string (``pattern$`), however putting the pattern within `/` will allow partial matches. Within the unit name, `$1`, `$2`, etc. will be replaced by the corresponding capture group. For large radio systems, regex may be better instead of specifying a long list of radio IDs. In case a Unit ID will be matched by regex but you do not want to use the associated unit name, you can put the specific unit ID and unit name before the regex, so it will be chosen before reaching the regex.
 
 In the second row of the example below, the first capture group `([0-9]{2})` becomes `$1` for the unit name, so an ID like 1210207 gets translated to Engine 20. In the third row, only the start of the string is being matched, so an ID of 173102555 is translated into Ambulance 102.
 
@@ -553,7 +883,7 @@ In the second row of the example below, the first capture group `([0-9]{2})` bec
 | ---------                | ---------    |
 | 911000                   | Dispatch     |
 | 1[1245]10([0-9]{2})[127] | Engine $1    |
-| /^1[78]3(1[0-9]{2})/     | Ambulance $1 |
+| /`1[78]3(1[0-9]{2})/     | Ambulance $1 |
 
 ## customFrequencyTableFile
 

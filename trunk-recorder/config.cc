@@ -74,6 +74,7 @@ void setup_file_log(std::string log_dir, std::string log_color, std::string time
   if (syslog_friendly) {
     global_log_sink = logging::add_file_log(
         keywords::file_name = log_dir + "/trunk-recorder.log",
+        keywords::open_mode = std::ios_base::app,
         keywords::auto_flush = true);
   } else {
     global_log_sink = logging::add_file_log(
@@ -229,6 +230,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     }
     config.frequency_format = frequency_format;
     BOOST_LOG_TRIVIAL(info) << "Frequency format: " << get_frequency_format();
+    config.filename_format = data.value("filenameFormat", "");
+    BOOST_LOG_TRIVIAL(info) << "Filename Format: " << (config.filename_format.empty() ? "(default)" : config.filename_format);
 
     statusAsString = data.value("statusAsString", statusAsString);
     BOOST_LOG_TRIVIAL(info) << "Status as String: " << statusAsString;
@@ -258,6 +261,25 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "\n\nSystem Number: " << sys_count << "\n-------------------------------------\n";
         system->set_short_name(element.value("shortName", default_script.str()));
         BOOST_LOG_TRIVIAL(info) << "Short Name: " << system->get_short_name();
+
+        // The shortName is used as part of directory and file paths, so reject
+        // characters that would corrupt those paths or break shell-invoked
+        // tools like sox/ffmpeg (issue #995).
+        {
+          std::string sn = system->get_short_name();
+          if (sn.empty()) {
+            BOOST_LOG_TRIVIAL(error) << "shortName is empty - please set a shortName in config.json";
+            return false;
+          }
+          if (sn.find(' ') != std::string::npos) {
+            BOOST_LOG_TRIVIAL(error) << "shortName \"" << sn << "\" contains a space. Spaces are not allowed - they corrupt recording file paths and break sox/ffmpeg. Use _ or - instead.";
+            return false;
+          }
+          if (!std::regex_match(sn, std::regex("^[A-Za-z0-9._-]+$"))) {
+            BOOST_LOG_TRIVIAL(error) << "shortName \"" << sn << "\" contains invalid characters. Only letters, digits, '.', '_' and '-' are allowed - other characters break recording file paths and shell-invoked tools.";
+            return false;
+          }
+        }
 
         system->set_system_type(element["type"]);
         BOOST_LOG_TRIVIAL(info) << "System Type: " << system->get_system_type();
@@ -365,12 +387,96 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Upload Script: " << system->get_upload_script();
         system->set_compress_wav(element.value("compressWav", true));
         BOOST_LOG_TRIVIAL(info) << "Compress .wav Files: " << system->get_compress_wav();
+        system->set_audio_bitrate(element.value("compressBitrate", "32k"));
+        BOOST_LOG_TRIVIAL(info) << "Audio Bitrate: " << system->get_audio_bitrate();
         system->set_call_log(element.value("callLog", true));
         BOOST_LOG_TRIVIAL(info) << "Call Log: " << system->get_call_log();
         system->set_audio_archive(element.value("audioArchive", true));
         BOOST_LOG_TRIVIAL(info) << "Audio Archive: " << system->get_audio_archive();
         system->set_transmission_archive(element.value("transmissionArchive", false));
         BOOST_LOG_TRIVIAL(info) << "Transmission Archive: " << system->get_transmission_archive();
+                bool audio_postprocess_enabled = false;
+        int audio_highpass_hz = 0;
+        int audio_lowpass_hz = 0;
+        int audio_bandreject_hz = 0;
+        int audio_bandreject_width_hz = 0;
+        bool audio_loudnorm = true;
+        bool audio_loudnorm_two_pass = true;
+        double audio_loudnorm_i = -16.0;
+        double audio_loudnorm_tp = -0.1;
+        double audio_loudnorm_lra = 11.0;
+        std::string audio_ffmpeg_filter = "";
+        bool audio_output_raw_audio = false;
+
+        if (element.contains("audio_postprocess") && element["audio_postprocess"].is_object()) {
+          const json &audio_post = element["audio_postprocess"];
+
+          audio_postprocess_enabled = audio_post.value("enabled", false);
+          audio_highpass_hz = audio_post.value("highpass_hz", 0);
+          audio_lowpass_hz = audio_post.value("lowpass_hz", 0);
+          audio_bandreject_hz = audio_post.value("bandreject_hz", 0);
+          audio_bandreject_width_hz = audio_post.value("bandreject_width_hz", 0);
+
+          audio_loudnorm = audio_post.value("loudnorm", true);
+          audio_loudnorm_two_pass = audio_post.value("loudnorm_two_pass", true);
+          audio_loudnorm_i = audio_post.value("loudnorm_i", -16.0);
+          audio_loudnorm_tp = audio_post.value("loudnorm_tp", -0.1);
+          audio_loudnorm_lra = audio_post.value("loudnorm_lra", 11.0);
+
+          audio_ffmpeg_filter = audio_post.value("ffmpeg_filter", "");
+          audio_output_raw_audio = audio_post.value("outputRawAudio", false);
+        }
+
+        if (audio_highpass_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.highpass_hz cannot be negative, forcing to 0";
+          audio_highpass_hz = 0;
+        }
+
+        if (audio_lowpass_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.lowpass_hz cannot be negative, forcing to 0";
+          audio_lowpass_hz = 0;
+        }
+
+        if (audio_bandreject_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.bandreject_hz cannot be negative, forcing to 0";
+          audio_bandreject_hz = 0;
+        }
+
+        if (audio_bandreject_width_hz < 0) {
+          BOOST_LOG_TRIVIAL(warning) << "audio_postprocess.bandreject_width_hz cannot be negative, forcing to 0";
+          audio_bandreject_width_hz = 0;
+        }
+
+        system->set_audio_postprocess_enabled(audio_postprocess_enabled);
+        system->set_audio_highpass_hz(audio_highpass_hz);
+        system->set_audio_lowpass_hz(audio_lowpass_hz);
+        system->set_audio_bandreject_hz(audio_bandreject_hz);
+        system->set_audio_bandreject_width_hz(audio_bandreject_width_hz);
+        system->set_audio_loudnorm(audio_loudnorm);
+        system->set_audio_loudnorm_two_pass(audio_loudnorm_two_pass);
+        system->set_audio_loudnorm_i(audio_loudnorm_i);
+        system->set_audio_loudnorm_tp(audio_loudnorm_tp);
+        system->set_audio_loudnorm_lra(audio_loudnorm_lra);
+        system->set_audio_ffmpeg_filter(audio_ffmpeg_filter);
+        system->set_audio_output_raw_audio(audio_output_raw_audio);
+
+        BOOST_LOG_TRIVIAL(info) << "Audio Postprocess Enabled: " << system->get_audio_postprocess_enabled();
+        BOOST_LOG_TRIVIAL(info) << "Audio Highpass (Hz): " << system->get_audio_highpass_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Lowpass (Hz): " << system->get_audio_lowpass_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Bandreject (Hz): " << system->get_audio_bandreject_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Bandreject Width (Hz): " << system->get_audio_bandreject_width_hz();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm: " << system->get_audio_loudnorm();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm Two Pass: " << system->get_audio_loudnorm_two_pass();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm I: " << system->get_audio_loudnorm_i();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm TP: " << system->get_audio_loudnorm_tp();
+        BOOST_LOG_TRIVIAL(info) << "Audio Loudnorm LRA: " << system->get_audio_loudnorm_lra();
+
+        if (!system->get_audio_ffmpeg_filter().empty()) {
+          BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: " << system->get_audio_ffmpeg_filter();
+        } else {
+          BOOST_LOG_TRIVIAL(info) << "Audio FFmpeg Filter Override: <none>";
+        }
+        BOOST_LOG_TRIVIAL(info) << "Audio Output Raw Audio: " << system->get_audio_output_raw_audio();
         system->set_unit_tags_file(element.value("unitTagsFile", ""));
         BOOST_LOG_TRIVIAL(info) << "Unit Tags File: " << system->get_unit_tags_file();
         system->set_unit_tags_ota_file(element.value("unitTagsOTA", ""));
@@ -442,6 +548,10 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Multiple Site System Name: " << system->get_multiSiteSystemName();
         system->set_multiSiteSystemNumber(element.value("multiSiteSystemNumber", 0));
         BOOST_LOG_TRIVIAL(info) << "Multiple Site System Number: " << system->get_multiSiteSystemNumber();
+        system->set_filename_format(element.value("filenameFormat", ""));
+        if (!system->get_filename_format().empty()) {
+          BOOST_LOG_TRIVIAL(info) << "Filename Format: " << system->get_filename_format();
+        }
 
         if (!system->get_compress_wav()) {
           if ((system->get_api_key().length() > 0) || (system->get_bcfy_api_key().length() > 0)) {
@@ -464,8 +574,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         bool gain_set = false;
         std::string driver = element.value("driver", "");
 
-        if ((driver != "osmosdr") && (driver != "usrp") && (driver != "sigmf") && (driver != "iqfile")) {
-          BOOST_LOG_TRIVIAL(error) << "Driver specified in config.json not recognized, needs to be osmosdr, sigmf, iqfile or usrp";
+        if ((driver != "osmosdr") && (driver != "usrp") && (driver != "sigmf") && (driver != "iqfile") && (driver != "iio")) {
+          BOOST_LOG_TRIVIAL(error) << "Driver specified in config.json not recognized, needs to be osmosdr, sigmf, iqfile, usrp, or iio";
           return false;
         }
 

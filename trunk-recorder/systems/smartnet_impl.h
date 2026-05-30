@@ -56,6 +56,7 @@ class smartnet_impl : public gr::hier_block2 {
   void set_center(double c);
   void set_rate(long s);
   void tune_freq(double f);
+  void reset();
   double get_pwr();
   double get_freq();
   void enable();

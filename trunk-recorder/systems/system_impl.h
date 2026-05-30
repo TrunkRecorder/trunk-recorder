@@ -69,6 +69,7 @@ public:
   std::string default_mode;
   std::string system_type;
   std::string upload_script;
+  std::string filename_format;
   int bcfy_system_id;
   int message_count;
   int decode_rate;
@@ -86,12 +87,25 @@ public:
   double max_call_duration;
   double min_transmission_duration;
   bool compress_wav;
+  std::string audio_bitrate;
   bool conversation_mode;
   bool qpsk_mod;
   double squelch_db;
   float tau;
   double analog_levels;
   double digital_levels;
+  bool audio_postprocess_enabled;
+  int audio_highpass_hz;
+  int audio_lowpass_hz;
+  int audio_bandreject_hz;
+  int audio_bandreject_width_hz;
+  bool audio_loudnorm;
+  bool audio_loudnorm_two_pass;
+  double audio_loudnorm_i;
+  double audio_loudnorm_tp;
+  double audio_loudnorm_lra;
+  std::string audio_ffmpeg_filter;
+  bool audio_output_raw_audio;
 
   unsigned xor_mask_len;
   const char *xor_mask;
@@ -118,6 +132,45 @@ public:
   void set_upload_script(std::string script) override;
   bool get_compress_wav() override;
   void set_compress_wav(bool compress) override;
+  std::string get_audio_bitrate() override;
+  void set_audio_bitrate(std::string bitrate) override;
+
+  bool get_audio_postprocess_enabled() override;
+  void set_audio_postprocess_enabled(bool enabled) override;
+
+  int get_audio_highpass_hz() override;
+  void set_audio_highpass_hz(int hz) override;
+
+  int get_audio_lowpass_hz() override;
+  void set_audio_lowpass_hz(int hz) override;
+
+  int get_audio_bandreject_hz() override;
+  void set_audio_bandreject_hz(int hz) override;
+
+  int get_audio_bandreject_width_hz() override;
+  void set_audio_bandreject_width_hz(int hz) override;
+
+  bool get_audio_loudnorm() override;
+  void set_audio_loudnorm(bool enabled) override;
+
+  bool get_audio_loudnorm_two_pass() override;
+  void set_audio_loudnorm_two_pass(bool enabled) override;
+
+  double get_audio_loudnorm_i() override;
+  void set_audio_loudnorm_i(double value) override;
+
+  double get_audio_loudnorm_tp() override;
+  void set_audio_loudnorm_tp(double value) override;
+
+  double get_audio_loudnorm_lra() override;
+  void set_audio_loudnorm_lra(double value) override;
+
+  std::string get_audio_ffmpeg_filter() override;
+  void set_audio_ffmpeg_filter(std::string filter) override;
+
+  bool get_audio_output_raw_audio() override;
+  void set_audio_output_raw_audio(bool enabled) override;
+
   std::string get_api_key() override;
   void set_api_key(std::string api_key) override;
   std::string get_bcfy_api_key() override;
@@ -184,6 +237,7 @@ public:
   Talkgroup *find_talkgroup(long tg) override;
   Talkgroup *find_talkgroup_by_freq(double freq) override;
   std::string find_unit_tag(long unitID) override;
+  std::string find_unit_tag_ota(long unitID) override;
   void set_talkgroups_file(std::string) override;
   void set_channel_file(std::string channel_file) override;
   bool has_channel_file() override;
@@ -264,6 +318,9 @@ public:
 
   unsigned long get_multiSiteSystemNumber() override;
   void set_multiSiteSystemNumber(unsigned long multiSiteSystemNumber) override;
+
+  std::string get_filename_format() override;
+  void set_filename_format(std::string format) override;
 
 private:
   TalkgroupDisplayFormat talkgroup_display_format;

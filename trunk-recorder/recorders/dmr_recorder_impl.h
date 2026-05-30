@@ -115,6 +115,7 @@ public:
   Source *get_source();
 
   void plugin_callback_handler(int16_t *samples, int sampleCount);
+  static void voice_codec_cb_handler(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
 
 protected:
   State state;

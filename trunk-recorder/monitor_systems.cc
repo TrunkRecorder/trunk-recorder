@@ -1,5 +1,6 @@
 #include "monitor_systems.h"
 #include "recorders/p25_recorder.h"
+#include <chrono>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/core.hpp>
 
@@ -709,7 +710,9 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
     // For Loop
     if (system->get_system_type() == "smartnet") {
       system->smartnet_trunking->tune_freq(control_channel_freq);
-      //system->smartnet_trunking->reset();
+      // Clear demod tracking state so reacquisition isn't biased by whatever
+      // the loop converged to on the previous (possibly noise-only) channel.
+      system->smartnet_trunking->reset();
     } else if (system->get_system_type() == "p25") {
       system->p25_trunking->tune_freq(control_channel_freq);
     } else {
@@ -729,10 +732,13 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
+          // Release the old hier_block2 before constructing the new one so its
+          // sub-blocks (prefilter, fsk2_demod, framer) are torn down deterministically
+          // instead of overlapping with the replacement.
+          system->smartnet_trunking.reset();
           system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
           tb->unlock();
-          //system->smartnet_trunking->reset();
         } else if (system->get_system_type() == "p25") {
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
@@ -871,18 +877,14 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
       for (vector<Call *>::iterator it = calls.begin(); it != calls.end();) {
         Call *call = *it;
 
-        if (call->get_state() != MONITORING) {
-          call->conclude_call();
-        }
+        call->conclude_call();
 
         it = calls.erase(it);
         delete call;
       }
 
       BOOST_LOG_TRIVIAL(info) << "Cleaning up & Exiting...";
-
-      // Sleep for 5 seconds to allow for all of the Call Concluder threads to finish.
-      boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+      Call_Concluder::shutdown_call_data_workers(std::chrono::seconds(10));
       return exit_code;
     }
 
@@ -936,7 +938,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
     }
     current_time = time(NULL);
     current_time_ms = time_since_epoch_millisec();
-    if ((current_time_ms - last_conventional_channel_detection_check) >= 0.1) {
+    if ((current_time_ms - last_conventional_channel_detection_check) >= 100) {
       check_conventional_channel_detection(sources);
       last_conventional_channel_detection_check = current_time_ms;
     }
@@ -957,7 +959,9 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
         Source *source = *src_it;
         if (!source->got_samples()) {
           BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " has stopped receiving samples - Terminating trunk recorder";
-          exit(1);
+          exit_code = EXIT_FAILURE;
+          exit_flag = 1;
+          break;
         }
       }
       last_decode_rate_check = current_time;

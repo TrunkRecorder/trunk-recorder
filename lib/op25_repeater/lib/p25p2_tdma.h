@@ -131,5 +131,12 @@ private:
     inline void reset_ess() { ess_algid = 0x80; memset(ess_mi, 0, sizeof(ess_mi)); }
 
 	void send_msg(const std::string msg_str, long msg_type);
+
+	typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
+	voice_codec_cb_t voice_codec_cb_;
+	void *voice_codec_cb_data_;
+
+public:
+	void set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) { voice_codec_cb_ = cb; voice_codec_cb_data_ = user_data; }
 };
 #endif /* INCLUDED_P25P2_TDMA_H */

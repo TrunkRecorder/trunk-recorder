@@ -118,7 +118,7 @@ vocoder_impl::general_work_decode (int noutput_items,
 
   consume_each (ninput_items[0]);
 
-  uint16_t *out = reinterpret_cast<uint16_t*>(output_items[0]);
+  int16_t *out = reinterpret_cast<int16_t*>(output_items[0]);
   const int n = std::min(static_cast<int>(output_queue_decode.size()), noutput_items);
   if(0 < n) {
      copy(output_queue_decode.begin(), output_queue_decode.begin() + n, out);

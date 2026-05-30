@@ -232,7 +232,9 @@ namespace gr {
             ess_algid(0x80),
             vf_tgid(0),
 			terminate_call(std::pair<bool,long>(false,0)),
-            p1voice_decode((debug > 0), udp, output_queue)
+            p1voice_decode((debug > 0), udp, output_queue),
+            voice_codec_cb_(NULL),
+            voice_codec_cb_data_(NULL)
         {
 			rx_status.error_count = 0;
 			rx_status.total_len = 0;
@@ -873,7 +875,7 @@ namespace gr {
 					}
 					double error_history_avg = error_history_total / error_history_len;
 
-					double error_history_sqrt;
+					double error_history_sqrt = 0.0;
 					for (int j=0; j<error_history_len; j++){
 						error_history_sqrt += pow((error_history[j] - error_history_avg), 2);
 					}
@@ -892,6 +894,12 @@ namespace gr {
 					// also, 32*9 = 288 byte pkts (for use via UDP)
 					sprintf(s, "%03x %03x %03x %03x %03x %03x %03x %03x\n", u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
 
+                    if (voice_codec_cb_) {
+                        voice_codec_cb_(0 /*CODEC_P25_IMBE*/, (long)vf_tgid,
+                                        (cached_src_id > 0) ? (uint32_t)cached_src_id : 0,
+                                        u, 8, (int)errs, voice_codec_cb_data_);
+                    }
+
                     if (d_do_audio_output) {
                         if ( !encrypted()) {
                             // This is the Vocoder that OP25 currently uses.
@@ -906,7 +914,7 @@ namespace gr {
                                 int16_t frame_vector[8];
 
                                 for (int i=0; i < 8; i++) { // Ugh. For compatibility convert imbe params from uint32_t to int16_t
-                                    frame_vector[i] = u[i];
+                                    frame_vector[i] = u[i] & 0xFFFF;
                                 }
                                 frame_vector[7] >>= 1;
                                 vocoder.imbe_decode(frame_vector, snd);

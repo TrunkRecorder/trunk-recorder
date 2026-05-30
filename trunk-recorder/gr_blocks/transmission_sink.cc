@@ -31,8 +31,10 @@
 #include <fcntl.h>
 #include <gnuradio/io_signature.h>
 #include <gnuradio/thread/thread.h>
+#include <sstream>
 #include <stdexcept>
 #include <stdio.h>
+#include <chrono>
 
 // win32 (mingw/msvc) specific
 #ifdef HAVE_IO_H
@@ -78,28 +80,50 @@ transmission_sink::transmission_sink(int n_channels, unsigned int sample_rate, i
 }
 
 void transmission_sink::create_filename() {
-  time_t work_start_time = d_start_time;
-  std::stringstream temp_path_stream;
-  // Found some good advice on Streams and Strings here: https://blog.sensecodons.com/2013/04/dont-let-stdstringstreamstrcstr-happen.html
+  using std::ostringstream;
+  using std::setw;
+  using std::setfill;
 
-  temp_path_stream << d_current_call_temp_dir << "/" << d_current_call_short_name;
-  std::string temp_path_string = temp_path_stream.str();
-  boost::filesystem::create_directories(temp_path_string);
+  // <temp>/<short_name>
+  boost::filesystem::path dir =
+      boost::filesystem::path(d_current_call_temp_dir) / d_current_call_short_name;
 
-  int nchars;
-
-  if (d_slot == -1) {
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq);
-  } else {
-    // this is for the case when it is a P25P2 TDMA or DMR recorder and 2 wav files are created, the slot is needed to keep them separate.
-    nchars = snprintf(current_filename, 255, "%s/%ld-%ld_%.0f.%d.wav", temp_path_string.c_str(), d_current_call_talkgroup, work_start_time, d_current_call_freq, d_slot);
+  boost::system::error_code ec;
+  boost::filesystem::create_directories(dir, ec);
+  if (ec) {
+    BOOST_LOG_TRIVIAL(error) << "create_directories failed for " << dir.string()
+                             << " : " << ec.message();
   }
-  if (nchars >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "Call: Path longer than 255 charecters";
+
+  // Seconds.milliseconds from d_start_time_ms
+  const long long start_ms = static_cast<long long>(d_start_time_ms);
+  const long long sec     = start_ms / 1000;
+  const int       milli   = static_cast<int>(start_ms % 1000);
+
+  // Normalize frequency to integer
+  const long long freq_i  = static_cast<long long>(std::llround(d_current_call_freq));
+
+  auto make_stem = [&](int suffix) {
+    ostringstream ts;
+    ts << sec << '.' << setw(3) << setfill('0') << milli;   // e.g. 1718145678.042
+
+    ostringstream oss;
+    oss << d_current_call_talkgroup << "-" << ts.str() << "_" << freq_i;
+    if (d_slot != -1) oss << "." << d_slot;
+    if (suffix > 0)    oss << "-" << suffix;                // collision suffix
+    oss << ".wav";
+    return oss.str();
+  };
+
+  boost::filesystem::path candidate = dir / make_stem(0);
+  for (int i = 1; boost::filesystem::exists(candidate) && i <= 99; ++i) {
+    candidate = dir / make_stem(i);
   }
+
+  current_filename = candidate.string();
 }
 
-char *transmission_sink::get_filename() {
+const std::string &transmission_sink::get_filename() {
   return current_filename;
 }
 
@@ -144,6 +168,7 @@ bool transmission_sink::start_recording(Call *call) {
 
 
   curr_src_id = d_current_call->get_current_source_id();
+  cached_src_id = -1;
   d_sample_count = 0;
 
   // when a wav_sink first gets associated with a call, set its lifecycle to idle;
@@ -173,10 +198,6 @@ bool transmission_sink::open_internal(const char *filename) {
 
     // fclose(d_fp);
     // d_fp = NULL;
-  }
-
-  if (strlen(filename) >= 255) {
-    BOOST_LOG_TRIVIAL(error) << "transmission_sink: Error! filename longer than 255";
   }
 
   if ((d_fp = fdopen(fd, "rb+")) == NULL) {
@@ -217,31 +238,65 @@ void transmission_sink::set_source(long src) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "Unit ID set via Control Channel, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
 
     curr_src_id = src;
-  }
-  else if (d_conventional && (src != curr_src_id)) {
-    if ((state == RECORDING) && (d_sample_count > 0)) {
-        gr::thread::scoped_lock guard(d_mutex);
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
-        end_transmission();
-        state = IDLE;
-        curr_src_id = src;
-    }
+  } else  if (src != curr_src_id) {
+    if (d_conventional) {
+      if ((state == RECORDING) && (d_sample_count > 0)) {
+          gr::thread::scoped_lock guard(d_mutex);
+          BOOST_LOG_TRIVIAL(error) << loghdr << "Unit ID externally set, ext: " << src << "\tcurrent: " << curr_src_id << "\t samples: " << d_sample_count;
+          end_transmission();
+          state = IDLE;
+          curr_src_id = src;
+      }
 
+    } else {
+      // Trunked system: a GRANT/UPDATE arrived mid-call with a different source ID than the current speaker.
+      // This is normal P25 group-call behavior — units take turns keying on the same TG. The new source is
+      // cached and applied to the next transmission via end_transmission(), so log at debug to avoid noise.
+      BOOST_LOG_TRIVIAL(debug) << loghdr << "Unit ID externally set from GRANT: " << src << "\t caching, doesn't match current: " << curr_src_id << "\t samples: " << d_sample_count << "\t state: " << format_state(state);
+      cached_src_id = src;
+    }
   }
 }
 
 void transmission_sink::end_transmission() {
+  std::string loghdr = log_header(d_current_call_short_name,d_current_call_num,d_current_call_talkgroup_display,d_current_call_freq);
+  
   if (d_sample_count > 0) {
     if (d_fp) {
       close_wav(false);
     } else {
-      BOOST_LOG_TRIVIAL(error) << "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
+      BOOST_LOG_TRIVIAL(error) << loghdr <<  "Ending transmission, sample_count is greater than 0 but d_fp is null" << std::endl;
     }
-    // if an Transmission has ended, send it to Call.
+
+    const std::int64_t dur_ms = (d_nchans > 0)
+        ? (std::int64_t)std::llround(1000.0 *
+           (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans))
+        : 0;
+
+    // Assign canonical stop time from sample count
+    d_stop_time_ms = d_start_time_ms + dur_ms;
+    d_stop_time    = static_cast<time_t>(d_stop_time_ms / 1000);
+
+    // Build Transmission using the canonical fields
     Transmission transmission;
-    transmission.source = curr_src_id;      // Source ID for the Call
+
+    // if we don't have a curr_src_id and we cached one in the previous transmission, use it
+    if ((curr_src_id == -1) && (cached_src_id != -1 )) {
+      transmission.source = cached_src_id;
+      BOOST_LOG_TRIVIAL(info) << loghdr << "Using cached ID: " << cached_src_id << " for Transmission: " << sizeof(transmission_list);
+      cached_src_id = -1;
+      
+    } else {
+      transmission.source = curr_src_id;      // Source ID for the Call
+    }
+    // if the Src ID was cached in the previous transmission, but we got it on the Voice channel, the reset the cache.
+    if ((cached_src_id != -1) && (curr_src_id == cached_src_id)) {
+      cached_src_id = -1;
+    }
     transmission.start_time = d_start_time; // Start time of the Call
     transmission.stop_time = d_stop_time;   // when the Call eneded
+    transmission.start_time_ms  = d_start_time_ms;
+    transmission.stop_time_ms   = d_stop_time_ms;
     transmission.sample_count = d_sample_count;
     transmission.spike_count = d_spike_count;
     transmission.error_count = d_error_count;
@@ -249,7 +304,7 @@ void transmission_sink::end_transmission() {
     transmission.color_code = d_current_color_code;
     transmission.length = length_in_seconds(); // length in seconds
     d_prior_transmission_length = d_prior_transmission_length + transmission.length;
-    strcpy(transmission.filename, current_filename); // Copy the filename
+    transmission.filename = current_filename;
     transmission.talkgroup = d_current_call_talkgroup;
 
     BOOST_LOG_TRIVIAL(debug) << "Adding transmission: " << transmission.filename << " Slot: " << transmission.slot << " Talkgroup: " << transmission.talkgroup << " Length: " << transmission.length << " Samples: " << d_sample_count;
@@ -540,16 +595,14 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
       close_wav(false);
     }
 
-    time_t current_time = time(NULL);
-    if (current_time == d_start_time) {
-      d_start_time = current_time + 1;
-    } else {
-      d_start_time = current_time;
-    }
+    auto now_sys = std::chrono::system_clock::now();
+    d_start_time_ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+      now_sys.time_since_epoch()).count();
+    d_start_time = static_cast<time_t>(d_start_time_ms / 1000);
 
     // create a new filename, based on the current time and source.
     create_filename();
-    if (!open_internal(current_filename)) {
+    if (!open_internal(current_filename.c_str())) {
       BOOST_LOG_TRIVIAL(error) << "can't open file";
       return noutput_items;
     }
@@ -589,7 +642,6 @@ int transmission_sink::dowork(int noutput_items, gr_vector_const_void_star &inpu
     }
   }
 
-  d_stop_time = time(NULL);
   d_last_write_time = std::chrono::steady_clock::now();
 
   if (nwritten < noutput_items) {
@@ -628,7 +680,7 @@ double transmission_sink::total_length_in_seconds() {
 }
 
 double transmission_sink::length_in_seconds() {
-  return (double)d_sample_count / (double)d_sample_rate;
+  return d_nchans > 0 ? (double)d_sample_count / ((double)d_sample_rate * (double)d_nchans) : 0.0;
 }
 
 void transmission_sink::do_update() {}

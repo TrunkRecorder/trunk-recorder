@@ -331,7 +331,7 @@ public:
     mime = curl_mime_init(curl);
     part = curl_mime_addpart(mime);
 
-    curl_mime_filedata(part, compress_wav ? call_info.converted : call_info.filename);
+    curl_mime_filedata(part, (compress_wav ? call_info.converted : call_info.filename).c_str());
     curl_mime_type(part, "application/octet-stream"); /* content-type for this part */
     curl_mime_name(part, "audio");
 
@@ -527,7 +527,7 @@ public:
       // NOTE: Your API may legitimately return 202 for stub-cache accepts.
       if (res == CURLM_OK && easy_result == CURLE_OK && is_success_http_status(response_code)) {
         struct stat file_info{};
-        stat(compress_wav ? call_info.converted : call_info.filename, &file_info);
+        stat((compress_wav ? call_info.converted : call_info.filename).c_str(), &file_info);
         std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
 
         if (response_code == 202) {

@@ -344,3 +344,12 @@ void plugman_unit_location(System *system, long source_id, long talkgroup_num) {
     }
   }
 }
+
+void plugman_voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs) {
+  for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
+    Plugin *plugin = *it;
+    if (plugin->state == PLUGIN_RUNNING) {
+      plugin->api->voice_codec_data(call, codec_type, tgid, src_id, params, param_count, errs);
+    }
+  }
+}

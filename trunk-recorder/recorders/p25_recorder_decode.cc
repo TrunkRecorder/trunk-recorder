@@ -102,6 +102,7 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
   bool do_nocrypt = 1;
 
   op25_frame_assembler = gr::op25_repeater::p25_frame_assembler::make(silence_frames, d_soft_vocoder, udp_host, udp_port, verbosity, do_imbe, do_output, do_msgq, rx_queue, do_audio_output, do_tdma, do_nocrypt);
+  op25_frame_assembler->set_voice_codec_callback(voice_codec_cb_handler, this);
   levels = gr::blocks::multiply_const_ss::make(1);
 
   if (use_streaming) {
@@ -121,6 +122,13 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
 void p25_recorder_decode::plugin_callback_handler(int16_t *samples, int sampleCount) {
   if (d_call) {
     plugman_audio_callback(d_call, d_recorder, samples, sampleCount);
+  }
+}
+
+void p25_recorder_decode::voice_codec_cb_handler(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data) {
+  p25_recorder_decode *self = static_cast<p25_recorder_decode *>(user_data);
+  if (self->d_call) {
+    plugman_voice_codec_data(self->d_call, codec_type, tgid, src_id, params, param_count, errs);
   }
 }
 

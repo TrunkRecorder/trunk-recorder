@@ -1,6 +1,7 @@
 
 #include "sigmf_recorder_impl.h"
 #include <boost/log/trivial.hpp>
+#include <cmath>
 
 // static int rec_counter=0;
 
@@ -50,12 +51,8 @@ sigmf_recorder_impl::sigmf_recorder_impl(Source *src, Recorder_Type type)
 
   // tm *ltm = localtime(&starttime);
 
-  int nchars = snprintf(filename, 160, "%ld-%ld_%g.raw", talkgroup, starttime, freq);
-
-  if (nchars >= 160) {
-    BOOST_LOG_TRIVIAL(error) << "Analog Recorder: Path longer than 160 charecters";
-  }
-  raw_sink = gr::blocks::file_sink::make(sizeof(gr_complex), filename);
+  filename = std::to_string(talkgroup) + "-" + std::to_string(starttime) + "_" + std::to_string(freq) + ".raw";
+  raw_sink = gr::blocks::file_sink::make(sizeof(gr_complex), filename.c_str());
 
   //initialize_prefilter();
   //initialize_prefilter_xlat();
@@ -133,7 +130,6 @@ bool sigmf_recorder_impl::start(Call *call) {
   if (state == INACTIVE) {
     timestamp = time(NULL);
     starttime = time(NULL);
-    int nchars;
     tm *ltm = localtime(&starttime);
     this->call = call;
     System *system = call->get_system();
@@ -154,12 +150,11 @@ bool sigmf_recorder_impl::start(Call *call) {
     std::string path_string = path_stream.str();
     boost::filesystem::create_directories(path_string);
 
-    nchars = snprintf(filename, 255, "%s/%ld-%ld_%.0f-call_%lu.sigmf-data", path_string.c_str(), talkgroup, starttime, call->get_freq(), call->get_call_num());
-    if (nchars >= 255) {
-      BOOST_LOG_TRIVIAL(error) << "SigMF-meta: Path longer than 255 charecters";
-    }
+    filename = path_string + "/" + std::to_string(talkgroup) + "-" + std::to_string(starttime) + "_" +
+               std::to_string(static_cast<long>(std::llround(call->get_freq()))) + "-call_" +
+               std::to_string(call->get_call_num()) + ".sigmf-data";
 
-    raw_sink->open(filename);
+    raw_sink->open(filename.c_str());
     state = ACTIVE;
 
   if (conventional) {
@@ -201,10 +196,9 @@ bool sigmf_recorder_impl::start(Call *call) {
       {"annotations", nlohmann::json::array({})}
     };
 
-    nchars = snprintf(filename, 255, "%s/%ld-%ld_%.0f-call_%lu.sigmf-meta", path_string.c_str(), talkgroup, starttime, call->get_freq(), call->get_call_num());
-    if (nchars >= 255) {
-      BOOST_LOG_TRIVIAL(error) << "SigMF-meta: Path longer than 255 charecters";
-    }
+    filename = path_string + "/" + std::to_string(talkgroup) + "-" + std::to_string(starttime) + "_" +
+               std::to_string(static_cast<long>(std::llround(call->get_freq()))) + "-call_" +
+               std::to_string(call->get_call_num()) + ".sigmf-meta";
     std::ofstream o(filename);
     o << std::setw(4) << j << std::endl;
     o.close();
