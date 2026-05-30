@@ -36,7 +36,11 @@ RUN apt-get update && \
     wget \
     python3-six \
     openssh-client \
-    ffmpeg && \
+    ffmpeg \
+    libiio-dev \
+    libiio-utils \
+    libad9361-dev \
+    libgnuradio-iio3.10.9t64 && \
   rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
@@ -68,6 +72,9 @@ RUN apt-get update && \
       libgnuradio-network3.10.9t64 \
       libgnuradio-uhd3.10.9t64 \
       libgnuradio-osmosdr0.2.0t64 \
+      libiio-dev libiio-utils \
+      libad9361-dev \
+      libgnuradio-iio3.10.9t64 \
       libsoapysdr0.8 \
       soapysdr0.8-module-all \
       libairspyhf1 \

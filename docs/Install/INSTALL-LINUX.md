@@ -24,6 +24,11 @@ If you are using a HackRF:
 sudo apt install -y hackrf libhackrf-dev libhackrf0
 ```
 
+If you are using an IIO device (Pluto, LibreSDR, fmcomms2/3/4, etc):
+```bash
+sudo apt install -y libad9361-dev libiio-dev libiio-utils libgnuradio-iio*
+```
+
 ### Ubuntu 22.04
 
 ```bash
@@ -35,6 +40,12 @@ If you are using a HackRF:
 ```bash
 sudo apt install -y hackrf libhackrf-dev libhackrf0
 ```
+
+If you are using an IIO device (Pluto, LibreSDR, fmcomms2/3/4, etc):
+```bash
+sudo apt install -y libad9361-dev libiio-dev libiio-utils libgnuradio-iio*
+```
+
 
 ### Ubuntu 21.04
 
@@ -48,6 +59,11 @@ If you are using a HackRF:
 sudo apt install -y hackrf libhackrf-dev libhackrf0
 ```
 
+If you are using an IIO device (Pluto, LibreSDR, fmcomms2/3/4, etc):
+```bash
+sudo apt install -y libad9361-dev libiio-dev libiio-utils libgnuradio-iio*
+```
+
 ### Ubuntu 20.x
 
 ```bash
@@ -58,6 +74,11 @@ If you are using a HackRF:
 
 ```bash
 sudo apt install -y hackrf libhackrf-dev libhackrf0
+```
+
+If you are using an IIO device (Pluto, LibreSDR, fmcomms2/3/4, etc):
+```bash
+sudo apt install -y libad9361-dev libiio-dev libiio-utils libgnuradio-iio*
 ```
 
 ### Older Ubuntu Versions...
