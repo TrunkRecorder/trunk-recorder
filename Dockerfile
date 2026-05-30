@@ -23,6 +23,8 @@ RUN apt-get update && \
     libhackrf-dev \
     libmirisdr-dev \
     liborc-0.4-dev \
+    libpaho-mqtt-dev \
+    libpaho-mqttpp-dev \
     libpthread-stubs0-dev \
     librtlsdr-dev \
     libsndfile1-dev \
@@ -47,6 +49,9 @@ WORKDIR /src
 
 COPY . .
 
+RUN git -C /src/user_plugins \
+       clone --depth 1 https://github.com/TrunkRecorder/tr-plugin-mqtt.git
+
 WORKDIR /src/build
 
 RUN cmake .. && make -j$(nproc) && make DESTDIR=/newroot install
@@ -63,6 +68,8 @@ RUN apt-get update && \
       curl \
       wget \
       docker.io \
+      libpaho-mqtt-dev \
+      libpaho-mqttpp-dev \
       ffmpeg \
       libboost-log1.83.0 \
       libboost-chrono1.83.0t64 \
