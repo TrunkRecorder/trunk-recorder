@@ -9,9 +9,6 @@ using namespace boost::asio;
 
 typedef struct plugin_t plugin_t;
 typedef struct stream_t stream_t;
-std::vector<stream_t> streams;
-boost::asio::io_context my_tcp_io_context;
-long max_tcp_index = 0;
 
 struct plugin_t {
   Config* config;
@@ -34,8 +31,11 @@ struct stream_t {
 
 class Simple_Stream : public Plugin_Api {
   boost::asio::io_context my_io_context;
+  boost::asio::io_context my_tcp_io_context;
   ip::udp::endpoint remote_endpoint;
   ip::udp::socket my_socket{my_io_context};
+  std::vector<stream_t> streams;
+  long max_tcp_index = 0;
   public:
   
   Simple_Stream(){
@@ -46,16 +46,51 @@ class Simple_Stream : public Plugin_Api {
     for (json element : config_data["streams"]) {
       stream_t stream;
       stream.TGID = element["TGID"];
-      stream.address = element["address"];
-      stream.port = element["port"];
-      stream.remote_endpoint = ip::udp::endpoint(ip::make_address(stream.address), stream.port);
+
+      if (element.contains("url")) {
+        // Parse url field: udp://hostname:port or tcp://hostname:port
+        std::string url = element["url"];
+        if (url.substr(0, 6) == "udp://") {
+          stream.tcp = false;
+          url = url.substr(6);
+        } else if (url.substr(0, 6) == "tcp://") {
+          stream.tcp = true;
+          url = url.substr(6);
+        } else {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: invalid URL scheme in \"" << element["url"] << "\", expected udp:// or tcp://";
+          continue;
+        }
+        size_t colon = url.rfind(':');
+        if (colon == std::string::npos) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: missing port in URL \"" << element["url"].get<std::string>() << "\"";
+          continue;
+        }
+        stream.address = url.substr(0, colon);
+        stream.port = static_cast<uint32_t>(std::stoul(url.substr(colon + 1)));
+      } else {
+        BOOST_LOG_TRIVIAL(warning) << "SimpleStream: address/port/useTCP are deprecated, please use the url field instead (e.g. \"url\": \"udp://hostname:port\")";
+        stream.address = element["address"];
+        stream.port = element["port"];
+        stream.tcp = element.value("useTCP", false);
+      }
+
+      if (!stream.tcp) {
+        ip::udp::resolver udp_resolver(my_io_context);
+        boost::system::error_code ec;
+        auto results = udp_resolver.resolve(stream.address, std::to_string(stream.port), ec);
+        if (ec || results.empty()) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve UDP address " << stream.address << ": " << ec.message();
+          continue;
+        }
+        stream.remote_endpoint = results.begin()->endpoint();
+      }
+
       stream.sendTGID = element.value("sendTGID",false);
       stream.sendJSON = element.value("sendJSON",false);
       stream.sendCallStart = element.value("sendCallStart",false);
       stream.sendCallEnd = element.value("sendCallEnd",false);
-      stream.tcp = element.value("useTCP",false);
       stream.short_name = element.value("shortName", "");
-      BOOST_LOG_TRIVIAL(info) << "simplestreamer will stream audio from TGID " <<stream.TGID << " on System " <<stream.short_name << " to " << stream.address <<" on port " << stream.port << " tcp is "<<stream.tcp;
+      BOOST_LOG_TRIVIAL(info) << "SimpleStream will stream audio from TGID " <<stream.TGID << " on System " <<stream.short_name << " to " << stream.address <<" on port " << stream.port << " tcp is "<<stream.tcp;
       streams.push_back(stream);
     }
     return 0;
@@ -92,7 +127,7 @@ class Simple_Stream : public Plugin_Api {
     int recorder_id = local_recorder.get_num();
     long wav_hz = local_recorder.get_wav_hz();
     boost::system::error_code error;
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
         if (patched_talkgroups.size() == 0){
           patched_talkgroups.push_back(call_tgid);  //call_info.talkgroup may be negative - we cast stream.TGID to signed for comparison
@@ -128,10 +163,17 @@ class Simple_Stream : public Plugin_Api {
             }
             send_buffer.push_back(buffer(samples, sampleCount*2));
             if(stream.tcp == true){
-              stream.tcp_socket->send(send_buffer);
+              try {
+                stream.tcp_socket->send(send_buffer);
+              } catch (const boost::system::system_error &e) {
+                BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+              }
             }
             else{
               my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+              if (error) {
+                BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+              }
             }
           }
         }
@@ -164,7 +206,7 @@ class Simple_Stream : public Plugin_Api {
       }
     }
     
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (stream.sendJSON == true && stream.sendCallStart == true){
         if (0==stream.short_name.compare(call_short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
           if (patched_talkgroups.size() == 0){
@@ -200,10 +242,17 @@ class Simple_Stream : public Plugin_Api {
                 send_buffer.push_back(buffer(json_string));  //prepend json data
               }
               if(stream.tcp == true){
-                stream.tcp_socket->send(send_buffer);
+                try {
+                  stream.tcp_socket->send(send_buffer);
+                } catch (const boost::system::system_error &e) {
+                  BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+                }
               }
               else{
                 my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+                if (error) {
+                  BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+                }
               }
             }
           }
@@ -215,7 +264,7 @@ class Simple_Stream : public Plugin_Api {
 
   int call_end(Call_Data_t call_info) {
     boost::system::error_code error;
-    BOOST_FOREACH (auto stream, streams){
+    BOOST_FOREACH (const auto &stream, streams){
       if (stream.sendJSON == true && stream.sendCallEnd == true){
         if (0==stream.short_name.compare(call_info.short_name) || (0==stream.short_name.compare(""))){ //Check if shortName matches or is not specified
           std::vector<long> patched_talkgroups;
@@ -248,10 +297,17 @@ class Simple_Stream : public Plugin_Api {
                 send_buffer.push_back(buffer(json_string));  //prepend json data
               }
               if(stream.tcp == true){
-                stream.tcp_socket->send(send_buffer);
+                try {
+                  stream.tcp_socket->send(send_buffer);
+                } catch (const boost::system::system_error &e) {
+                  BOOST_LOG_TRIVIAL(error) << "SimpleStream TCP send failed: " << e.what();
+                }
               }
               else{
                 my_socket.send_to(send_buffer, stream.remote_endpoint, 0, error);
+                if (error) {
+                  BOOST_LOG_TRIVIAL(warning) << "SimpleStream UDP send failed: " << error.message();
+                }
               }
             }
           }
@@ -266,7 +322,17 @@ class Simple_Stream : public Plugin_Api {
       if (stream.tcp == true){
         ip::tcp::socket *my_tcp_socket = new ip::tcp::socket{my_tcp_io_context};
         stream.tcp_socket = my_tcp_socket;
-        stream.tcp_socket->connect(ip::tcp::endpoint( ip::make_address(stream.address), stream.port ));
+        ip::tcp::resolver tcp_resolver(my_tcp_io_context);
+        boost::system::error_code ec;
+        auto results = tcp_resolver.resolve(stream.address, std::to_string(stream.port), ec);
+        if (ec || results.empty()) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: failed to resolve TCP address " << stream.address << ": " << ec.message();
+          continue;
+        }
+        stream.tcp_socket->connect(results.begin()->endpoint(), ec);
+        if (ec) {
+          BOOST_LOG_TRIVIAL(error) << "SimpleStream: TCP connect failed to " << stream.address << ":" << stream.port << ": " << ec.message();
+        }
       }
     }
     my_socket.open(ip::udp::v4());
