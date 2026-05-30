@@ -34,10 +34,14 @@ void UnitTags::load_unit_tags(std::string filename) {
       if (row.size() < 2) {
         continue;
       }
-      
+
       std::string pattern = row["unit_id"].get<>();
+      // Allow '#' to comment out lines in the unit tags CSV
+      if (!pattern.empty() && pattern[0] == '#') {
+        continue;
+      }
       std::string tag = row["tag"].get<>();
-      
+
       add(pattern, tag);
       lines_loaded++;
     }
@@ -240,6 +244,15 @@ std::string UnitTags::find_unit_tag(long tg_number) {
     return search_user_tags();
   }
 
+  return "";
+}
+
+std::string UnitTags::find_unit_tag_ota(long unitID) {
+  for (auto it = unit_tags_ota.rbegin(); it != unit_tags_ota.rend(); ++it) {
+    if ((*it)->unit_id == unitID) {
+      return (*it)->alias;
+    }
+  }
   return "";
 }
 

@@ -7,18 +7,29 @@
 #include "../trunk-recorder/gr_blocks/decoder_wrapper.h"
 #include <boost/dll/alias.hpp> // for BOOST_DLL_ALIAS
 #include <boost/foreach.hpp>
+#include <boost/algorithm/string.hpp>
+#include <boost/regex.hpp>
 #include <sys/stat.h>
 
 struct Broadcastify_System_Key {
   std::string api_key;
   int system_id;
   std::string short_name;
+
+  // Talkgroup filters (compiled patterns)
+  // allow: if set, talkgroup MUST match at least one pattern
+  // deny:  if set, talkgroup MUST NOT match any pattern
+  std::vector<boost::regex> tg_allow;
+  std::vector<boost::regex> tg_deny;
+  std::vector<std::string> tg_allow_raw; // for logging/debug
+  std::vector<std::string> tg_deny_raw;  // for logging/debug
 };
 
 struct Broadcastify_Uploader_Data {
   std::vector<Broadcastify_System_Key> keys;
   std::string bcfy_calls_server;
   bool ssl_verify_disable;
+  bool ota_enabled;
 };
 
 boost::mutex curl_share_mutex;
@@ -29,8 +40,137 @@ class Broadcastify_Uploader : public Plugin_Api {
   Broadcastify_Uploader_Data data;
   CURLSH *curl_share;
   long curl_dns_ttl;
+  std::string plugin_name;
+
+private:
+  static std::string glob_to_regex_str(const std::string& glob) {
+    // Convert glob (* and ?) to a fully-anchored regex: ^...$
+    std::string rx;
+    rx.reserve(glob.size() * 2);
+    rx += "^";
+
+    for (char c : glob) {
+      switch (c) {
+        case '*': rx += ".*"; break;
+        case '?': rx += ".";  break;
+
+        // escape regex metacharacters
+        case '.': case '+': case '(': case ')': case '^': case '$':
+        case '|': case '{': case '}': case '[': case ']': case '\\':
+          rx += "\\";
+          rx += c;
+          break;
+
+        default:
+          rx += c;
+          break;
+      }
+    }
+
+    rx += "$";
+    return rx;
+  }
+
+  static bool match_any(const std::string& value, const std::vector<boost::regex>& patterns) {
+    for (const auto& r : patterns) {
+      if (boost::regex_match(value, r)) return true;
+    }
+    return false;
+  }
+
+  static bool passes_talkgroup_filter(const Broadcastify_System_Key* sys, uint32_t talkgroup) {
+    if (!sys) return true; // no system config => don't filter here
+    const std::string tg = std::to_string(talkgroup);
+
+    // If allow list is set, MUST match it
+    if (!sys->tg_allow.empty() && !match_any(tg, sys->tg_allow)) {
+      return false;
+    }
+
+    // If deny list is set, MUST NOT match it
+    if (!sys->tg_deny.empty() && match_any(tg, sys->tg_deny)) {
+      return false;
+    }
+
+    return true;
+  }
+
+  static void compile_patterns_from_json(
+    const json& parent,
+    const char* key,
+    std::vector<boost::regex>& out_compiled,
+    std::vector<std::string>& out_raw,
+    const std::string& log_prefix,
+    const std::string& sys_short_name
+  ) {
+    out_compiled.clear();
+    out_raw.clear();
+
+    if (!parent.contains(key)) return;
+    const auto& j = parent.at(key);
+
+    if (!j.is_array()) {
+      BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
+                               << " " << key << " must be an array (e.g. [\"507*\", \"12345\"])";
+      return;
+    }
+
+    for (const auto& v : j) {
+      std::string pat;
+      if (v.is_string()) {
+        pat = v.get<std::string>();
+      } else if (v.is_number_unsigned() || v.is_number_integer()) {
+        pat = std::to_string(v.get<long long>());
+      } else {
+        continue;
+      }
+
+      boost::algorithm::trim(pat);
+      if (pat.empty()) continue;
+
+      try {
+        out_raw.push_back(pat);
+        out_compiled.emplace_back(glob_to_regex_str(pat));
+      } catch (const boost::regex_error& e) {
+        BOOST_LOG_TRIVIAL(error) << log_prefix << sys_short_name
+                                 << " invalid pattern in " << key
+                                 << " value='" << pat << "' : " << e.what();
+      }
+    }
+  }
+
+  static bool compile_patterns_try_keys(
+    const json& parent,
+    const std::vector<const char*>& keys,
+    std::vector<boost::regex>& out_compiled,
+    std::vector<std::string>& out_raw,
+    const std::string& log_prefix,
+    const std::string& sys_short_name
+  ) {
+    for (const char* k : keys) {
+      if (parent.contains(k)) {
+        compile_patterns_from_json(parent, k, out_compiled, out_raw, log_prefix, sys_short_name);
+        return true; // stop on first key present (even if empty array)
+      }
+    }
+    // No key present -> leave as empty
+    out_compiled.clear();
+    out_raw.clear();
+    return false;
+  }
 
 public:
+  Broadcastify_Uploader() : curl_share(NULL), curl_dns_ttl(300) {}
+
+  Broadcastify_System_Key *get_system(std::string short_name) {
+    for (std::vector<Broadcastify_System_Key>::iterator it = data.keys.begin(); it != data.keys.end(); ++it) {
+      if (it->short_name == short_name) {
+        return &(*it);
+      }
+    }
+    return NULL;
+  }
+
   std::string get_api_key(std::string short_name) {
     for (std::vector<Broadcastify_System_Key>::iterator it = data.keys.begin(); it != data.keys.end(); ++it) {
       Broadcastify_System_Key key = *it;
@@ -105,7 +245,7 @@ public:
 
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share); 
+      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share);
       curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, curl_dns_ttl);
 
       /* Perform the request, res will get the return code */
@@ -128,8 +268,26 @@ public:
     int still_running = 0;
     std::string response_buffer;
 
-    std::string api_key = get_api_key(call_info.short_name);
-    int system_id = get_system_id(call_info.short_name);
+    Broadcastify_System_Key *sys = get_system(call_info.short_name);
+    if (!sys) {
+      return 0;
+    }
+
+    if (call_info.encrypted) {
+      return 0;
+    }
+
+    // Talkgroup allow/deny filtering
+    if (!passes_talkgroup_filter(sys, call_info.talkgroup)) {
+      std::string loghdr = log_header(call_info.short_name, call_info.call_num,
+                                      call_info.talkgroup_display, call_info.freq);
+      BOOST_LOG_TRIVIAL(info) << loghdr << "Broadcastify upload skipped due to talkgroup filter (tg="
+                              << call_info.talkgroup << ")";
+      return 0;
+    }
+
+    std::string api_key = sys->api_key;
+    int system_id = sys->system_id;
 
     if ((api_key.size() == 0) || (system_id == 0)) {
       return 0;
@@ -161,6 +319,16 @@ public:
     curl_mime_data(part, api_key.c_str(), CURL_ZERO_TERMINATED);
     curl_mime_name(part, "apiKey");
 
+    if (this->data.ota_enabled && !call_info.transmission_source_list.empty()) {
+      std::string ota_alias = call_info.transmission_source_list[0].tag_ota;
+      BOOST_LOG_TRIVIAL(debug) << "Broadcastify srcId_alias: '" << ota_alias << "' for src " << call_info.transmission_source_list[0].source;
+      if (!ota_alias.empty()) {
+        part = curl_mime_addpart(mime);
+        curl_mime_data(part, ota_alias.c_str(), CURL_ZERO_TERMINATED);
+        curl_mime_name(part, "srcId_alias");
+      }
+    }
+
     multi_handle = curl_multi_init();
 
     /* initialize custom header list (stating that Expect: 100-continue is not wanted */
@@ -176,7 +344,7 @@ public:
       curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response_buffer);
 
-      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share); 
+      curl_easy_setopt(curl, CURLOPT_SHARE, curl_share);
       curl_easy_setopt(curl, CURLOPT_DNS_CACHE_TIMEOUT, curl_dns_ttl);
 
       // broadcastify seems to make a habit out of letting their ssl certs expire
@@ -254,6 +422,10 @@ public:
         }
       }
 
+      // Grab HTTP status BEFORE cleaning up easy handle (important!)
+      long response_code = 0;
+      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
       res = curl_multi_cleanup(multi_handle);
 
       /* always cleanup */
@@ -265,13 +437,10 @@ public:
       /* free slist */
       curl_slist_free_all(headerlist);
 
-      long response_code;
-      curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
       std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
 
       if (res != CURLM_OK || response_code != 200) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Metadata Upload Error: " << response_buffer;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Metadata Upload Error: " << response_buffer;
         return 1;
       }
 
@@ -285,31 +454,31 @@ public:
       std::string message = response_buffer.substr(spacepos + 1);
 
       if (code == "1" && (message.rfind("SKIPPED", 0) == 0)) {
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Broadcastify Upload Skipped: " << message;
+        BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Skipped: " << message;
         return 0;
       }
-      
+
       if (code == "1" && (message.rfind("REJECTED", 0) == 0)) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Upload REJECTED: " << message;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload REJECTED: " << message;
         return 0;
       }
 
       if (code != "0") {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Metadata Upload Error: " << message;
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Metadata Upload Error: " << message;
         return 1;
       }
 
       CURLcode audio_error = this->upload_audio_file(call_info.converted, message);
 
       if (audio_error) {
-        BOOST_LOG_TRIVIAL(error) << loghdr << "Broadcastify Audio Upload Error: " << curl_easy_strerror(audio_error);
+        BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Audio Upload Error: " << curl_easy_strerror(audio_error);
         return 1;
       }
 
       struct stat file_info;
-      stat(call_info.converted, &file_info);
+      stat(call_info.converted.c_str(), &file_info);
 
-      BOOST_LOG_TRIVIAL(info) << loghdr << "Broadcastify Upload Success - file size: " << file_info.st_size;
+      BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
       return 0;
     } else {
       return 1;
@@ -321,6 +490,9 @@ public:
   }
 
   int parse_config(json config_data) {
+    // Extract plugin name from config, with fallback for default internal plugin name
+    std::string config_name = config_data.value("name", "broadcastify_uploader");
+    this->plugin_name = (config_name == "broadcastify_uploader") ? "Broadcastify" : config_name;
     std::string log_prefix = "\t[Broadcastify]\t";
 
     // Tests to see if the uploadServer value exists in the config file
@@ -347,6 +519,11 @@ public:
       BOOST_LOG_TRIVIAL(info) << log_prefix << "Broadcastify SSL Verify Disabled";
     }
 
+    this->data.ota_enabled = config_data.value("broadcastifyOTA", true);
+    if (this->data.ota_enabled) {
+      BOOST_LOG_TRIVIAL(info) << log_prefix << "OTA alias upload enabled";
+    }
+
     for (json element : config_data["systems"]) {
       bool broadcastify_exists = element.contains("broadcastifyApiKey");
       if (broadcastify_exists) {
@@ -354,9 +531,39 @@ public:
         key.api_key = element.value("broadcastifyApiKey", "");
         key.system_id = element.value("broadcastifySystemId", 0);
         key.short_name = element.value("shortName", "");
+
+        // Talkgroup filters per system (Optional)
+        // New (preferred):
+        //   broadcastifyAllow: ["507*", "12?45"]
+        //   broadcastifyDeny:  ["99*",  "12345"]
+        //
+        // Also accepts legacy keys for compatibility:
+        //   broadcastifyWhitelist / broadcastifyBlacklist
+        //   talkgroupWhitelist / talkgroupBlacklist
+        compile_patterns_try_keys(
+          element,
+          {"broadcastifyAllow", "broadcastifyWhitelist", "talkgroupWhitelist"},
+          key.tg_allow, key.tg_allow_raw,
+          log_prefix, key.short_name
+        );
+        compile_patterns_try_keys(
+          element,
+          {"broadcastifyDeny", "broadcastifyBlacklist", "talkgroupBlacklist"},
+          key.tg_deny, key.tg_deny_raw,
+          log_prefix, key.short_name
+        );
+
+        if (!key.tg_allow_raw.empty() || !key.tg_deny_raw.empty()) {
+          BOOST_LOG_TRIVIAL(info) << log_prefix << "Talkgroup filters for " << key.short_name
+                                  << " allow=" << key.tg_allow_raw.size()
+                                  << " deny=" << key.tg_deny_raw.size();
+        }
+
         regex_match(key.api_key.c_str(), what, api_regex);
         std::string redacted_api(what[2].first, what[2].second);
-        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << key.short_name << "\t Broadcastify System: " << key.system_id << "\t API Key: ******" << redacted_api;
+        BOOST_LOG_TRIVIAL(info) << log_prefix << "Uploading calls for: " << key.short_name
+                                << "\t Broadcastify System: " << key.system_id
+                                << "\t API Key: ******" << redacted_api;
         this->data.keys.push_back(key);
       }
     }

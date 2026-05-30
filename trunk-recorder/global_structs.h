@@ -1,5 +1,6 @@
 #ifndef GLOBAL_STRUCTS_H
 #define GLOBAL_STRUCTS_H
+#include <cstdint>
 #include <ctime>
 #include <string>
 #include <vector>
@@ -14,15 +15,18 @@ struct Transmission {
   unsigned int color_code;
   long start_time;
   long stop_time;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   long sample_count;
   long spike_count;
   long error_count;
   double freq;
   double length;
-  char filename[255];
+  std::string filename;
 };
 
 struct Config {
+  std::string config_file;
   std::string upload_script;
   std::string upload_server;
   std::string bcfy_calls_server;
@@ -40,6 +44,7 @@ struct Config {
   double call_timeout;
   bool console_log;
   bool log_file;
+  bool syslog_friendly;
   std::string log_color;
   int control_message_warn_rate;
   int control_retune_limit;
@@ -49,6 +54,27 @@ struct Config {
   bool record_uu_v_calls;
   bool archive_files_on_failure;
   int frequency_format;
+  std::string filename_format;
+};
+
+struct Audio_Postprocess_Config {
+  bool enabled = false;
+
+  int highpass_hz = 0;
+  int lowpass_hz = 0;
+
+  int bandreject_hz = 0;
+  int bandreject_width_hz = 0;
+
+  bool loudnorm = true;
+  bool loudnorm_two_pass = true;
+  double loudnorm_i = -16.0;
+  double loudnorm_tp = -0.1;
+  double loudnorm_lra = 11.0;
+
+  std::string ffmpeg_filter = "";
+
+  bool output_raw_audio = false;
 };
 
 struct Call_Source {
@@ -58,6 +84,7 @@ struct Call_Source {
   bool emergency;
   std::string signal_system;
   std::string tag;
+  std::string tag_ota;
 };
 
 struct Call_Freq {
@@ -81,7 +108,7 @@ enum Call_Data_Status { INITIAL,
                         SUCCESS,
                         RETRY,
                         FAILED };
-                  
+
 enum Recorder_Type { DEBUG,
                       SIGMF,
                       SIGMFC,
@@ -110,6 +137,8 @@ struct Call_Data_t {
   double noise;
   long start_time;
   long stop_time;
+  std::int64_t start_time_ms;
+  std::int64_t stop_time_ms;
   long error_count;
   long spike_count;
   bool encrypted;
@@ -122,9 +151,11 @@ struct Call_Data_t {
   bool archive_files_on_failure;
   bool call_log;
   bool compress_wav;
-  char filename[300];
-  char status_filename[300];
-  char converted[300];
+  std::string audio_bitrate = "32k";
+  std::string filename;
+  std::string status_filename;
+  std::string converted;
+  std::string raw_audio_filename;
   int min_transmissions_removed;
 
   int sys_num;
@@ -132,8 +163,11 @@ struct Call_Data_t {
   std::string upload_script;
   std::string audio_type;
 
+  Audio_Postprocess_Config audio_postprocess;
+
   int tdma_slot;
   double length;
+  std::int64_t call_length_ms;
   bool phase2_tdma;
 
   std::vector<Call_Source> transmission_source_list;

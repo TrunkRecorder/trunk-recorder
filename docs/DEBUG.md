@@ -26,7 +26,7 @@ make
 gdb trunk-recorder core
 ```
 
-6. *gdb* is a powerful debugging platform. However, all we need is a trace of the crash. After *gdb* has finished loading, type in `bt full` to get a trace. Copy all of the output from *gdb* into a new [GitHub Issue](https://github.com/TrunkRecorder/trunk-recorder/issues/new), along with as much information as possible on what maybe causing the crash.
+6. *gdb* is a powerful debugging platform. However, all we need is a trace of the crash. After *gdb* has finished loading, type in `bt full` to get a trace. Copy all of the output from *gdb* into a new [GitHub Issue](https://github.com/TrunkRecorder/trunk-recorder/issues/new), along with as much information as possible on what might be causing the crash.
 
 
 # How to Capture an IQ Sample

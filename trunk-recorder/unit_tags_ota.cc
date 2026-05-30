@@ -8,6 +8,14 @@
 #include <iomanip>
 #include <map>
 #include <array>
+#include <cctype>
+
+// Helper: trim trailing whitespace in-place using locale-independent isspace
+static void rtrim_whitespace(std::string &s) {
+  while (!s.empty() && std::isspace(static_cast<unsigned char>(s.back()))) {
+    s.pop_back();
+  }
+}
 
 // OTA Motorola alias handling tools
 
@@ -91,6 +99,9 @@ OTAAlias UnitTagsOTA::decode_motorola_alias(const std::array<std::vector<uint8_t
   std::vector<int8_t> encoded(payload_bytes.begin() + 7, payload_bytes.end());
 
   std::string alias = decode_mot_alias(encoded);
+
+  // Trim trailing whitespace from alias
+  rtrim_whitespace(alias);
 
   if (!alias.empty()) {
     BOOST_LOG_TRIVIAL(debug) << "MOTOROLA: Decoded alias: '" << alias << "' for radio " << radio_decimal << " (0x" << radio << ")" << ", TG: " << tg_decimal << " (0x" << tg << ")";
@@ -238,12 +249,92 @@ OTAAlias UnitTagsOTA::decode_motorola_alias_p2(const std::array<std::vector<uint
 
   std::string alias = decode_mot_alias(encoded);
 
+  // Trim trailing whitespace from alias
+  rtrim_whitespace(alias);
+
   if (!alias.empty()) {
     BOOST_LOG_TRIVIAL(debug) << "MOTOROLA P2: Decoded alias: '" << alias << "' for radio " << radio_decimal << " (0x" << radio << ")" << ", TG: " << tg_decimal << " (0x" << tg << ")";
     return OTAAlias(radio_decimal, alias, "MotoP25_TDMA", wacn, sys, tg_decimal);
   }
 
   BOOST_LOG_TRIVIAL(debug) << "MOTOROLA P2: Decrypt returned empty alias";
+  return OTAAlias();
+}
+
+// Harris Phase 1 FDMA: decode concatenated alias (14 characters)
+// FDMA decoder concatenates Part A (7 chars) + Part B (7 chars) into alias_buffer[0]
+// Radio ID and talkgroup are inferred from current transmission (curr_src_id/curr_grp_id)
+OTAAlias UnitTagsOTA::decode_harris_alias(const std::array<std::vector<uint8_t>, 10>& alias_buffer, long radio_id, long talkgroup_id, const std::string& wacn, const std::string& sys_id) {
+  BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: Starting decode";
+  
+  // Validate that we have the concatenated buffer (14 bytes = 7 from Part A + 7 from Part B)
+  if (alias_buffer[0].size() != 14) {
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: Invalid buffer size (" << alias_buffer[0].size() << " bytes, expected exactly 14)";
+    return OTAAlias();
+  }
+  
+  std::string alias;
+  
+  // Extract all 14 ASCII characters (Part A + Part B already concatenated by FDMA decoder)
+  for (size_t i = 0; i < 14; i++) {
+    uint8_t c = alias_buffer[0][i];
+    if (c == 0x00) break;  // Null terminator
+    if (c >= 0x20 && c <= 0x7E) {  // Printable ASCII
+      alias += static_cast<char>(c);
+    }
+  }
+  
+  rtrim_whitespace(alias);
+  
+  if (!alias.empty()) {
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: Complete alias: '" << alias << "' (" << alias.length() << " chars)";
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: Inferred radio_id: " << radio_id << ", talkgroup: " << talkgroup_id;
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: WACN: " << wacn << ", System: " << sys_id;
+    return OTAAlias(radio_id, alias, "HarrisP25_FDMA", wacn, sys_id, talkgroup_id);
+  }
+  
+  BOOST_LOG_TRIVIAL(debug) << "HARRIS P1: No valid alias decoded";
+  return OTAAlias();
+}
+
+// Harris Phase 2 TDMA: decode single variable-length message
+// Radio ID and talkgroup are inferred from current transmission (src_id/grp_id)
+OTAAlias UnitTagsOTA::decode_harris_alias_p2(const std::array<std::vector<uint8_t>, 10>& alias_buffer, long radio_id, long talkgroup_id, const std::string& wacn, const std::string& sys_id) {
+  BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: Starting decode";
+  
+  if (alias_buffer[0].size() < 4) {
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: Message too small (" << alias_buffer[0].size() << " bytes)";
+    return OTAAlias();
+  }
+  
+  // Convert message to hex for logging
+  std::string msg_hex = uint8_vector_to_hex_string(alias_buffer[0]);
+  BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: Raw message (" << alias_buffer[0].size() << " bytes): " << msg_hex;
+  
+  // Extract all ASCII characters starting at byte 3 (after opcode, MFID, length)
+  std::string alias;
+  for (size_t i = 3; i < alias_buffer[0].size(); i++) {
+    uint8_t c = alias_buffer[0][i];
+    if (c == 0x00) break;  // Null terminator
+    if (c >= 0x20 && c <= 0x7E) {  // Printable ASCII
+      alias += static_cast<char>(c);
+    }
+  }
+  
+  rtrim_whitespace(alias);
+  
+  if (!alias.empty()) {
+    std::ostringstream hex_debug;
+    for (unsigned char c : alias) {
+      hex_debug << std::hex << std::setw(2) << std::setfill('0') << (int)c << " ";
+    }
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: Decoded alias: '" << alias << "' (" << alias.length() << " chars)";
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: Inferred radio_id: " << radio_id << ", talkgroup: " << talkgroup_id;
+    BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: WACN: " << wacn << ", System: " << sys_id;
+    return OTAAlias(radio_id, alias, "HarrisP25_TDMA", wacn, sys_id, talkgroup_id);
+  }
+  
+  BOOST_LOG_TRIVIAL(debug) << "HARRIS P2: No valid alias decoded";
   return OTAAlias();
 }
 

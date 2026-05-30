@@ -53,6 +53,110 @@ void System_impl::set_compress_wav(bool compress) {
   this->compress_wav = compress;
 }
 
+std::string System_impl::get_audio_bitrate() {
+  return this->audio_bitrate;
+}
+
+void System_impl::set_audio_bitrate(std::string bitrate) {
+  this->audio_bitrate = bitrate;
+}
+
+bool System_impl::get_audio_postprocess_enabled() {
+  return this->audio_postprocess_enabled;
+}
+
+void System_impl::set_audio_postprocess_enabled(bool enabled) {
+  this->audio_postprocess_enabled = enabled;
+}
+
+int System_impl::get_audio_highpass_hz() {
+  return this->audio_highpass_hz;
+}
+
+void System_impl::set_audio_highpass_hz(int hz) {
+  this->audio_highpass_hz = hz;
+}
+
+int System_impl::get_audio_lowpass_hz() {
+  return this->audio_lowpass_hz;
+}
+
+void System_impl::set_audio_lowpass_hz(int hz) {
+  this->audio_lowpass_hz = hz;
+}
+
+int System_impl::get_audio_bandreject_hz() {
+  return this->audio_bandreject_hz;
+}
+
+void System_impl::set_audio_bandreject_hz(int hz) {
+  this->audio_bandreject_hz = hz;
+}
+
+int System_impl::get_audio_bandreject_width_hz() {
+  return this->audio_bandreject_width_hz;
+}
+
+void System_impl::set_audio_bandreject_width_hz(int hz) {
+  this->audio_bandreject_width_hz = hz;
+}
+
+bool System_impl::get_audio_loudnorm() {
+  return this->audio_loudnorm;
+}
+
+void System_impl::set_audio_loudnorm(bool enabled) {
+  this->audio_loudnorm = enabled;
+}
+
+bool System_impl::get_audio_loudnorm_two_pass() {
+  return this->audio_loudnorm_two_pass;
+}
+
+void System_impl::set_audio_loudnorm_two_pass(bool enabled) {
+  this->audio_loudnorm_two_pass = enabled;
+}
+
+double System_impl::get_audio_loudnorm_i() {
+  return this->audio_loudnorm_i;
+}
+
+void System_impl::set_audio_loudnorm_i(double value) {
+  this->audio_loudnorm_i = value;
+}
+
+double System_impl::get_audio_loudnorm_tp() {
+  return this->audio_loudnorm_tp;
+}
+
+void System_impl::set_audio_loudnorm_tp(double value) {
+  this->audio_loudnorm_tp = value;
+}
+
+double System_impl::get_audio_loudnorm_lra() {
+  return this->audio_loudnorm_lra;
+}
+
+void System_impl::set_audio_loudnorm_lra(double value) {
+  this->audio_loudnorm_lra = value;
+}
+
+std::string System_impl::get_audio_ffmpeg_filter() {
+  return this->audio_ffmpeg_filter;
+}
+
+void System_impl::set_audio_ffmpeg_filter(std::string filter) {
+  this->audio_ffmpeg_filter = filter;
+}
+
+bool System_impl::get_audio_output_raw_audio() {
+  return this->audio_output_raw_audio;
+}
+
+void System_impl::set_audio_output_raw_audio(bool enabled) {
+  this->audio_output_raw_audio = enabled;
+}
+
 double System_impl::get_min_duration() {
   return this->min_call_duration;
 }
@@ -103,6 +207,18 @@ System_impl::System_impl(int sys_num) {
   message_count = 0;
   decode_rate = 0;
   msg_queue = gr::msg_queue::make(100);
+  audio_postprocess_enabled = false;
+  audio_highpass_hz = 0;
+  audio_lowpass_hz = 0;
+  audio_bandreject_hz = 0;
+  audio_bandreject_width_hz = 0;
+  audio_loudnorm = false;
+  audio_loudnorm_two_pass = true;
+  audio_loudnorm_i = -16.0;
+  audio_loudnorm_tp = -0.1;
+  audio_loudnorm_lra = 11.0;
+  audio_ffmpeg_filter = "";
+  audio_output_raw_audio = false;
 }
 
 void System_impl::set_xor_mask(unsigned long sys_id, unsigned long wacn, unsigned long nac) {
@@ -391,6 +507,9 @@ Talkgroup *System_impl::find_talkgroup_by_freq(double freq) {
 }
 std::string System_impl::find_unit_tag(long unitID) {
   return unit_tags->find_unit_tag(unitID);
+}
+std::string System_impl::find_unit_tag_ota(long unitID) {
+  return unit_tags->find_unit_tag_ota(unitID);
 }
 
 std::vector<double> System_impl::get_channels() {
@@ -782,4 +901,12 @@ unsigned long System_impl::get_multiSiteSystemNumber() {
 
 void System_impl::set_multiSiteSystemNumber(unsigned long multiSiteSystemNumber) {
   d_multiSiteSystemNumber = multiSiteSystemNumber;
+}
+
+std::string System_impl::get_filename_format() {
+  return this->filename_format;
+}
+
+void System_impl::set_filename_format(std::string format) {
+  this->filename_format = format;
 }

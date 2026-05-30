@@ -1,0 +1,21 @@
+name: Trigger site docs sync
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'docs/**'
+
+jobs:
+  trigger:
+    name: Dispatch docs-updated to site repo
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger sync in trunkrecorder.github.io
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.SITE_REPO_PAT }}
+          repository: TrunkRecorder/trunkrecorder.github.io
+          event-type: docs-updated

@@ -23,7 +23,7 @@
 
 cmake_minimum_required(VERSION 3.12)
 
-project(Trunk-Recorder LANGUAGES CXX C VERSION "5.1.1")
+project(Trunk-Recorder LANGUAGES CXX C VERSION "5.2.0")
 
 
 configure_file(cmake.h.in "${PROJECT_BINARY_DIR}/cmake.h" @ONLY)
@@ -166,6 +166,13 @@ endif()
 ########################################################################
 MESSAGE(STATUS "Configuring Boost C++ Libraries...")
 
+# CMake 3.30 removed the bundled FindBoost module in favor of upstream
+# BoostConfig.cmake (shipped by Boost >= 1.70). Opt in to the new policy
+# so we use the upstream config and silence the CMP0167 deprecation warning.
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+
 # Although not required on my system, some users have linking issues without
 SET(BOOST_REQUIRED_COMPONENTS
     thread
@@ -181,18 +188,7 @@ if(UNIX AND NOT BOOST_ROOT AND EXISTS "/usr/lib64")
     list(APPEND BOOST_LIBRARYDIR "/usr/lib64") #fedora 64-bit fix
 endif(UNIX AND NOT BOOST_ROOT AND EXISTS "/usr/lib64")
 
-set(Boost_ADDITIONAL_VERSIONS
-    "1.35.0" "1.35" "1.36.0" "1.36" "1.37.0" "1.37" "1.38.0" "1.38" "1.39.0" "1.39"
-    "1.40.0" "1.40" "1.41.0" "1.41" "1.42.0" "1.42" "1.43.0" "1.43" "1.44.0" "1.44"
-    "1.45.0" "1.45" "1.46.0" "1.46" "1.47.0" "1.47" "1.48.0" "1.48" "1.49.0" "1.49"
-    "1.50.0" "1.50" "1.51.0" "1.51" "1.52.0" "1.52" "1.53.0" "1.53" "1.54.0" "1.54"
-    "1.55.0" "1.55" "1.56.0" "1.56" "1.57.0" "1.57" "1.58.0" "1.58" "1.59.0" "1.59"
-    "1.60.0" "1.60" "1.61.0" "1.61" "1.62.0" "1.62" "1.63.0" "1.63" "1.64.0" "1.64"
-    "1.65.0" "1.65" "1.66.0" "1.66" "1.67.0" "1.67" "1.68.0" "1.68" "1.69.0" "1.69"
-    "1.70.0" "1.70" "1.71.0" "1.71" "1.72.0" "1.72" "1.73.0" "1.73" "1.74.0" "1.74"
-)
-
-find_package(Boost COMPONENTS ${BOOST_REQUIRED_COMPONENTS} REQUIRED)
+find_package(Boost CONFIG COMPONENTS ${BOOST_REQUIRED_COMPONENTS} REQUIRED)
 
 if(NOT Boost_FOUND)
     message(FATAL_ERROR "Boost required to build " ${CMAKE_PROJECT_NAME})
@@ -243,6 +239,26 @@ SET(CMAKE_CXX_STANDARD 17)
 
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread -Wno-narrowing -fvisibility=hidden -fPIC")
 
+# Eigen (used by lfsr) requires IEEE NaN/Inf semantics.
+# Strip fast/finite-math flags from toolchain/env and force safe math flags.
+foreach(_var
+    CMAKE_C_FLAGS CMAKE_CXX_FLAGS
+    CMAKE_C_FLAGS_DEBUG CMAKE_CXX_FLAGS_DEBUG
+    CMAKE_C_FLAGS_RELEASE CMAKE_CXX_FLAGS_RELEASE
+    CMAKE_C_FLAGS_RELWITHDEBINFO CMAKE_CXX_FLAGS_RELWITHDEBINFO
+    CMAKE_C_FLAGS_MINSIZEREL CMAKE_CXX_FLAGS_MINSIZEREL)
+  if(DEFINED ${_var})
+    string(REGEX REPLACE "(^| )[/-]ffast-math( |$)" " " ${_var} "${${_var}}")
+    string(REGEX REPLACE "(^| )[/-]ffinite-math-only( |$)" " " ${_var} "${${_var}}")
+    string(REGEX REPLACE "(^| )[/-]Ofast( |$)" " " ${_var} "${${_var}}")
+    set(${_var} "${${_var}}" CACHE STRING "" FORCE)
+  endif()
+endforeach()
+
+if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-finite-math-only -fno-fast-math")
+endif()
+
 
 list(APPEND trunk_recorder_sources
   trunk-recorder/recorders/recorder.cc
@@ -250,11 +266,11 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/formatter.cc
   trunk-recorder/source.cc
   trunk-recorder/call_conventional.cc
-  trunk-recorder/systems/smartnet_trunking.cc
   trunk-recorder/systems/p25_trunking.cc
-  trunk-recorder/systems/smartnet_parser.cc
   trunk-recorder/systems/p25_parser.cc
-  trunk-recorder/systems/smartnet_decode.cc
+  trunk-recorder/systems/smartnet_parser.cc
+  trunk-recorder/systems/smartnet_impl.cc
+  trunk-recorder/systems/smartnet_fsk2_demod.cc
   trunk-recorder/systems/system_impl.cc
   trunk-recorder/recorders/debug_recorder_impl.cc
   trunk-recorder/recorders/sigmf_recorder_impl.cc
@@ -368,7 +384,7 @@ add_subdirectory(plugins/openmhz_uploader)
 add_subdirectory(plugins/broadcastify_uploader)
 add_subdirectory(plugins/unit_script)
 add_subdirectory(plugins/rdioscanner_uploader)
-#add_subdirectory(plugins/simplestream)
+add_subdirectory(plugins/simplestream)
 
 # Add user plugins located in /user_plugins
 # Matching: /user_plugins/${plugin_dir}/CMakeLists.txt

@@ -143,7 +143,24 @@ channelizer::channelizer(double input_rate, int samples_per_symbol, double symbo
   squelch = gr::analog::pwr_squelch_cc::make(squelch_db, 0.0001, 0, true);
 
   rms_agc = gr::blocks::rms_agc::make(0.45, 0.85);
-  fll_band_edge = gr::digital::fll_band_edge_cc::make(sps, def_excess_bw, 2 * sps + 1, (2.0 * pi) / sps / 250); // OP25 has this set to 350 instead of 250
+  // Legacy FLL loop-filter bandwidth (OP25 historically uses 350 instead of 250).
+  double fll_loop_bw_legacy = (2.0 * pi) / sps / 250;
+#if GNURADIO_VERSION >= 0x030a0d
+  // gnuradio PR #7890 reworked the FLL loop filter. The improved filter expects
+  // bandwidth as BL*T (loop noise bandwidth * symbol period). Convert the legacy
+  // gain so closed-loop dynamics roughly match the prior behavior.
+  double fll_loop_bw = (fll_loop_bw_legacy * fll_loop_bw_legacy * sps) /
+                       ((1.0 + M_SQRT2 * fll_loop_bw_legacy + fll_loop_bw_legacy * fll_loop_bw_legacy) * 2.0 * pi);
+#if GNURADIO_VERSION >= 0x030b00
+  // 3.11+: the improved filter is the only behavior; the opt-in bool was removed.
+  fll_band_edge = gr::digital::fll_band_edge_cc::make(sps, def_excess_bw, 2 * sps + 1, fll_loop_bw);
+#else
+  // 3.10 backport: opt in via the new `improved_loop_filter` bool to silence the legacy warning.
+  fll_band_edge = gr::digital::fll_band_edge_cc::make(sps, def_excess_bw, 2 * sps + 1, fll_loop_bw, true);
+#endif
+#else
+  fll_band_edge = gr::digital::fll_band_edge_cc::make(sps, def_excess_bw, 2 * sps + 1, fll_loop_bw_legacy);
+#endif
 
  
   if (double_decim) {

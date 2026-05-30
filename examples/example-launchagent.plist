@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+
+<!--
+    LaunchAgent template for a Trunk Recorder instance.
+
+    SETUP:
+      1. Copy this file to:
+            ~/Library/LaunchAgents/local.trunk-recorder-<system>.plist
+      2. Replace <system> with a short name for this instance (e.g. "cityfd", "metro")
+      3. Replace <username> with your macOS username (run `whoami` if unsure)
+      4. Replace the script path and working directory with your actual paths
+      5. Create the log directory if it doesn't exist:
+            mkdir -p ~/Library/Logs/TrunkRecorder
+      6. Load the job:
+            launchctl load ~/Library/LaunchAgents/local.trunk-recorder-<system>.plist
+
+    MANAGE:
+      Start:   launchctl load   ~/Library/LaunchAgents/local.trunk-recorder-<system>.plist
+      Stop:    launchctl unload ~/Library/LaunchAgents/local.trunk-recorder-<system>.plist
+      Status:  launchctl list | grep trunk-recorder
+
+    LOGS:
+      All output → ~/Library/Logs/TrunkRecorder/<system>.log
+      View with Launch Control, Console.app (Files section), or:
+        tail -f ~/Library/Logs/TrunkRecorder/<system>.log
+
+    NOTE: Do not add UserName or GroupName keys — those are only valid in
+          LaunchDaemons. A LaunchAgent always runs as the logged-in user.
+-->
+
+<plist version="1.0">
+<dict>
+
+    <!-- Unique identifier. Must match the filename (without .plist). -->
+    <key>Label</key>
+    <string>local.trunk-recorder-<system></string>
+
+    <!--
+        Command to run. Use /bin/bash so the script's environment setup
+        (eval, export, ulimit) works correctly.
+    -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/<username>/path/to/trunk-build/start-<system>.sh</string>
+    </array>
+
+    <!--
+        Must point to the trunk-build directory. Trunk Recorder uses relative
+        paths for its config and recording output, so the working directory
+        determines where recordings are saved.
+    -->
+    <key>WorkingDirectory</key>
+    <string>/Users/<username>/path/to/trunk-build</string>
+
+    <!-- Start the job as soon as this plist is loaded (at login). -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!--
+        Restart the process automatically whenever it exits — whether due to
+        a crash, an error, or a clean exit. This is the primary restart
+        mechanism when using the simplified exec-based launcher script.
+    -->
+    <key>KeepAlive</key>
+    <true/>
+
+    <!--
+        All output goes to a single log file. Trunk Recorder writes everything
+        to stderr, so both keys point to the same file to avoid losing output.
+    -->
+    <key>StandardOutPath</key>
+    <string>/Users/<username>/Library/Logs/TrunkRecorder/<system>.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>/Users/<username>/Library/Logs/TrunkRecorder/<system>.log</string>
+
+</dict>
+</plist>

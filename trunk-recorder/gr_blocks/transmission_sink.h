@@ -32,6 +32,7 @@
 #include <boost/log/trivial.hpp>
 #include <gnuradio/blocks/api.h>
 #include <gnuradio/sync_block.h>
+#include <chrono>
 
 class Call;
 struct Transmission;
@@ -52,12 +53,15 @@ private:
   bool d_termination_flag;
   time_t d_start_time;
   time_t d_stop_time;
+  std::int64_t d_start_time_ms;
+  std::int64_t d_stop_time_ms;
   std::chrono::time_point<std::chrono::steady_clock> d_last_write_time;
   long d_spike_count;
   long d_error_count;
   long curr_src_id;
+  long cached_src_id;
   unsigned int d_current_color_code;
-  char current_filename[255];
+  std::string current_filename;
   Call *d_current_call;
   long d_current_call_num;
   std::string d_current_call_short_name;
@@ -119,7 +123,7 @@ public:
                     int bits_per_sample);
   virtual ~transmission_sink();
   void create_filename();
-  char *get_filename();
+  const std::string &get_filename();
   bool start_recording(Call *call);
   bool start_recording(Call *call, int slot);
   void stop_recording();
@@ -134,6 +138,8 @@ public:
   unsigned int sample_rate();
   double total_length_in_seconds();
   double length_in_seconds();
+  std::int64_t get_start_time_ms() const { return d_start_time_ms; }
+  std::int64_t get_stop_time_ms()  const { return d_stop_time_ms;  }
   Call_Source *get_source_list();
   int get_source_count();
   virtual int work(int noutput_items,

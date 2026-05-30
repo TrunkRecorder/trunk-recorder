@@ -1,12 +1,24 @@
 #include "monitor_systems.h"
 #include "recorders/p25_recorder.h"
+#include <chrono>
+#include <boost/log/sinks/text_file_backend.hpp>
+#include <boost/log/core.hpp>
+
 using namespace std;
 
+// External reference to global log sink for SIGHUP rotation
+extern boost::shared_ptr<boost::log::sinks::synchronous_sink<boost::log::sinks::text_file_backend>> global_log_sink;
+
 volatile sig_atomic_t exit_flag = 0;
+volatile sig_atomic_t rotate_log_flag = 0;
 int exit_code = EXIT_SUCCESS;
 
 void exit_interupt(int sig) { // can be called asynchronously
   exit_flag = 1;              // set flag
+}
+
+void rotate_log_signal(int sig) { // can be called asynchronously
+  rotate_log_flag = 1;          // set flag
 }
 
 uint64_t time_since_epoch_millisec() {
@@ -698,6 +710,8 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
     // For Loop
     if (system->get_system_type() == "smartnet") {
       system->smartnet_trunking->tune_freq(control_channel_freq);
+      // Clear demod tracking state so reacquisition isn't biased by whatever
+      // the loop converged to on the previous (possibly noise-only) channel.
       system->smartnet_trunking->reset();
     } else if (system->get_system_type() == "p25") {
       system->p25_trunking->tune_freq(control_channel_freq);
@@ -718,18 +732,24 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           // We must lock the flow graph in order to disconnect and reconnect blocks
           tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->smartnet_trunking, 0);
-          system->smartnet_trunking = make_smartnet_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
+          // Release the old hier_block2 before constructing the new one so its
+          // sub-blocks (prefilter, fsk2_demod, framer) are torn down deterministically
+          // instead of overlapping with the replacement.
+          system->smartnet_trunking.reset();
+          system->smartnet_trunking = smartnet_impl::make(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->smartnet_trunking, 0);
           tb->unlock();
-          system->smartnet_trunking->reset();
         } else if (system->get_system_type() == "p25") {
           system->set_source(source);
           // We must lock the flow graph in order to disconnect and reconnect blocks
-          tb->stop();
+          // ( We have gone back and forth on whether this should be lock/unlock or stop/wait/start.
+          //   If there are unexplained issues around control channel tuning, we should look at alternet
+          //   approaches. See PR #1090 )
+          tb->lock();
           tb->disconnect(current_source->get_src_block(), 0, system->p25_trunking, 0);
           system->p25_trunking = make_p25_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_qpsk_mod(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->p25_trunking, 0);
-          tb->start();
+          tb->unlock();
         } else {
           BOOST_LOG_TRIVIAL(error) << "\t - Unkown system type for Retune";
         }
@@ -845,8 +865,9 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
   P25Parser *p25_parser;
 
   signal(SIGINT, exit_interupt);
+  signal(SIGHUP, rotate_log_signal);
 
-  smartnet_parser = new SmartnetParser(); // this has to eventually be generic;
+  smartnet_parser = new SmartnetParser(systems.front()); // this has to eventually be generic;
   p25_parser = new P25Parser();
 
   while (1) {
@@ -856,19 +877,28 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
       for (vector<Call *>::iterator it = calls.begin(); it != calls.end();) {
         Call *call = *it;
 
-        if (call->get_state() != MONITORING) {
-          call->conclude_call();
-        }
+        call->conclude_call();
 
         it = calls.erase(it);
         delete call;
       }
 
       BOOST_LOG_TRIVIAL(info) << "Cleaning up & Exiting...";
-
-      // Sleep for 5 seconds to allow for all of the Call Concluder threads to finish.
-      boost::this_thread::sleep(boost::posix_time::milliseconds(5000));
+      Call_Concluder::shutdown_call_data_workers(std::chrono::seconds(10));
       return exit_code;
+    }
+
+    if (rotate_log_flag) { // SIGHUP received for log rotation
+      rotate_log_flag = 0;  // reset flag
+      if (global_log_sink) {
+        BOOST_LOG_TRIVIAL(info) << "Received SIGHUP signal - rotating log file...";
+        // Flush the sink
+        global_log_sink->flush();
+        // Rotate the log file by removing and re-adding the backend
+        boost::log::core::get()->remove_sink(global_log_sink);
+        boost::log::core::get()->add_sink(global_log_sink);
+        BOOST_LOG_TRIVIAL(info) << "Log file rotation complete";
+      }
     }
 
     process_message_queues(systems);
@@ -886,7 +916,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
           system->set_message_count(system->get_message_count() + 1);
 
           if (system->get_system_type() == "smartnet") {
-            trunk_messages = smartnet_parser->parse_message(msg->to_string(), system);
+            trunk_messages = smartnet_parser->parse_message(msg, system);
             handle_message(trunk_messages, system, config, sources, calls, tb);
             plugman_trunk_message(trunk_messages, system);
           }
@@ -908,7 +938,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
     }
     current_time = time(NULL);
     current_time_ms = time_since_epoch_millisec();
-    if ((current_time_ms - last_conventional_channel_detection_check) >= 0.1) {
+    if ((current_time_ms - last_conventional_channel_detection_check) >= 100) {
       check_conventional_channel_detection(sources);
       last_conventional_channel_detection_check = current_time_ms;
     }
@@ -929,7 +959,9 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
         Source *source = *src_it;
         if (!source->got_samples()) {
           BOOST_LOG_TRIVIAL(error) << "Source " << source->get_num() << " has stopped receiving samples - Terminating trunk recorder";
-          exit(1);
+          exit_code = EXIT_FAILURE;
+          exit_flag = 1;
+          break;
         }
       }
       last_decode_rate_check = current_time;

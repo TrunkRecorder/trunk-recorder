@@ -80,6 +80,11 @@ namespace gr {
             }
         }
 
+        void frame_assembler_impl::set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {
+            if (d_sync)
+                d_sync->set_voice_codec_callback(cb, user_data);
+        }
+
         void frame_assembler_impl::set_debug(int debug) {
             if (d_sync)
                 d_sync->set_debug(debug);
@@ -153,26 +158,33 @@ namespace gr {
         produce(0, output_queue[0].size());
         produce(1, output_queue[1].size());
 
-                if ((output_queue[0].size() > 0) || ( output_queue[1].size() > 0)) {
+            if ((output_queue[0].size() > 0) || ( output_queue[1].size() > 0)) {
         //BOOST_LOG_TRIVIAL(info) << "DMR Frame Assembler - Amt Prod: " << amt_produce << " output_queue 0: " << output_queue[0].size() << " output_queue 1: " << output_queue[1].size() <<" noutput_items: " <<  noutput_items;
         }
         for (int slot_id = 0; slot_id < 2; slot_id++) {
-        int16_t *out = (int16_t *)output_items[slot_id];
-        int src_id = d_sync->get_src_id(slot_id);
-        int dst_id = d_sync->get_dst_id(slot_id);
-        int cc = d_sync->get_cc(slot_id);
-        std::pair<bool,long> terminated = d_sync->get_terminated(slot_id);
-        if ((src_id != -1) && (src_id != 0)) {
+          int16_t *out = (int16_t *)output_items[slot_id];
+          // Skip tag emission when no items are produced on this slot. SmartNet uses the
+          // msg_queue path and never populates output_queue, so without this guard tags
+          // (e.g. cc=-1 from the rx_base default) would accumulate indefinitely on a
+          // stalled stream.
+          if (output_queue[slot_id].empty()) {
+            continue;
+          }
+          int src_id = d_sync->get_src_id(slot_id);
+          int dst_id = d_sync->get_dst_id(slot_id);
+          int cc = d_sync->get_cc(slot_id);
+          std::pair<bool,long> terminated = d_sync->get_terminated(slot_id);
+          if ((src_id != -1) && (src_id != 0)) {
             BOOST_LOG_TRIVIAL(debug) << "DMR Frame Assembler - sending src: " << src_id;
-            add_item_tag(0, nitems_written(0), pmt::intern("src_id"), pmt::from_long(src_id), pmt::intern(name()));
+            add_item_tag(slot_id, nitems_written(slot_id), pmt::intern("src_id"), pmt::from_long(src_id), pmt::intern(name()));
           }
           if (dst_id != -1) {
             BOOST_LOG_TRIVIAL(debug) << "DMR Frame Assembler - sending dst: " << dst_id;
-            add_item_tag(0, nitems_written(0), pmt::intern("grp_id"), pmt::from_long(dst_id), pmt::intern(name()));
+            add_item_tag(slot_id, nitems_written(slot_id), pmt::intern("grp_id"), pmt::from_long(dst_id), pmt::intern(name()));
           }
-          if (cc != 0) {
+          if ((cc != -1) && (cc != 0)) {
             BOOST_LOG_TRIVIAL(debug) << "DMR Frame Assembler - sending cc: " << cc;
-            add_item_tag(0, nitems_written(0), pmt::intern("cc"), pmt::from_long(cc), pmt::intern(name()));
+            add_item_tag(slot_id, nitems_written(slot_id), pmt::intern("cc"), pmt::from_long(cc), pmt::intern(name()));
           }
           /*
         if (terminated) {

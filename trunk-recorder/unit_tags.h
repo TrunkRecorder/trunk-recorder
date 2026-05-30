@@ -24,6 +24,7 @@ public:
   void load_unit_tags(std::string filename);
   void load_unit_tags_ota(std::string filename);
   std::string find_unit_tag(long unitID);
+  std::string find_unit_tag_ota(long unitID);
   void add(std::string pattern, std::string tag);
   bool add_ota(const OTAAlias& ota_alias);
   void set_mode(UnitTagMode mode);

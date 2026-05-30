@@ -29,6 +29,7 @@ class Openmhz_Uploader : public Plugin_Api {
   Openmhz_Uploader_Data data;
   CURLSH *curl_share;
   long curl_dns_ttl;
+  std::string plugin_name;
 
 public:
   Openmhz_System *get_openmhz_system(std::string short_name) {
@@ -144,7 +145,7 @@ public:
     mime = curl_mime_init(curl);
     part = curl_mime_addpart(mime);
 
-    curl_mime_filedata(part, call_info.converted);
+    curl_mime_filedata(part, call_info.converted.c_str());
     curl_mime_type(part, "application/octet-stream"); /* content-type for this part */
     curl_mime_name(part, "call");
 
@@ -297,9 +298,9 @@ public:
 
       if (res == CURLM_OK && response_code == 200) {
         struct stat file_info;
-        stat(call_info.converted, &file_info);
+        stat(call_info.converted.c_str(), &file_info);
         std::string loghdr = log_header(call_info.short_name,call_info.call_num,call_info.talkgroup_display,call_info.freq);
-        BOOST_LOG_TRIVIAL(info) << loghdr << "OpenMHz Upload Success - file size: " << file_info.st_size;
+        BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload Success - file size: " << file_info.st_size;
         ;
         return 0;
       }
@@ -317,16 +318,16 @@ public:
     for (const auto& error : config_errors) {
       if (response_buffer.find(error.match) != std::string::npos) {
         if (error.is_error) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "OpenMHz Upload " << error.message;
+          BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload " << error.message;
         } else {
-          BOOST_LOG_TRIVIAL(info) << loghdr << "OpenMHz Upload " << error.message;
+          BOOST_LOG_TRIVIAL(info) << loghdr << this->plugin_name << " Upload " << error.message;
         }
         return 0;
       }
     }
     
     // Default error - add to the retry queue
-    BOOST_LOG_TRIVIAL(error) << loghdr << "OpenMHz Upload Error: " << response_buffer;
+    BOOST_LOG_TRIVIAL(error) << loghdr << this->plugin_name << " Upload Error: " << response_buffer;
     return 1;
   }
 
@@ -335,6 +336,9 @@ public:
   }
 
   int parse_config(json config_data) {
+    // Extract plugin name from config, with fallback for default internal plugin name
+    std::string config_name = config_data.value("name", "openmhz_uploader");
+    this->plugin_name = (config_name == "openmhz_uploader") ? "OpenMHz" : config_name;
     std::string log_prefix = "\t[OpenMHz]\t";
 
     // Tests to see if the uploadServer value exists in the config file

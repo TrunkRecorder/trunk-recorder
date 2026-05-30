@@ -41,6 +41,15 @@ void initialize_plugins(json config_data, Config *config, std::vector<Source *> 
     for (json element : config_data["plugins"]) {
       std::string plugin_lib = element.value("library", "");
       std::string plugin_name = element.value("name", "");
+      
+      // If name is not provided, derive it from the library filename
+      if (plugin_name.empty() && !plugin_lib.empty()) {
+        plugin_name = boost::filesystem::path(plugin_lib).stem().string();
+        if (plugin_name.size() > 3 && plugin_name.substr(0, 3) == "lib") {
+          plugin_name = plugin_name.substr(3);
+        }
+      }
+      
       bool plugin_enabled = element.value("enabled", true);
       if (plugin_enabled) {
         Plugin *plugin = setup_plugin(plugin_lib, plugin_name);
@@ -332,6 +341,15 @@ void plugman_unit_location(System *system, long source_id, long talkgroup_num) {
     Plugin *plugin = *it;
     if (plugin->state == PLUGIN_RUNNING) {
       plugin->api->unit_location(system, source_id, talkgroup_num);
+    }
+  }
+}
+
+void plugman_voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs) {
+  for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
+    Plugin *plugin = *it;
+    if (plugin->state == PLUGIN_RUNNING) {
+      plugin->api->voice_codec_data(call, codec_type, tgid, src_id, params, param_count, errs);
     }
   }
 }

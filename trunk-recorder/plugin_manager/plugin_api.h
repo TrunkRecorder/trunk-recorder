@@ -19,6 +19,15 @@ typedef enum {
   PLUGIN_DISABLED
 } plugin_state_t;
 
+enum VoiceCodecType {
+  CODEC_P25_IMBE = 0,     // P25 Phase 1: 8 IMBE codewords, uint32_t u[8]
+  CODEC_P25_AMBE = 1,     // P25 Phase 2: 4 AMBE+2 codewords, uint32_t u[4]
+  CODEC_DMR_AMBE = 2,     // DMR: 4 AMBE codewords, int U[4] cast to uint32_t
+  CODEC_DSTAR_AMBE = 3,   // D-STAR: 9 AMBE2400 params, int b[9] cast to uint32_t
+  CODEC_YSF_FULLRATE = 4, // YSF full rate: 8 IMBE codewords, uint32_t u[8]
+  CODEC_YSF_HALFRATE = 5, // YSF half rate: 9 AMBE2250 params, int b[9] cast to uint32_t
+};
+
 using json = nlohmann::json;
 
 class Plugin_Api {
@@ -47,6 +56,11 @@ public:
   virtual int unit_data_grant(System *sys, long source_id) { return 0; };
   virtual int unit_answer_request(System *sys, long source_id, long talkgroup) { return 0; };
   virtual int unit_location(System *sys, long source_id, long talkgroup_num) { return 0; };
+  // Called for every voice codec frame before vocoder synthesis.
+  // tgid/src_id are populated from voice channel headers for P25; for DMR, src_id comes from
+  // rx_sync slot tracking; for D-STAR/YSF they are 0. Use call->get_talkgroup() and
+  // call->get_current_source_id() for authoritative values across all codec types.
+  virtual int voice_codec_data(Call *call, int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs) { return 0; };
   //void set_frequency_format(int f) { frequencyFormat = f; }
   virtual ~Plugin_Api(){};
 };
