@@ -149,8 +149,8 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
     source_block = usrp_src;
   }
 
-#ifdef GnuradioIIO_FOUND
   if (driver == "iio") {
+#ifdef GnuradioIIO_FOUND
     std::vector<bool> enable_channels{1,1,0,0};
     BOOST_LOG_TRIVIAL(info) << "SOURCE TYPE IIO";
 
@@ -175,24 +175,24 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
     BOOST_LOG_TRIVIAL(info) << "Tuning to " << format_freq(center + error);
     iio_src->set_frequency(center + error);
 
-    
+
     BOOST_LOG_TRIVIAL(info) << "Setting sample rate to: " << FormatSamplingRate(rate);
     iio_src->set_samplerate(rate);
     actual_rate = rate;
-    
+
     iio_src->set_quadrature(true);
     iio_src->set_rfdc(true);
     iio_src->set_bbdc(true);
     iio_src->set_filter_params("Auto", "", 0.0, 0.0);
 
-    
+
 
     source_block = iio_src;
-  }
 #else // GnuradioIIO_FOUND
-  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
-  exit(1);
+    BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO support. Install libiio-dev, libad9361-dev, and libgnuradio-iio*, then rebuild.";
+    exit(1);
 #endif //GnuradioIIO_FOUND
+  }
 }
 
 void Source::set_iq_source(std::string iq_file, bool repeat, double center, double rate) {
@@ -377,16 +377,16 @@ void Source::set_gain(double r) {
     cast_to_usrp_sptr(source_block)->set_gain(gain);
   }
 
-#ifdef GnuradioIIO_FOUND
   if (driver == "iio") {
+#ifdef GnuradioIIO_FOUND
     gain = r;
     cast_to_iio_sptr(source_block)->set_gain(0, gain);
     BOOST_LOG_TRIVIAL(info) << "Gain set to: " << gain;
-  }
 #else // GnuradioIIO_FOUND
-  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
-  exit(1);
+    BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO support. Install libiio-dev, libad9361-dev, and libgnuradio-iio*, then rebuild.";
+    exit(1);
 #endif //GnuradioIIO_FOUND
+  }
 }
 
 void Source::add_gain_stage(std::string stage_name, double value) {
@@ -439,20 +439,19 @@ void Source::set_gain_mode(bool m) {
       BOOST_LOG_TRIVIAL(info) << "Auto gain control is OFF";
     }
 
-  }
+  } else if (driver == "iio") {
 #ifdef GnuradioIIO_FOUND
- else if (driver == "iio") {
     gain_mode = m;
     if (gain_mode) {
       cast_to_iio_sptr(source_block)->set_gain_mode(0, "fast_attack");
     } else {
       cast_to_iio_sptr(source_block)->set_gain_mode(0, "manual");
     }
-  }
 #else // GnuradioIIO_FOUND
-  BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO enabled.";
-  exit(1);
+    BOOST_LOG_TRIVIAL(fatal) << "Trunk-recorder was not compiled with IIO support. Install libiio-dev, libad9361-dev, and libgnuradio-iio*, then rebuild.";
+    exit(1);
 #endif
+  }
 }
 
 double Source::get_if_gain() {
