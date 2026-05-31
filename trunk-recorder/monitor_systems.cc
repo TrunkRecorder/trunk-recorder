@@ -381,6 +381,10 @@ void unit_answer_request(System *sys, long source_id, long talkgroup) {
   plugman_unit_answer_request(sys, source_id, talkgroup);
 }
 
+void unit_call_alert(System *sys, long source_id, long talkgroup) {
+  plugman_unit_call_alert(sys, source_id, talkgroup);
+}
+
 void unit_location(System *sys, long source_id, long talkgroup_num) {
   plugman_unit_location(sys, source_id, talkgroup_num);
 }
@@ -672,6 +676,10 @@ void handle_message(std::vector<TrunkMessage> messages, System *sys, Config &con
 
     case UU_ANS_REQ:
       unit_answer_request(sys, message.source, message.talkgroup);
+      break;
+
+    case CALL_ALERT:
+      unit_call_alert(sys, message.source, message.talkgroup);
       break;
 
     case INVALID_CC_MESSAGE:
