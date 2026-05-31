@@ -166,77 +166,6 @@ static int run_process_wait(const std::vector<std::string> &args,
   return -1;
 }
 
-static bool run_process_capture_combined_output(const std::vector<std::string> &args,
-                                                const std::string &loghdr,
-                                                const std::string &friendly_name,
-                                                std::string &output,
-                                                int &exit_code) {
-  output.clear();
-  exit_code = -1;
-
-  if (args.empty()) {
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mCannot execute empty command for "
-                              << friendly_name << "\033[0m";
-    return false;
-  }
-
-  BOOST_LOG_TRIVIAL(trace) << loghdr << "Running " << friendly_name;
-  BOOST_LOG_TRIVIAL(trace) << loghdr << "Command: " << render_command_for_logging(args);
-
-  int pipefd[2];
-  if (pipe(pipefd) < 0) {
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to create pipe for "
-                              << friendly_name << ": " << std::strerror(errno) << "\033[0m";
-    return false;
-  }
-
-  auto argv = make_argv(args);
-
-  const pid_t pid = fork();
-  if (pid < 0) {
-    close(pipefd[0]); close(pipefd[1]);
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to fork for "
-                              << friendly_name << ": " << std::strerror(errno) << "\033[0m";
-    return false;
-  }
-  if (pid == 0) {
-    close(pipefd[0]);
-    if (dup2(pipefd[1], STDOUT_FILENO) < 0 || dup2(pipefd[1], STDERR_FILENO) < 0) {
-      std::fprintf(stderr, "dup2 failed for %s: %s\n", friendly_name.c_str(), std::strerror(errno));
-      _exit(127);
-    }
-    close(pipefd[1]);
-    execvp(argv[0], argv.data());
-    std::fprintf(stderr, "execvp failed for %s '%s': %s\n",
-                 friendly_name.c_str(), argv[0], std::strerror(errno));
-    _exit(127);
-  }
-
-  close(pipefd[1]);
-  char buf[4096];
-  ssize_t nread;
-  while ((nread = read(pipefd[0], buf, sizeof(buf))) > 0)
-    output.append(buf, static_cast<std::size_t>(nread));
-  close(pipefd[0]);
-
-  int status = 0;
-  if (waitpid(pid, &status, 0) < 0) {
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mwaitpid failed for "
-                              << friendly_name << ": " << std::strerror(errno) << "\033[0m";
-    return false;
-  }
-  if (WIFEXITED(status)) { exit_code = WEXITSTATUS(status); return true; }
-  if (WIFSIGNALED(status)) {
-    exit_code = 128 + WTERMSIG(status);
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31m" << friendly_name
-                              << " terminated by signal " << WTERMSIG(status) << "\033[0m";
-    return true;
-  }
-  BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31m" << friendly_name
-                            << " ended in an unknown state\033[0m";
-  return false;
-}
-
 // ---------------------------------------------------------------------------
 // Filename format expansion helpers
 // ---------------------------------------------------------------------------
@@ -365,31 +294,13 @@ static std::string build_cleanup_filter(const Audio_Postprocess_Config &cfg) {
   return oss.str();
 }
 
-static bool is_invalid_loudnorm_value(const std::string &v) {
-  const char *p = v.data(), *e = p + v.size();
-  while (p < e && std::isspace(static_cast<unsigned char>(*p)))    ++p;
-  while (e > p && std::isspace(static_cast<unsigned char>(e[-1]))) --e;
-  if (p == e) return true;
-
-  const std::ptrdiff_t len = e - p;
-  if (len > 4) return false;   // longest invalid token is 4 chars
-
-  char buf[5];
-  for (std::ptrdiff_t j = 0; j < len; ++j)
-    buf[j] = static_cast<char>(std::tolower(static_cast<unsigned char>(p[j])));
-  buf[len] = '\0';
-
-  const std::string_view sv(buf, static_cast<std::size_t>(len));
-  return sv == "-inf" || sv == "inf"  || sv == "+inf" ||
-         sv == "nan"  || sv == "+nan" || sv == "-nan";
-}
-
 static bool override_filter_contains_loudnorm(const Audio_Postprocess_Config &cfg) {
   const std::string f = trim_whitespace(cfg.ffmpeg_filter);
   return !f.empty() && lowercase_copy(f).find("loudnorm") != std::string::npos;
 }
 
 static bool should_apply_structured_loudnorm(const Audio_Postprocess_Config &cfg) {
+  if (!cfg.enabled)  return false;
   if (!cfg.loudnorm) return false;
 
   if (override_filter_contains_loudnorm(cfg)) {
@@ -416,127 +327,24 @@ static void append_ffmpeg_output_args(std::vector<std::string> &args,
   }
 }
 
-struct LoudnormMeasured {
-  std::string input_i, input_tp, input_lra, input_thresh, target_offset;
-  bool valid = false;
-};
-
-static std::string build_loudnorm_analysis_filter(const Audio_Postprocess_Config &cfg) {
-  std::ostringstream f;
-  f << std::fixed << std::setprecision(1)
-    << "loudnorm=I=" << cfg.loudnorm_i
-    << ":TP="        << cfg.loudnorm_tp
-    << ":LRA="       << cfg.loudnorm_lra
-    << ":print_format=json";
-  return f.str();
-}
-
-static bool analyze_loudnorm_from_concat(const Call_Data_t &call_info,
-                                         const std::string &list_filename,
-                                         const std::string &cleanup_filter,
-                                         LoudnormMeasured &measured) {
-  const std::string loghdr =
-      log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
-
-  const std::string analysis_filter = build_loudnorm_analysis_filter(call_info.audio_postprocess);
-  const std::string full_filter =
-      cleanup_filter.empty() ? analysis_filter : cleanup_filter + "," + analysis_filter;
-
-  const std::vector<std::string> args = {
-      "ffmpeg", "-y", "-hide_banner", "-nostats",
-      "-loglevel", "info",
-      "-f", "concat", "-safe", "0", "-i", list_filename,
-      "-af", full_filter, "-vn", "-f", "null", "-"
-  };
-
-  std::string output;
-  int exit_code = -1;
-  if (!run_process_capture_combined_output(args, loghdr, "ffmpeg loudnorm analysis", output, exit_code)) {
-    BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to start ffmpeg loudnorm analysis pass\033[0m";
-    return false;
-  }
-  if (exit_code != 0)
-    BOOST_LOG_TRIVIAL(warning) << loghdr
-        << "\033[0;33mffmpeg loudnorm first pass returned non-zero exit status: " << exit_code << "\033[0m";
-
-  // Extract the last complete JSON object from ffmpeg's combined output.
-  const std::size_t json_end   = output.rfind('}');
-  const std::size_t json_start = (json_end != std::string::npos)
-                                     ? output.rfind('{', json_end) : std::string::npos;
-
-  if (json_end == std::string::npos || json_start == std::string::npos || json_start >= json_end) {
-    BOOST_LOG_TRIVIAL(error) << loghdr
-    << "\033[0;31mFailed to parse loudnorm first-pass JSON: no valid JSON object found; "
-    << "two-pass loudnorm cannot be used for this call\033[0m";
-    return false;
-  }
-
-  try {
-    // Parse directly from existing buffer — no substr copy.
-    const nlohmann::json stats =
-        nlohmann::json::parse(output.data() + json_start, output.data() + json_end + 1);
-
-    auto json_str = [](const nlohmann::json &v) -> std::string {
-      if (v.is_string())          return v.get<std::string>();
-      if (v.is_number_float())    { std::ostringstream o; o << v.get<double>(); return o.str(); }
-      if (v.is_number_integer())  return std::to_string(v.get<long long>());
-      if (v.is_number_unsigned()) return std::to_string(v.get<unsigned long long>());
-      return v.dump();
-    };
-
-    measured.input_i       = json_str(stats.at("input_i"));
-    measured.input_tp      = json_str(stats.at("input_tp"));
-    measured.input_lra     = json_str(stats.at("input_lra"));
-    measured.input_thresh  = json_str(stats.at("input_thresh"));
-    measured.target_offset = json_str(stats.at("target_offset"));
-
-    if (is_invalid_loudnorm_value(measured.input_i)      ||
-        is_invalid_loudnorm_value(measured.input_tp)     ||
-        is_invalid_loudnorm_value(measured.input_lra)    ||
-        is_invalid_loudnorm_value(measured.input_thresh) ||
-        is_invalid_loudnorm_value(measured.target_offset)) {
-      BOOST_LOG_TRIVIAL(warning) << loghdr
-      << "\033[0;33mLoudnorm first-pass returned unusable values "
-      << "(input_i=" << measured.input_i << ", input_tp=" << measured.input_tp
-      << ", input_lra=" << measured.input_lra << ", input_thresh=" << measured.input_thresh
-      << ", target_offset=" << measured.target_offset
-      << "); two-pass loudnorm is unavailable for this call and rendering will fall back to single-pass loudnorm\033[0m";
-
-      return false;
-    }
-
-    measured.valid = true;
-    return true;
-  } catch (const std::exception &e) {
-    BOOST_LOG_TRIVIAL(error) << loghdr
-    << "\033[0;31mFailed to decode loudnorm first-pass JSON: " << e.what()
-    << "; two-pass loudnorm cannot be used for this call\033[0m";
-    return false;
-  }
-}
-
-static std::string build_loudnorm_render_filter(const Audio_Postprocess_Config &cfg,
-                                                const LoudnormMeasured &m) {
-  std::ostringstream f;
-  f << std::fixed << std::setprecision(1)
-    << "loudnorm=I="       << cfg.loudnorm_i
-    << ":TP="              << cfg.loudnorm_tp
-    << ":LRA="             << cfg.loudnorm_lra
-    << ":measured_I="      << m.input_i
-    << ":measured_TP="     << m.input_tp
-    << ":measured_LRA="    << m.input_lra
-    << ":measured_thresh=" << m.input_thresh
-    << ":offset="          << m.target_offset
-    << ":linear=true:dual_mono=true";
-  return f.str();
-}
-
-static std::string build_loudnorm_single_pass_filter(const Audio_Postprocess_Config &cfg) {
+static std::string build_loudnorm_filter(const Audio_Postprocess_Config &cfg) {
   std::ostringstream f;
   f << std::fixed << std::setprecision(1)
     << "loudnorm=I=" << cfg.loudnorm_i
     << ":TP="        << cfg.loudnorm_tp
     << ":LRA="       << cfg.loudnorm_lra;
+  return f.str();
+}
+
+// Brick-wall true-peak limiter applied after concat. Ceiling sits 0.5 dB above
+// the loudnorm TP target so loudnorm has headroom to work and the limiter only
+// catches accidental overshoots from intersample peaks.
+static std::string build_limiter_filter(const Audio_Postprocess_Config &cfg) {
+  const double limit_dbfs = cfg.loudnorm_tp + 0.5;
+  const double limit_lin  = std::pow(10.0, limit_dbfs / 20.0);
+  std::ostringstream f;
+  f << std::fixed << std::setprecision(4)
+    << "alimiter=limit=" << limit_lin << ":attack=1:release=50";
   return f.str();
 }
 
@@ -601,6 +409,114 @@ static void append_common_metadata_args(std::vector<std::string> &args,
   });
 }
 
+// Build the filter_complex graph for per-transmission processing.
+//   per_tx_filter — cleanup + loudnorm + limiter applied to each input
+//   emit_archive_pads — when true, asplit each per-tx pad so both the
+//     concat path and an [archiveN] pad can consume it (caller maps
+//     [archiveN] to an archive output file)
+//   concat_tail — appended after the concat filter; either a single label
+//     like "[out]" (uncompressed) or a filter chain like
+//     ",asplit=2[awav][aaac]" (compressed dual-output)
+//
+// Example (3 inputs, archive on, uncompressed):
+//   [0:a]<chain>,asplit=2[a0][archive0];
+//   [1:a]<chain>,asplit=2[a1][archive1];
+//   [2:a]<chain>,asplit=2[a2][archive2];
+//   [a0][a1][a2]concat=n=3:v=0:a=1[out]
+static std::string build_filter_complex(std::size_t n_inputs,
+                                        const std::string &per_tx_filter,
+                                        bool emit_archive_pads,
+                                        const std::string &concat_tail) {
+  std::ostringstream g;
+  // anull keeps each per-input chain non-empty when per_tx_filter is empty;
+  // ffmpeg filter_complex requires at least one filter between an input pad
+  // and a labeled output pad.
+  const std::string per_chain = per_tx_filter.empty() ? "anull" : per_tx_filter;
+  for (std::size_t i = 0; i < n_inputs; ++i) {
+    g << '[' << i << ":a]" << per_chain;
+    if (emit_archive_pads)
+      g << ",asplit=2[a" << i << "][archive" << i << ']';
+    else
+      g << "[a" << i << ']';
+    g << ';';
+  }
+  for (std::size_t i = 0; i < n_inputs; ++i) g << "[a" << i << ']';
+  g << "concat=n=" << n_inputs << ":v=0:a=1" << concat_tail;
+  return g.str();
+}
+
+// Compute per-transmission archive target paths: each raw tx file's basename
+// dropped into the call's capture directory. Used when transmissionArchive=true.
+static std::vector<std::string> archive_target_paths(const Call_Data_t &call_info,
+                                                     const std::vector<std::string> &input_files) {
+  std::vector<std::string> out;
+  out.reserve(input_files.size());
+  const fs::path call_dir = fs::path(call_info.filename).parent_path();
+  for (const auto &src : input_files)
+    out.push_back((call_dir / fs::path(src).filename()).string());
+  return out;
+}
+
+// enabled=false path: stream-copy concat of raw transmission wavs into the
+// main output. For compressed mode we still need an AAC encode pass since
+// PCM can't be stream-copied into m4a. transmissionArchive simply duplicates
+// the raw tx files into the capture dir.
+static int render_raw_concat(const Call_Data_t &call_info,
+                             const std::vector<std::string> &input_files,
+                             const std::vector<std::string> &archive_paths,
+                             bool do_compress,
+                             const std::string &date,
+                             const std::string &short_name,
+                             const std::string &talkgroup,
+                             const std::string &loghdr) {
+  const fs::path transmission_dir = fs::path(input_files[0]).parent_path();
+  const std::string list_filename = (transmission_dir /
+      (fs::path(call_info.filename).filename().string() + ".concat.txt")).string();
+  if (!write_concat_list(input_files, list_filename)) return -1;
+
+  std::vector<std::string> args;
+  args.reserve(30);
+  args.insert(args.end(), {
+      "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
+      "-f", "concat", "-safe", "0", "-i", list_filename, "-vn"
+  });
+
+  // Main wav: stream-copy the raw transmissions joined together.
+  append_common_metadata_args(args, date, short_name, talkgroup);
+  args.insert(args.end(), {"-c:a", "copy"});
+  args.push_back(call_info.filename);
+
+  // Compressed mode: a second output spec encodes the same input as AAC.
+  if (do_compress) {
+    append_common_metadata_args(args, date, short_name, talkgroup);
+    append_ffmpeg_output_args(args, true, call_info.audio_bitrate);
+    args.push_back(call_info.converted);
+  }
+
+  const int rc = run_process_wait(args, loghdr, "ffmpeg raw concat");
+  std::remove(list_filename.c_str());
+
+  if (rc != 0) {
+    BOOST_LOG_TRIVIAL(error) << loghdr
+        << "\033[0;31mFailed to write raw-concat call audio. Make sure ffmpeg is installed.\033[0m";
+    return -1;
+  }
+
+  // Archive raw transmissions by simple copy — they're already in the format
+  // the user wants when post-processing is disabled.
+  for (std::size_t i = 0; i < archive_paths.size(); ++i) {
+    if (!checkIfFile(input_files[i])) continue;
+    try {
+      boost::filesystem::copy_file(input_files[i], archive_paths[i],
+                                   boost::filesystem::copy_options::overwrite_existing);
+    } catch (const boost::filesystem::filesystem_error &e) {
+      BOOST_LOG_TRIVIAL(error) << loghdr
+          << "\033[0;31mFailed to archive raw transmission: " << e.what() << "\033[0m";
+    }
+  }
+  return 0;
+}
+
 static int render_call_audio_artifacts(const Call_Data_t &call_info,
                                        const std::vector<std::string> &input_files,
                                        const std::string &date,
@@ -611,72 +527,77 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
     return -1;
   }
 
-  const fs::path transmission_dir = fs::path(input_files[0]).parent_path();
-  const std::string list_filename = (transmission_dir /
-      (fs::path(call_info.filename).filename().string() + ".concat.txt")).string();
-  if (!write_concat_list(input_files, list_filename)) return -1;
-
   const std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
-  const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
   const bool do_compress           = call_info.compress_wav;
 
-  const bool loudnorm_requested = should_apply_structured_loudnorm(call_info.audio_postprocess);
-  bool apply_loudnorm_two_pass = false;
-  bool apply_loudnorm_single_pass = false;
+  // Only bother writing per-tx archives if they'll actually be kept after
+  // upload. transmission_archive on its own is meaningless if neither
+  // audio_archive nor archive_files_on_failure is set — remove_call_files
+  // would just delete them. Match that policy at render time so we avoid
+  // wasted disk writes.
+  const bool archive_transmissions = call_info.transmission_archive &&
+      (call_info.audio_archive || call_info.archive_files_on_failure);
 
-  const bool too_short_for_two_pass = (call_info.length > 0.0 && call_info.length < 1.5);
+  std::vector<std::string> archive_paths;
+  if (archive_transmissions)
+    archive_paths = archive_target_paths(call_info, input_files);
 
-  LoudnormMeasured measured;
-  if (loudnorm_requested) {
-    if (call_info.audio_postprocess.loudnorm_two_pass) {
-      if (too_short_for_two_pass) {
-        BOOST_LOG_TRIVIAL(debug) << loghdr
-            << "Call too short for reliable loudnorm first pass (" << call_info.length
-            << "s); falling back to single-pass loudnorm";
-        apply_loudnorm_single_pass = true;
-      } else if (analyze_loudnorm_from_concat(call_info, list_filename, cleanup_filter, measured) && measured.valid) {
-        apply_loudnorm_two_pass = true;
-        BOOST_LOG_TRIVIAL(debug) << loghdr
-        << "Two-pass loudnorm analysis succeeded; using two-pass loudnorm rendering";
-      } else {
-        BOOST_LOG_TRIVIAL(warning) << loghdr
-        << "\033[0;33mTwo-pass loudnorm analysis was not usable for this call; "
-        << "falling back to single-pass loudnorm rendering\033[0m";
-        apply_loudnorm_single_pass = true;
-      }
+  // enabled=false → master switch off, skip the whole processing pipeline.
+  // Main file is the raw concat of transmissions; archived tx files are
+  // verbatim copies of the recorder's output.
+  if (!call_info.audio_postprocess.enabled)
+    return render_raw_concat(call_info, input_files, archive_paths,
+                             do_compress, date, short_name, talkgroup, loghdr);
 
-    } else {
-      BOOST_LOG_TRIVIAL(debug) << loghdr
-      << "audio_postprocess.loudnorm_two_pass is disabled; using single-pass loudnorm rendering";
-      apply_loudnorm_single_pass = true;
-    }
-  }
+  // enabled=true path: full per-transmission filter chain.
+  const std::string cleanup_filter = build_cleanup_filter(call_info.audio_postprocess);
+  const bool apply_loudnorm        = should_apply_structured_loudnorm(call_info.audio_postprocess);
+  const bool apply_limiter         = call_info.audio_postprocess.final_limiter;
 
-  std::string final_filter = cleanup_filter;
-  if (apply_loudnorm_two_pass) {
-    if (!final_filter.empty()) final_filter += ',';
-    final_filter += build_loudnorm_render_filter(call_info.audio_postprocess, measured);
-  } else if (apply_loudnorm_single_pass) {
-    if (!final_filter.empty()) final_filter += ',';
-    final_filter += build_loudnorm_single_pass_filter(call_info.audio_postprocess);
-  }
+  // Each per-tx chain: cleanup → loudnorm → limiter. Asplit (when archiving)
+  // happens after the limiter so the archived per-tx files are fully processed
+  // and ready to play standalone.
+  auto build_per_tx = [&](bool include_loudnorm, bool include_limiter) -> std::string {
+    std::string chain = cleanup_filter;
+    auto append = [&](const std::string &filt) {
+      if (!chain.empty()) chain += ',';
+      chain += filt;
+    };
+    if (include_loudnorm) append(build_loudnorm_filter(call_info.audio_postprocess));
+    if (include_limiter)  append(build_limiter_filter(call_info.audio_postprocess));
+    return chain;
+  };
 
-  // Pre-reserve: compressed path ~36 args, uncompressed ~22.
-  auto run_render = [&](const std::string &filter) -> int {
+  const bool emit_archive_pads = archive_transmissions;
+
+  auto run_render = [&](const std::string &per_tx) -> int {
     std::vector<std::string> args;
-    args.reserve(do_compress ? 36 : 22);
-    args.insert(args.end(), {
-        "ffmpeg", "-y", "-hide_banner", "-loglevel", "error",
-        "-f", "concat", "-safe", "0", "-i", list_filename, "-vn"
-    });
+    // Rough size: 5 fixed flags + 2*N inputs + filter_complex (2) +
+    // 4 maps + 2*(6 metadata + 10 output args) + 2*N archive outputs.
+    args.reserve(40 + 4 * input_files.size());
 
+    args.insert(args.end(), {"ffmpeg", "-y", "-hide_banner", "-loglevel", "error"});
+    for (const auto &f : input_files) {
+      args.push_back("-i");
+      args.push_back(f);
+    }
+    args.push_back("-vn");
+
+    // Concat tail differs by output mode. Uncompressed gets a plain [out]
+    // label. Compressed splits the concat output into wav and aac feeds.
+    const std::string concat_tail = do_compress
+        ? ",asplit=2[awav][aaac]"
+        : "[out]";
+
+    const std::string graph = build_filter_complex(
+        input_files.size(), per_tx, emit_archive_pads, concat_tail);
+    args.insert(args.end(), {"-filter_complex", graph});
+
+    // Main outputs (wav, optional m4a).
     if (do_compress) {
-      const std::string split = filter.empty()
-          ? "[0:a]asplit=2[awav][aaac]"
-          : "[0:a]" + filter + ",asplit=2[awav][aaac]";
-      args.insert(args.end(), {"-filter_complex", split, "-map", "[awav]"});
+      args.insert(args.end(), {"-map", "[awav]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
       append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
@@ -686,30 +607,45 @@ static int render_call_audio_artifacts(const Call_Data_t &call_info,
       append_ffmpeg_output_args(args, true, call_info.audio_bitrate);
       args.push_back(call_info.converted);
     } else {
-      if (!filter.empty()) args.insert(args.end(), {"-af", filter});
+      args.insert(args.end(), {"-map", "[out]"});
       append_common_metadata_args(args, date, short_name, talkgroup);
       append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
       args.push_back(call_info.filename);
     }
 
+    // Per-transmission archive outputs (uncompressed WAV, matching the
+    // recorder's original format). One [archiveN] mapping per input.
+    if (emit_archive_pads) {
+      for (std::size_t i = 0; i < input_files.size(); ++i) {
+        args.insert(args.end(), {"-map", "[archive" + std::to_string(i) + "]"});
+        append_common_metadata_args(args, date, short_name, talkgroup);
+        append_ffmpeg_output_args(args, false, call_info.audio_bitrate);
+        args.push_back(archive_paths[i]);
+      }
+    }
+
     return run_process_wait(args, loghdr, "ffmpeg render");
   };
 
-  int rc = run_render(final_filter);
+  // Primary attempt: full chain (cleanup + loudnorm + limiter).
+  int rc = run_render(build_per_tx(apply_loudnorm, apply_limiter));
 
-  if (rc != 0 && final_filter != cleanup_filter) {
+  // First fallback: drop loudnorm. Catches loudnorm failures (extremely short
+  // input, malformed filter) without losing cleanup or the limiter.
+  if (rc != 0 && apply_loudnorm) {
     BOOST_LOG_TRIVIAL(warning) << loghdr
-        << "\033[0;33mLoudnorm render failed; retrying with cleanup-only filtering\033[0m";
-    rc = run_render(cleanup_filter);
+        << "\033[0;33mLoudnorm render failed; retrying with cleanup-only per-transmission filtering\033[0m";
+    rc = run_render(build_per_tx(false, apply_limiter));
   }
 
+  // Second fallback: drop the per-tx filter entirely. Catches a bad user
+  // ffmpeg_filter override. Archived per-tx outputs in this mode are
+  // unprocessed (anull passthrough) — better than no archive at all.
   if (rc != 0 && !cleanup_filter.empty()) {
     BOOST_LOG_TRIVIAL(warning) << loghdr
         << "\033[0;33mCleanup-filter render failed; falling back to unfiltered rendering\033[0m";
     rc = run_render("");
   }
-
-  std::remove(list_filename.c_str());
 
   if (rc != 0) {
     BOOST_LOG_TRIVIAL(error) << loghdr
@@ -891,30 +827,37 @@ void remove_call_files(const Call_Data_t &call_info, bool plugin_failure) {
 
   const bool should_archive = call_info.audio_archive ||
                                (plugin_failure && call_info.archive_files_on_failure);
+
+  // Per-tx archive files were already written into the capture dir during
+  // render_call_audio_artifacts (when transmission_archive=true AND the
+  // archive was going to be kept). Just clean them up here if the user
+  // doesn't actually want archives this time.
   if (should_archive) {
-    if (call_info.transmission_archive) {
-      for (const auto &t : call_info.transmission_list) {
-        if (!checkIfFile(t.filename)) continue;
-        const boost::filesystem::path target =
-            boost::filesystem::path(fs::path(call_info.filename)
-                                        .replace_filename(fs::path(t.filename).filename()));
-        try {
-          boost::filesystem::copy_file(t.filename, target);
-        } catch (const boost::filesystem::filesystem_error &e) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "\033[0;31mFailed to copy transmission file: "
-                                   << e.what() << "\033[0m";
-        }
-      }
-    }
+    // Keep call main files + any per-tx archive files. Just clean up the
+    // recorder's tmp tx files now that they've been processed.
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
   } else {
+    // No archive wanted. Delete call main files, per-tx archive files in
+    // the capture dir (if any were written), and the recorder tmp tx files.
     for (const std::string &f : {call_info.filename, call_info.converted})
       if (checkIfFile(f)) std::remove(f.c_str());
+
+    if (call_info.transmission_archive) {
+      const fs::path call_dir = fs::path(call_info.filename).parent_path();
+      for (const auto &t : call_info.transmission_list) {
+        const std::string archived =
+            (call_dir / fs::path(t.filename).filename()).string();
+        if (checkIfFile(archived)) std::remove(archived.c_str());
+      }
+    }
+
     for (const auto &t : call_info.transmission_list)
       if (checkIfFile(t.filename)) std::remove(t.filename.c_str());
 
     // Raw audio output is intentionally kept on success (audio_archive=false) — it is
+    // the documented debug-keep file. Cleaned only on plugin failure with no
+    // archive_files_on_failure (handled by the catch-all path above).
   }
 
   const bool keep_json = call_info.call_log || (plugin_failure && call_info.archive_files_on_failure);
@@ -1105,8 +1048,9 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.audio_postprocess.loudnorm_i          = sys->get_audio_loudnorm_i();
   call_info.audio_postprocess.loudnorm_tp         = sys->get_audio_loudnorm_tp();
   call_info.audio_postprocess.loudnorm_lra        = sys->get_audio_loudnorm_lra();
+  call_info.audio_postprocess.final_limiter       = sys->get_audio_final_limiter();
   call_info.audio_postprocess.ffmpeg_filter       = sys->get_audio_ffmpeg_filter();
-  call_info.audio_postprocess.output_raw_audio     = sys->get_audio_output_raw_audio();
+  call_info.audio_postprocess.output_raw_audio    = sys->get_audio_output_raw_audio();
 
   call_info.talkgroup                 = call->get_talkgroup();
   call_info.talkgroup_display         = call->get_talkgroup_display();

@@ -180,37 +180,26 @@ analog_recorder::analog_recorder(Source *src, System *system, Recorder_Type type
   decoder_sink = gr::blocks::decoder_wrapper_impl::make(wav_sample_rate, std::bind(&analog_recorder::decoder_callback_handler, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
   BOOST_LOG_TRIVIAL(info) << "\t Decoder sink created!" << std::endl;
 
-  // Analog audio band pass from 300 to 3000 Hz
-  // can't use gnuradio.filter.firdes.band_pass since we have different transition widths
-  // 300 Hz high pass (275-325 Hz): removes CTCSS/DCS and Type II 150 bps Low Speed Data (LSD), or "FSK wobble"
-#if GNURADIO_VERSION < 0x030900
-  high_f_taps = gr::filter::firdes::high_pass(1, wav_sample_rate, 300, 50, gr::filter::firdes::WIN_HANN); // Configurable
-  low_f_taps = gr::filter::firdes::low_pass(1, wav_sample_rate, 3250, 500, gr::filter::firdes::WIN_HANN);
-#else
-  high_f_taps = gr::filter::firdes::high_pass(1, wav_sample_rate, 300, 50, gr::fft::window::WIN_HANN); // Configurable
-  low_f_taps = gr::filter::firdes::low_pass(1, wav_sample_rate, 3250, 500, gr::fft::window::WIN_HANN);
-#endif
-
-  high_f = gr::filter::fir_filter_fff::make(1, high_f_taps);
-  // 3000 Hz low pass (3000-3500 Hz)
-
-  low_f = gr::filter::fir_filter_fff::make(1, low_f_taps);
+  // Voice-band cleanup (300/3000 Hz bandpass) used to live here as FIR
+  // blocks. It now runs in ffmpeg during call conclusion (see
+  // audio_postprocess in CONFIGURE.md), so wav_sink receives the
+  // post-demod / post-deemph signal directly — actual discriminator
+  // audio. This keeps the recording pipeline cheaper and lets users
+  // tune or disable the bandpass per system.
 
   // using squelch
   connect(self(), 0, prefilter, 0);
   connect(prefilter, 0, demod, 0);
   connect(demod, 0, deemph, 0);
   if (use_tone_squelch) {
-    connect(deemph, 0, tone_squelch, 0); 
-      connect(tone_squelch, 0, decim_audio, 0);
+    connect(deemph, 0, tone_squelch, 0);
+    connect(tone_squelch, 0, decim_audio, 0);
   } else {
     connect(deemph, 0, decim_audio, 0);
   }
 
   connect(decim_audio, 0, decoder_sink, 0);
-  connect(decim_audio, 0, high_f, 0);
-  connect(high_f, 0, low_f, 0);
-  connect(low_f, 0, squelch_two, 0);
+  connect(decim_audio, 0, squelch_two, 0);
   connect(squelch_two, 0, levels, 0);
   connect(levels, 0, converter, 0);
   connect(converter, 0, wav_sink, 0);
