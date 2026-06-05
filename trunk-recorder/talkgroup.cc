@@ -15,12 +15,13 @@ Talkgroup::Talkgroup(int sys_num, long num, std::string mode, std::string alpha_
   // This talkgroup is for a Trunked system and freq and tone are not used
   this->freq = 0;
   this->tone = 0;
+  this->tone_config = Tone_Config{}; // TONE_OFF
   this->squelch_db = DB_UNSET;
   this->signal_detection = false;
 
 }
 
-Talkgroup::Talkgroup(int sys_num, long num, double freq, double tone, std::string alpha_tag, std::string description, std::string tag, std::string group, double squelch_db, bool signal_detection) {
+Talkgroup::Talkgroup(int sys_num, long num, double freq, const Tone_Config &tone_config, std::string alpha_tag, std::string description, std::string tag, std::string group, double squelch_db, bool signal_detection) {
   this->sys_num = sys_num;
   this->number = num;
   this->mode = "Z";
@@ -30,7 +31,11 @@ Talkgroup::Talkgroup(int sys_num, long num, double freq, double tone, std::strin
   this->group = group;
   this->active = false;
   this->freq = freq;
-  this->tone = tone;
+  this->tone_config = tone_config;
+  // Keep the legacy `tone` field populated for CTCSS so any downstream
+  // consumer still reading it as a Hz value (logs, plugins, etc.) keeps
+  // working. DCS / search modes leave it at 0.
+  this->tone = (tone_config.mode == TONE_CTCSS) ? tone_config.ctcss_hz : 0.0;
   this->squelch_db = squelch_db;
   this->signal_detection = signal_detection;
 

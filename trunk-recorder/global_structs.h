@@ -8,6 +8,24 @@
 
 const int DB_UNSET = 999;
 
+// Conventional-channel sub-audible squelch / identification mode. Drives
+// what (if any) CTCSS or DCS block sits in the analog_recorder audio path
+// and whether a side-chain detector also runs to identify the actual
+// on-air tone for end-of-call reporting.
+enum ToneMode {
+  TONE_OFF    = 0, // no gating, no detection (legacy "Tone=0" channels)
+  TONE_CTCSS  = 1, // gate on configured ctcss_hz; DCS detector runs side-chain
+  TONE_DCS    = 2, // gate on configured dcs_code/inverted; CTCSS detector runs side-chain
+  TONE_SEARCH = 3  // no gate; both detectors run side-chain to identify on-air tone
+};
+
+struct Tone_Config {
+  ToneMode mode = TONE_OFF;
+  double   ctcss_hz = 0.0;   // valid only when mode == TONE_CTCSS
+  int      dcs_code = 0;     // valid only when mode == TONE_DCS (octal as decimal int)
+  bool     dcs_inverted = false; // valid only when mode == TONE_DCS
+};
+
 struct Transmission {
   long source;
   long talkgroup;
@@ -173,6 +191,22 @@ struct Call_Data_t {
   std::vector<Call_Source> transmission_source_list;
   std::vector<Call_Error> transmission_error_list;
   std::vector<Transmission> transmission_list;
+
+  // Sub-audible squelch / identification verdict for analog conventional
+  // calls. Populated in Call_Concluder::create_call_data() from the
+  // analog_recorder; empty / "off" for digital and trunked calls. See
+  // ToneMode enum above for the configured-mode strings.
+  std::string tone_mode;       // "off" | "ctcss" | "dcs" | "search"
+  std::string tone_detected;   // "" | "173.8" | "D023N" | ...
+  float       tone_confidence; // 0.0 (no lock) .. 1.0 (fully confident)
+
+  // SKIPPED — set when this call's freq has multiple CSV rows (a freq
+  // group) and the detector's tone verdict doesn't match any configured
+  // row's Tone column (and no catch-all Tone=0 / Tone=S row exists). The
+  // call is concluded (recorder state cleans up) but the wav/m4a/json
+  // are removed and no plugins fire. Mirrors the SUPERSEDED handling
+  // path in Call_Concluder::conclude_call.
+  bool        tone_skipped = false;
 
   Call_Data_Status status;
   time_t process_call_time;

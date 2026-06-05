@@ -266,6 +266,7 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/formatter.cc
   trunk-recorder/source.cc
   trunk-recorder/call_conventional.cc
+  trunk-recorder/tone_manager.cc
   trunk-recorder/systems/p25_trunking.cc
   trunk-recorder/systems/p25_parser.cc
   trunk-recorder/systems/smartnet_parser.cc
@@ -299,6 +300,8 @@ list(APPEND trunk_recorder_sources
   #lib/gr-latency/latency_tagger.cc
   #lib/gr-latency-manager/lib/latency_manager_impl.cc
   #lib/gr-latency-manager/lib/tag_to_msg_impl.cc
+  trunk-recorder/gr_blocks/ctcss_squelch_ff.cc
+  trunk-recorder/gr_blocks/dcs_squelch_ff.cc
   trunk-recorder/gr_blocks/freq_xlating_fft_filter.cc
   trunk-recorder/gr_blocks/transmission_sink.cc
   trunk-recorder/gr_blocks/decoders/fsync_decode.cc

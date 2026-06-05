@@ -1,5 +1,6 @@
 #include "call_concluder.h"
 #include "../plugin_manager/plugin_manager.h"
+#include "../recorders/analog_recorder.h"
 
 #include <boost/filesystem.hpp>
 #include <filesystem>
@@ -811,7 +812,10 @@ int create_call_json(Call_Data_t &call_info) {
       {"talkgroup_group",       call_info.talkgroup_group},
       {"color_code",            call_info.color_code},
       {"audio_type",            call_info.audio_type},
-      {"short_name",            call_info.short_name}
+      {"short_name",            call_info.short_name},
+      {"tone_mode",             call_info.tone_mode},
+      {"tone_detected",         call_info.tone_detected},
+      {"tone_confidence",       call_info.tone_confidence}
   };
 
   if (call_info.patched_talkgroups.size() > 1) {
@@ -1114,7 +1118,11 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.min_transmissions_removed = 0;
   call_info.color_code                = -1;
 
-  const std::string loghdr =
+  // Non-const so we can rebuild after the multi-row freq-group routing
+  // override below — log lines that fire AFTER the override (the
+  // per-transmission summaries and the routing line itself) should reflect
+  // the matched row's TG number.
+  std::string loghdr =
       log_header(call_info.short_name, call_info.call_num, call_info.talkgroup_display, call_info.freq);
 
   if (const Talkgroup *tg = sys->find_talkgroup(call->get_talkgroup())) {
@@ -1128,6 +1136,80 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   if (call->get_is_analog())        call_info.audio_type = "analog";
   else if (call->get_phase2_tdma()) call_info.audio_type = "digital tdma";
   else                              call_info.audio_type = "digital";
+
+  // Pull the end-of-call tone verdict off the analog_recorder when present.
+  // Non-analog recorders never run the CTCSS/DCS sub-audible detectors, so
+  // these fields stay empty / "off" for trunked digital and conventional
+  // P25/DMR calls.
+  call_info.tone_mode       = "off";
+  call_info.tone_detected   = "";
+  call_info.tone_confidence = 0.0f;
+  if (Recorder *rec = call->get_recorder()) {
+    if (analog_recorder *arec = dynamic_cast<analog_recorder *>(rec)) {
+      const auto tr = arec->get_tone_result();
+      call_info.tone_mode       = tr.mode;
+      call_info.tone_detected   = tr.detected;
+      call_info.tone_confidence = tr.confidence;
+    }
+  }
+
+  // Multi-row freq-group routing. When the channel CSV had several rows at
+  // this frequency, the recorder ran in TONE_SEARCH mode and captured
+  // whatever was on air; here we look up which row's metadata to use by
+  // matching the detected tone against each row's tone_config. If a row
+  // matches (including any catch-all Tone=0 / Tone=S row in the group), we
+  // overwrite the call_info metadata with its values. If NOTHING matches,
+  // mark the call SKIPPED so conclude_call() can drop it without firing
+  // plugins (see the discard path that follows).
+  if (Call_conventional *cc = dynamic_cast<Call_conventional *>(call)) {
+    if (cc->has_alternate_channels()) {
+      Talkgroup *matched = cc->find_matching_channel(call_info.tone_detected);
+      if (matched != nullptr) {
+        call_info.talkgroup             = matched->number;
+        call_info.talkgroup_tag         = matched->tag;
+        call_info.talkgroup_alpha_tag   = matched->alpha_tag;
+        call_info.talkgroup_description = matched->description;
+        call_info.talkgroup_group       = matched->group;
+
+        // The transmissions were recorded under the primary row's TG (the
+        // recorder doesn't know the routing target until the tone is
+        // decoded at end-of-call). Push the routed TG into every
+        // transmission so the consistency loop below doesn't see a
+        // Call/Transmission mismatch and clobber our routing.
+        for (Transmission &t : call_info.transmission_list) {
+          t.talkgroup = matched->number;
+        }
+
+        // Rebuild the formatted display string to reflect the matched row
+        // so subsequent log lines and the JSON's talkgroup_display field
+        // are consistent. (The earlier "Concluding Recorded Call" and
+        // "Tone Result:" log lines fired BEFORE routing was known and
+        // still show the primary's display — that's an unavoidable
+        // timing artifact, the routing decision can't be made until the
+        // tone verdict is available.)
+        {
+          char fmt[64];
+          snprintf(fmt, sizeof(fmt), "%c[35m%10ld%c[0m",
+                   0x1B, matched->number, 0x1B);
+          call_info.talkgroup_display = fmt;
+          loghdr = log_header(call_info.short_name, call_info.call_num,
+                              call_info.talkgroup_display, call_info.freq);
+        }
+
+        // Tell the operator where this call was routed and why. Helps the
+        // log skim test for "did the right row catch this transmission".
+        const std::string detected_for_log =
+            call_info.tone_detected.empty() ? std::string("(none)")
+                                            : call_info.tone_detected;
+        BOOST_LOG_TRIVIAL(info) << loghdr
+            << "\033[0;36mROUTED\033[0m → TG " << matched->number
+            << " (" << (matched->alpha_tag.empty() ? "-" : matched->alpha_tag)
+            << ") by tone '" << detected_for_log << "'";
+      } else {
+        call_info.tone_skipped = true;
+      }
+    }
+  }
 
   const double min_tx_s = sys->get_min_tx_duration();
 
@@ -1237,6 +1319,23 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
 
   if (call->get_state() == MONITORING && call->get_monitoring_state() == SUPERSEDED) {
     BOOST_LOG_TRIVIAL(info) << loghdr << "Call has been superseded. Removing files.";
+    remove_call_files(call_info);
+    return;
+  }
+
+  // Tone-routing SKIPPED: multi-row freq-group call whose detected tone
+  // didn't match any configured row (and no catch-all Tone=0 / Tone=S row
+  // was present). Concludes the call cleanly — recorder state cleans up
+  // via the standard path — but drops wav/m4a/json without firing plugins.
+  // Mirrors the SUPERSEDED handling above.
+  if (call_info.tone_skipped) {
+    BOOST_LOG_TRIVIAL(info) << loghdr
+        << "\033[0;33mSKIPPED\033[0m — detected tone '"
+        << (call_info.tone_detected.empty() ? "none" : call_info.tone_detected)
+        << "' (mode=" << call_info.tone_mode
+        << " conf=" << std::fixed << std::setprecision(2)
+        << call_info.tone_confidence << ")"
+        << " does not match any configured row at this freq; removing files, no plugins";
     remove_call_files(call_info);
     return;
   }

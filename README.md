@@ -64,6 +64,8 @@ RTL-SDR dongles; HackRF; Ettus USRP B200, B210, B205; BladeRF; Airspy; SDRplay
 
 ## Setup
 * [Configuring a system](docs/CONFIGURE.md)
+* [Adjusting Squelch for Conventional Systems](docs/SQUELCH.md)
+* [CTCSS / DCS Tone Squelch (analog conventional)](docs/TONE-SQUELCH.md)
 * [Uploading to OpenMHz](./docs/OpenMHz.md)
 * [FAQ](docs/FAQ.md)
 

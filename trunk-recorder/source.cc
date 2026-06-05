@@ -553,7 +553,7 @@ void Source::enable_detected_recorders() {
       Recorder *recorder = *it;
       if (!recorder->is_enabled()) {
         recorder->set_enabled(true);
-        BOOST_LOG_TRIVIAL(info) << "\t[ " << recorder->get_num() << " ] " << recorder->get_type_string() << "\tEnabled - Freq: " << format_freq(recorder->get_freq()) << "\t Detected Signal: " << floor(rssi) << "dBM (Threshold: " << floor(threshold) << "dBM)";
+        BOOST_LOG_TRIVIAL(info) << "\t[ " << recorder->get_num() << " ] " << recorder->get_type_string() << "\tSignal Detector Opened - Freq: " << format_freq(recorder->get_freq()) << "\t Detected Signal: " << floor(rssi) << "dBM (Threshold: " << floor(threshold) << "dBM)";
       }
     }
   }
@@ -611,13 +611,13 @@ void Source::create_sigmf_recorders(gr::top_block_sptr tb, int r) {
   }
 }
 
-analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb, float tone_freq) {
+analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb, const Tone_Config &tone_config) {
   // Not adding it to the vector of analog_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in analog_conv_recorders
   attach_detector(tb);
   attach_selector(tb);
 
-  analog_recorder_sptr log = make_analog_recorder(this, ANALOGC, tone_freq);
+  analog_recorder_sptr log = make_analog_recorder(this, ANALOGC, tone_config);
   analog_conv_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
   tb->connect(recorder_selector, next_selector_port, log, 0);
@@ -626,17 +626,9 @@ analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb,
 }
 
 analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb) {
-  // Not adding it to the vector of analog_recorders. We don't want it to be available for trunk recording.
-  // Conventional recorders are tracked seperately in analog_conv_recorders
-  attach_detector(tb);
-  attach_selector(tb);
-
-  analog_recorder_sptr log = make_analog_recorder(this, ANALOGC);
-  analog_conv_recorders.push_back(log);
-  log->set_selector_port(next_selector_port);
-  tb->connect(recorder_selector, next_selector_port, log, 0);
-  next_selector_port++;
-  return log;
+  // Backwards-compat helper for channel-less conventional setups (no Tone column).
+  // Defaults to TONE_OFF: no CTCSS/DCS block in the chain.
+  return create_conventional_recorder(tb, Tone_Config{});
 }
 sigmf_recorder_sptr Source::create_sigmf_conventional_recorder(gr::top_block_sptr tb) {
   // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.

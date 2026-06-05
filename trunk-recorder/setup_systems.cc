@@ -1,103 +1,231 @@
 #include "./setup_systems.h"
+#include "talkgroup.h"
+#include <map>
 using namespace std;
-bool setup_conventional_channel(System *system, double frequency, long channel_index, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
-  bool channel_added = false;
-  Source *source = NULL;
-  float tone_freq = 0.0;
-  for (std::vector<Source *>::iterator src_it = sources.begin(); src_it != sources.end(); src_it++) {
-    source = *src_it;
 
-    if ((source->get_min_hz() <= frequency) && (source->get_max_hz() >= frequency)) {
-      channel_added = true;
-      if (system->get_squelch_db() == -160) {
-        BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name() << "]\tSquelch needs to be specified for the Source for Conventional Systems";
-        return false;
-      } else {
-        channel_added = true;
-      }
+// Common backend: given a chosen Call_conventional, its tone_config for the
+// recorder, and a covering Source, build the per-system-type recorder and
+// register it. Both the no-channel-file path (setup_conventional_channel)
+// and the channel-file path (setup_conventional_channel_group) end up here.
+static void build_recorder_for_call(
+    System *system,
+    Call_conventional *call,
+    const Tone_Config &recorder_tone_config,
+    Source *source,
+    Config & /*config*/,
+    gr::top_block_sptr &tb,
+    std::vector<Call *> &calls) {
+  if (system->get_system_type() == "conventional") {
+    analog_recorder_sptr rec;
+    rec = source->create_conventional_recorder(tb, recorder_tone_config);
+    rec->start(call);
+    rec->set_tau(system->get_tau()); // set the tau value for the recorder from the system config
+    call->set_is_analog(true);
+    call->set_recorder((Recorder *)rec.get());
+    call->set_state(RECORDING);
+    system->add_conventional_recorder(rec);
+    calls.push_back(call);
+    plugman_setup_recorder((Recorder *)rec.get());
+    plugman_call_start(call);
+  } else if (system->get_system_type() == "conventionalDMR") {
+    // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
+    // This has something to do with the way the Selector block works.
+    // the manage_conventional_calls() function handles adding and starting the P25 Recorder
+    dmr_recorder_sptr rec;
+    rec = source->create_dmr_conventional_recorder(tb);
+    call->set_recorder((Recorder *)rec.get());
+    system->add_conventionalDMR_recorder(rec);
+    calls.push_back(call);
+  } else if (system->get_system_type() == "conventionalP25") { // has to be "conventional P25"
+    // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
+    // This has something to do with the way the Selector block works.
+    // the manage_conventional_calls() function handles adding and starting the P25 Recorder
+    p25_recorder_sptr rec;
+    rec = source->create_digital_conventional_recorder(tb);
+    call->set_recorder((Recorder *)rec.get());
+    system->add_conventionalP25_recorder(rec);
+    calls.push_back(call);
+  } else if (system->get_system_type() == "conventionalSIGMF") {
+    sigmf_recorder_sptr rec;
+    rec = source->create_sigmf_conventional_recorder(tb);
+    call->set_recorder((Recorder *)rec.get());
+    system->add_conventionalSIGMF_recorder(rec);
+    calls.push_back(call);
+  } else {
+    BOOST_LOG_TRIVIAL(error) << "Error - Unknown system type: " << system->get_system_type();
+  }
+}
 
-      Call_conventional *call = NULL;
-      if (system->has_channel_file()) {
-        Talkgroup *tg = system->find_talkgroup_by_freq(frequency);
-        tone_freq = tg->tone;
-
-        // If there is a per channel squelch setting, use it, otherwise use the system squelch setting
-        if (tg->squelch_db != DB_UNSET) {
-          call = new Call_conventional(tg->number, tg->freq, system, config, tg->squelch_db, tg->signal_detection);
-        } else {
-          call = new Call_conventional(tg->number, tg->freq, system, config, system->get_squelch_db(), tg->signal_detection);
-        }
-        
-        call->set_talkgroup_tag(tg->alpha_tag);
-      } else {
-        call = new Call_conventional(channel_index, frequency, system, config, system->get_squelch_db(), true);  // signal detection is always true when a channel file is not used
-      }
-
-      BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring " << system->get_system_type() << " channel: " << format_freq(frequency) << " Talkgroup: " << channel_index;
-      if (system->get_system_type() == "conventional") {
-        analog_recorder_sptr rec;
-        if (tone_freq > 0.0) {
-          rec = source->create_conventional_recorder(tb, tone_freq);
-        } else {
-          rec = source->create_conventional_recorder(tb);
-        }
-        rec->start(call);
-        rec->set_tau(system->get_tau()); //set the tau value for the recorder from the system config
-        call->set_is_analog(true);
-        call->set_recorder((Recorder *)rec.get());
-        call->set_state(RECORDING);
-        system->add_conventional_recorder(rec);
-        calls.push_back(call);
-        plugman_setup_recorder((Recorder *)rec.get());
-        plugman_call_start(call);
-      } else if (system->get_system_type() == "conventionalDMR") {
-        // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
-        // This has something to do with the way the Selector block works.
-        // the manage_conventional_calls() function handles adding and starting the P25 Recorder
-        dmr_recorder_sptr rec;
-        rec = source->create_dmr_conventional_recorder(tb);
-        call->set_recorder((Recorder *)rec.get());
-        system->add_conventionalDMR_recorder(rec);
-        calls.push_back(call);
-      } else if (system->get_system_type() == "conventionalP25") { // has to be "conventional P25"
-        // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
-        // This has something to do with the way the Selector block works.
-        // the manage_conventional_calls() function handles adding and starting the P25 Recorder
-        p25_recorder_sptr rec;
-        rec = source->create_digital_conventional_recorder(tb);
-        call->set_recorder((Recorder *)rec.get());
-        system->add_conventionalP25_recorder(rec);
-        calls.push_back(call);
-      } else if (system->get_system_type() == "conventionalSIGMF") {
-        sigmf_recorder_sptr rec;
-        rec = source->create_sigmf_conventional_recorder(tb);
-        call->set_recorder((Recorder *)rec.get());
-        system->add_conventionalSIGMF_recorder(rec);
-        calls.push_back(call);
-      } else {
-        BOOST_LOG_TRIVIAL(error) << "Error - Unknown system type: " << system->get_system_type();
-      }
-
-      // break out of the for loop
-      break;
+// Find the first Source whose passband covers `frequency`, or nullptr.
+static Source *find_source_covering(double frequency, std::vector<Source *> &sources) {
+  for (Source *source : sources) {
+    if (source->get_min_hz() <= frequency && source->get_max_hz() >= frequency) {
+      return source;
     }
   }
-  return channel_added;
+  return nullptr;
+}
+
+// No-channel-file path: a single frequency, no Talkgroup metadata, no Tone
+// column. Used when the system config has a "channels": [...] list instead
+// of a "channelFile".
+bool setup_conventional_channel(System *system, double frequency, long channel_index, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
+  Source *source = find_source_covering(frequency, sources);
+  if (!source) return false;
+
+  if (system->get_squelch_db() == -160) {
+    BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name()
+                              << "]\tSquelch needs to be specified for the Source for Conventional Systems";
+    return false;
+  }
+
+  // signal detection is always true when a channel file is not used
+  Call_conventional *call = new Call_conventional(
+      channel_index, frequency, system, config, system->get_squelch_db(), true);
+
+  BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring "
+                          << system->get_system_type() << " channel: "
+                          << format_freq(frequency)
+                          << " Talkgroup: " << channel_index;
+  Tone_Config tc; // TONE_OFF
+  build_recorder_for_call(system, call, tc, source, config, tb, calls);
+  return true;
+}
+
+// Channel-file path: one or more Talkgroup rows all at the same frequency.
+// `group[0]` is the primary row (provides squelch + signal_detection).
+// Multi-row groups force the recorder into TONE_SEARCH mode so every
+// transmission reaches the audio chain; the actual tone-to-metadata routing
+// is done in Call_Concluder::create_call_data using the alternate_channels
+// list attached to the Call_conventional. Non-matching tones become SKIPPED
+// at conclusion time (no plugins fire, files removed).
+bool setup_conventional_channel_group(System *system, const std::vector<Talkgroup *> &group, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
+  if (group.empty()) return false;
+  Talkgroup *primary = group[0];
+  const double frequency = primary->freq;
+
+  Source *source = find_source_covering(frequency, sources);
+  if (!source) return false;
+
+  if (system->get_squelch_db() == -160 && primary->squelch_db == DB_UNSET) {
+    BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name()
+                              << "]\tSquelch needs to be specified for the Source for Conventional Systems";
+    return false;
+  }
+
+  // Squelch + signal_detection from the primary (row 0). Per-row Squelch
+  // overrides the system-wide value when set.
+  const double effective_squelch =
+      (primary->squelch_db != DB_UNSET) ? primary->squelch_db : system->get_squelch_db();
+
+  // Recorder tone:
+  //   • Single row → use that row's tone_config (today's existing behavior).
+  //   • Multiple rows → TONE_SEARCH internally so every keyup is captured;
+  //     the per-call match step decides which row to label it with (or
+  //     marks it SKIPPED). This stops the previous behavior of spawning N
+  //     recorders for N rows on the same freq.
+  Tone_Config recorder_tone =
+      (group.size() == 1) ? primary->tone_config
+                          : Tone_Config{TONE_SEARCH, 0.0, 0, false};
+
+  Call_conventional *call = new Call_conventional(
+      primary->number, primary->freq, system, config,
+      effective_squelch, primary->signal_detection, recorder_tone);
+  call->set_talkgroup_tag(primary->alpha_tag);
+
+  if (group.size() > 1) {
+    call->set_alternate_channels(group);
+  }
+
+  if (group.size() == 1) {
+    char tone_buf[24];
+    switch (primary->tone_config.mode) {
+    case TONE_CTCSS:
+      snprintf(tone_buf, sizeof(tone_buf), "%.1f Hz", primary->tone_config.ctcss_hz);
+      break;
+    case TONE_DCS:
+      snprintf(tone_buf, sizeof(tone_buf), "D%03d%c",
+               primary->tone_config.dcs_code,
+               primary->tone_config.dcs_inverted ? 'I' : 'N');
+      break;
+    case TONE_SEARCH:
+      snprintf(tone_buf, sizeof(tone_buf), "S (search)");
+      break;
+    case TONE_OFF:
+    default:
+      snprintf(tone_buf, sizeof(tone_buf), "0 (off)");
+      break;
+    }
+    BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring "
+                            << system->get_system_type() << " channel: "
+                            << format_freq(frequency)
+                            << "  TG " << primary->number
+                            << "  tone=" << tone_buf
+                            << "  \"" << primary->alpha_tag << "\""
+                            << "  Squelch: " << effective_squelch << " dB"
+                            << "  Signal Detection: " << (primary->signal_detection ? "true" : "false");
+  } else {
+    BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring "
+                            << system->get_system_type() << " channel: "
+                            << format_freq(frequency)
+                            << " — freq group (" << group.size() << " rows, primary TG "
+                            << primary->number << "); recorder in search mode, "
+                            << "metadata routed by detected tone";
+    for (Talkgroup *tg : group) {
+      char tone_buf[24];
+      switch (tg->tone_config.mode) {
+      case TONE_CTCSS:
+        snprintf(tone_buf, sizeof(tone_buf), "%.1f Hz", tg->tone_config.ctcss_hz);
+        break;
+      case TONE_DCS:
+        snprintf(tone_buf, sizeof(tone_buf), "D%03d%c",
+                 tg->tone_config.dcs_code,
+                 tg->tone_config.dcs_inverted ? 'I' : 'N');
+        break;
+      case TONE_SEARCH:
+        snprintf(tone_buf, sizeof(tone_buf), "S (catch-all)");
+        break;
+      case TONE_OFF:
+      default:
+        snprintf(tone_buf, sizeof(tone_buf), "0 (catch-all)");
+        break;
+      }
+      BOOST_LOG_TRIVIAL(info) << "\t  TG " << tg->number
+                              << "  tone=" << tone_buf
+                              << "  \"" << tg->alpha_tag << "\"";
+    }
+  }
+
+  build_recorder_for_call(system, call, recorder_tone, source, config, tb, calls);
+  return true;
 }
 
 bool setup_conventional_system(System *system, Config &config, gr::top_block_sptr &tb, std::vector<Source *> &sources, std::vector<Call *> &calls) {
   bool system_added = false;
 
   if (system->has_channel_file()) {
+    // Group talkgroups by frequency so we only spawn ONE analog_recorder per
+    // unique freq, no matter how many CSV rows the operator wrote for it.
+    // Preserve CSV order for the "primary" (row 0) selection — the first
+    // row at any given freq is the one whose Squelch + Signal Detector
+    // settings get used.
     std::vector<Talkgroup *> talkgroups = system->get_talkgroups();
-    for (vector<Talkgroup *>::iterator tg_it = talkgroups.begin(); tg_it != talkgroups.end(); tg_it++) {
-      Talkgroup *tg = *tg_it;
+    std::map<double, std::vector<Talkgroup *>> by_freq;
+    std::vector<double> freq_order;
+    for (Talkgroup *tg : talkgroups) {
+      if (by_freq.find(tg->freq) == by_freq.end()) {
+        freq_order.push_back(tg->freq);
+      }
+      by_freq[tg->freq].push_back(tg);
+    }
 
-      bool channel_added = setup_conventional_channel(system, tg->freq, tg->number, config, tb, sources, calls);
-
+    for (double freq : freq_order) {
+      const std::vector<Talkgroup *> &group = by_freq[freq];
+      bool channel_added = setup_conventional_channel_group(system, group, config, tb, sources, calls);
       if (!channel_added) {
-        BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name() << "]\t Unable to find a source for this conventional channel! Channel not added: " << format_freq(tg->freq) << " Talkgroup: " << tg->number;
-        // return false;
+        BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name()
+                                  << "]\t Unable to find a source for this conventional channel! Channel not added: "
+                                  << format_freq(freq) << " (primary TG " << group[0]->number << ")";
       } else {
         system_added = true;
       }

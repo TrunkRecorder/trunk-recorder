@@ -853,7 +853,7 @@ This file allows for you to specify additional information about conventional ch
 |-------------|----------|-------|
 | TG Number     | ✔️        | The Talkgroup Number formatted as a decimal number. This has to be the first column |
 | Frequency        |  ✔️       | The frequency in MHz or Hz for the channel (decimal point must be used for MHz) |
-| Tone |        | The CTCSS Tone for the talkgroup. |
+| Tone |        | Tone-squelch spec. Empty / `0` = no tone. A positive number = CTCSS frequency in Hz (e.g. `118.8`). `D<code><N\|I>` = DCS, with 3-digit octal code and polarity (e.g. `D023N`, `D131I`). `S` = search mode (record everything, identify the tone in the call metadata). Multiple rows at the same Frequency become one shared recorder routed by detected tone — see [TONE-SQUELCH.md](TONE-SQUELCH.md) for the full feature, multi-row freq groups, and the SKIPPED behavior for non-matching tones. |
 | Alpha Tag |       | A 16 character description that is intended as a shortened display on radio displays |
 | Description |   | A longer description of the talkgroup  |
 | Category |    |  The category for the Talkgroup |
@@ -869,6 +869,11 @@ A **Header Row** is required for the file, with a header provided for each of th
 | --------- | --------- | -------- | ------------- | ---------------------- | ------ | ------ | ------------------- | ---- | ---- |
 | 300       | 462275000 | 94.8  | Town A Police | Town A Police Dispatch | Police | Town A |    |  false |  |
 | 325       | 462275000 | 151.4 | Town B DPW    | Town B Trash Dispatch  | DPW    | Town B | false   |  |  -50 |
+| 410       | 155857500 | D023N | County Fire   | County Fire Ops        | Fire   | County |    |    |  -48 |
+| 510       | 155250000 | S     | FD Paging     | Fire Paging Out        | Fire   | Paging |    |    |  -48 |
+
+Multiple rows can share the same `Frequency` to route one shared recorder to
+different talkgroups by detected tone — see [TONE-SQUELCH.md](TONE-SQUELCH.md).
 
 
 ## unitTagsFile

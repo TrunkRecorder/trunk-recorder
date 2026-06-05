@@ -145,7 +145,7 @@ public:
   void create_digital_recorders(gr::top_block_sptr tb, int r);
 
   analog_recorder_sptr create_conventional_recorder(gr::top_block_sptr tb);
-  analog_recorder_sptr create_conventional_recorder(gr::top_block_sptr tb, float tone_freq);
+  analog_recorder_sptr create_conventional_recorder(gr::top_block_sptr tb, const Tone_Config &tone_config);
   sigmf_recorder_sptr create_sigmf_conventional_recorder(gr::top_block_sptr tb);
   p25_recorder_sptr create_digital_conventional_recorder(gr::top_block_sptr tb);
   dmr_recorder_sptr create_dmr_conventional_recorder(gr::top_block_sptr tb);

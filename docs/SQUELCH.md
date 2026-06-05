@@ -18,6 +18,8 @@ The **Signal Detector** automatically tries to find a power threshold to separat
 
 Each Conventional Recorder also has a Squelch setting. Once a Conventional Recorder has been enabled and is receiving samples from the source, it will use a Squelch block and only process samples above a certain power level. This prevent noise from being recorded. The Squelch value needs to be hand tuned, and can be set for the entire Conventional System, or per channel.
 
+For analog channels you can also configure a **sub-audible tone squelch** (CTCSS or DCS) per channel, gate audio on a specific tone, or share one recorder across multiple talkgroups on the same frequency. See [TONE-SQUELCH.md](TONE-SQUELCH.md).
+
 
 ## Configuring a Conventional System
 
