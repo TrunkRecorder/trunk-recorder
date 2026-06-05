@@ -57,6 +57,15 @@ public:
   static constexpr double smartnet_symbol_rate = 3600;
   static constexpr double channel_bandwidth = 12500;
 
+  // Set via xlat_channelizer() the previous values below are likely to cause issues when
+  // there are active neighborinbg channels.  
+  //   cutoff      = d_bandwidth / 2 = 6250 Hz
+  //   traansition = d_bandwidth / 4 = 3125 Hz
+  // Narrowing the filter is needed to attenuate the effects of adjacent channels.
+  static constexpr double channel_lpf_cutoff     = 5200;  // 5200 Hz
+  static constexpr double channel_lpf_stopband   = 6500;  // 6500 Hz
+  static constexpr double channel_lpf_transition = channel_lpf_stopband - channel_lpf_cutoff;  // 1300 Hz
+
   int get_freq_error();
   bool is_squelched();
   double get_pwr();

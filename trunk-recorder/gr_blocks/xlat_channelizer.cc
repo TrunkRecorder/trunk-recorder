@@ -69,7 +69,7 @@ xlat_channelizer::xlat_channelizer(double input_rate, int samples_per_symbol, do
 
   freq_xlat = make_freq_xlating_fft_filter(initial_decim, if_coeffs, 0, input_rate); // inital_lpf_taps, 0, input_rate);
 
-  std::vector<float> channel_lpf_taps = gr::filter::firdes::low_pass_2(1.0, initial_rate, d_bandwidth / 2, d_bandwidth / 4, 60);
+  std::vector<float> channel_lpf_taps = gr::filter::firdes::low_pass_2(1.0, initial_rate, channel_lpf_cutoff, channel_lpf_transition, 60);
   channel_lpf = gr::filter::fft_filter_ccf::make(decim, channel_lpf_taps);
 
   // BOOST_LOG_TRIVIAL(info) << "\t Xlating Channelizer single-stage decimator - Decim: " << decimation << " Resampled Rate: " << resampled_rate << " Lowpass Taps: " << if_coeffs.size();
