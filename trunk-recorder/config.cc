@@ -311,7 +311,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
             return false;
           }
           // If it is a Trunked System
-        } else if ((system->get_system_type() == "smartnet") || (system->get_system_type() == "p25")) {
+        } else if ((system->get_system_type() == "smartnet") || (system->get_system_type() == "p25") || (system->get_system_type() == "dmr")) {
           BOOST_LOG_TRIVIAL(info) << "Control Channels: ";
           std::vector<double> control_channels = element["control_channels"];
           for (auto &control_channel : control_channels) {
@@ -331,6 +331,22 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
             BOOST_LOG_TRIVIAL(info) << "Custom Frequency Table File: " << custom_freq_table_file;
           }
 
+          // DMR trunked systems use an LCN -> frequency table because grants
+          // identify the voice repeater by LCN id, not Hz. Schema:
+          //   "lcnTable": { "1": 463.1125e6, "2": 463.6125e6, ... }
+          if (system->get_system_type() == "dmr") {
+            if (!element.contains("lcnTable")) {
+              BOOST_LOG_TRIVIAL(error) << "Trunked DMR system requires \"lcnTable\" mapping LCN id -> frequency (Hz)";
+              return false;
+            }
+            BOOST_LOG_TRIVIAL(info) << "DMR LCN Table:";
+            for (auto &entry : element["lcnTable"].items()) {
+              int lcn = std::stoi(entry.key());
+              double freq = entry.value();
+              system->add_lcn_freq(lcn, freq);
+              BOOST_LOG_TRIVIAL(info) << "  LCN " << lcn << " -> " << format_freq(freq);
+            }
+          }
 
         } else {
           BOOST_LOG_TRIVIAL(error) << "System Type in config.json not recognized";
@@ -582,6 +598,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         int digital_recorders = element.value("digitalRecorders", 0);
         int sigmf_recorders = element.value("sigmfRecorders", 0);
         int analog_recorders = element.value("analogRecorders", 0);
+        int dmr_recorders = element.value("dmrRecorders", 0);
 
         if (driver == "sigmf") {
           string sigmf_data = element.value("sigmfData", "");
@@ -598,7 +615,9 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
             BOOST_LOG_TRIVIAL(error) << "IQ Type specified in config.json not recognized, needs to be complex or float";
             return false;
           }
-          source = new Source(iq_file, center, rate, repeat, &config);
+          // Source ctor is (file, repeat, center, rate, cfg) — args were
+          // mis-ordered, leaving iqfile sources with center=rate and rate=0.
+          source = new Source(iq_file, repeat, center, rate, &config);
         } else {
 
           std::string device = element.value("device", "");
@@ -747,9 +766,11 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         BOOST_LOG_TRIVIAL(info) << "Digital Recorders: " << element.value("digitalRecorders", 0);
         BOOST_LOG_TRIVIAL(info) << "SigMF Recorders: " << element.value("sigmfRecorders", 0);
         BOOST_LOG_TRIVIAL(info) << "Analog Recorders: " << element.value("analogRecorders", 0);
+        BOOST_LOG_TRIVIAL(info) << "DMR Recorders: " << element.value("dmrRecorders", 0);
         source->create_digital_recorders(tb, digital_recorders);
         source->create_analog_recorders(tb, analog_recorders);
         source->create_sigmf_recorders(tb, sigmf_recorders);
+        source->create_dmr_recorders(tb, dmr_recorders);
         if (config.debug_recorder) {
           source->create_debug_recorder(tb, source_count);
         }

@@ -6,11 +6,13 @@
 #include <boost/log/trivial.hpp>
 #include <stdio.h>
 //#include "../source.h"
+#include "dmr_trunking.h"
 #include "p25_trunking.h"
 #include "parser.h"
 //#include "smartnet_trunking.h"
 #include "smartnet_impl.h"
 #include "system.h"
+#include <map>
 
 #ifdef __GNUC__
 #pragma GCC diagnostic push
@@ -123,6 +125,12 @@ public:
 
   smartnet_impl::sptr smartnet_trunking;
   p25_trunking_sptr p25_trunking;
+  dmr_trunking_sptr dmr_trunking;
+
+  // Trunked-DMR per-system state
+  std::map<int, double> lcn_freq_table;
+  int dmr_rest_lcn;
+  std::string dmr_variant;
 
   std::map<unsigned long, std::map<unsigned long, std::time_t>> talkgroup_patches;
 
@@ -321,6 +329,14 @@ public:
 
   std::string get_filename_format() override;
   void set_filename_format(std::string format) override;
+
+  void add_lcn_freq(int lcn, double freq) override;
+  double get_lcn_freq(int lcn) override;
+  size_t lcn_count() override;
+  void set_dmr_rest_lcn(int lcn) override;
+  int get_dmr_rest_lcn() override;
+  void set_dmr_variant(const std::string &v) override;
+  std::string get_dmr_variant() override;
 
 private:
   TalkgroupDisplayFormat talkgroup_display_format;

@@ -164,6 +164,18 @@ bool setup_systems(Config &config, gr::top_block_sptr &tb, std::vector<Source *>
             tb->connect(source->get_src_block(), 0, system->p25_trunking, 0);
           }
 
+          if (system->get_system_type() == "dmr") {
+            if (system->lcn_count() == 0) {
+              BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name() << "]\tTrunked DMR system has no LCN table — grants cannot be routed. Add an lcnTable to the system config.";
+            }
+            system->dmr_trunking = make_dmr_trunking(control_channel_freq,
+                                                    source->get_center(),
+                                                    source->get_rate(),
+                                                    system->get_msg_queue(),
+                                                    system->get_sys_num());
+            tb->connect(source->get_src_block(), 0, system->dmr_trunking, 0);
+          }
+
           break;
         }
       }

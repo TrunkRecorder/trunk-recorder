@@ -1,5 +1,6 @@
 #include "monitor_systems.h"
 #include "recorders/p25_recorder.h"
+#include "systems/dmr_parser.h"
 #include <chrono>
 #include <boost/log/sinks/text_file_backend.hpp>
 #include <boost/log/core.hpp>
@@ -104,6 +105,8 @@ bool start_recorder(Call *call, TrunkMessage message, Config &config, System *sy
         if (talkgroup->mode.compare("A") == 0) {
           recorder = source->get_analog_recorder(talkgroup, priority, call);
           call->set_is_analog(true);
+        } else if (sys->get_system_type() == "dmr") {
+          recorder = source->get_dmr_recorder(talkgroup, priority, call);
         } else {
           recorder = source->get_digital_recorder(talkgroup, priority, call);
         }
@@ -117,6 +120,8 @@ bool start_recorder(Call *call, TrunkMessage message, Config &config, System *sy
         if ((config.default_mode == "analog") && (sys->get_system_type() == "smartnet")) {
           recorder = source->get_analog_recorder(call);
           call->set_is_analog(true);
+        } else if (sys->get_system_type() == "dmr") {
+          recorder = source->get_dmr_recorder(call);
         } else {
           recorder = source->get_digital_recorder(call);
         }
@@ -723,6 +728,8 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
       system->smartnet_trunking->reset();
     } else if (system->get_system_type() == "p25") {
       system->p25_trunking->tune_freq(control_channel_freq);
+    } else if (system->get_system_type() == "dmr") {
+      system->dmr_trunking->tune_freq(control_channel_freq);
     } else {
       BOOST_LOG_TRIVIAL(error) << "\t - Unknown system type for Retune";
     }
@@ -757,6 +764,14 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
           tb->disconnect(current_source->get_src_block(), 0, system->p25_trunking, 0);
           system->p25_trunking = make_p25_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_qpsk_mod(), system->get_sys_num());
           tb->connect(source->get_src_block(), 0, system->p25_trunking, 0);
+          tb->unlock();
+        } else if (system->get_system_type() == "dmr") {
+          system->set_source(source);
+          tb->lock();
+          tb->disconnect(current_source->get_src_block(), 0, system->dmr_trunking, 0);
+          system->dmr_trunking.reset();
+          system->dmr_trunking = make_dmr_trunking(control_channel_freq, source->get_center(), source->get_rate(), system->get_msg_queue(), system->get_sys_num());
+          tb->connect(source->get_src_block(), 0, system->dmr_trunking, 0);
           tb->unlock();
         } else {
           BOOST_LOG_TRIVIAL(error) << "\t - Unkown system type for Retune";
@@ -871,12 +886,14 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
   std::vector<TrunkMessage> trunk_messages;
   SmartnetParser *smartnet_parser;
   P25Parser *p25_parser;
+  DmrParser *dmr_parser;
 
   signal(SIGINT, exit_interupt);
   signal(SIGHUP, rotate_log_signal);
 
   smartnet_parser = new SmartnetParser(systems.front()); // this has to eventually be generic;
   p25_parser = new P25Parser();
+  dmr_parser = new DmrParser();
 
   while (1) {
 
@@ -917,7 +934,7 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
     for (vector<System *>::iterator sys_it = systems.begin(); sys_it != systems.end(); sys_it++) {
       System_impl *system = (System_impl *)*sys_it;
 
-      if ((system->get_system_type() == "p25") || (system->get_system_type() == "smartnet")) {
+      if ((system->get_system_type() == "p25") || (system->get_system_type() == "smartnet") || (system->get_system_type() == "dmr")) {
         msg.reset();
         msg = system->get_msg_queue()->delete_head_nowait();
         while (msg != 0) {
@@ -931,6 +948,12 @@ int monitor_messages(Config &config, gr::top_block_sptr &tb, std::vector<Source 
 
           if (system->get_system_type() == "p25") {
             trunk_messages = p25_parser->parse_message(msg, system);
+            handle_message(trunk_messages, system, config, sources, calls, tb);
+            plugman_trunk_message(trunk_messages, system);
+          }
+
+          if (system->get_system_type() == "dmr") {
+            trunk_messages = dmr_parser->parse_message(msg, system);
             handle_message(trunk_messages, system, config, sources, calls, tb);
             plugman_trunk_message(trunk_messages, system);
           }

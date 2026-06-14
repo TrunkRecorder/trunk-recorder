@@ -1,0 +1,30 @@
+{
+    "ver": 2,
+    "sources": [
+        {
+            "center": 463500000.0,
+            "rate": 2400000,
+            "gain": 36,
+            "dmrRecorders": 4,
+            "driver": "osmosdr"
+        }
+    ],
+    "systems": [
+        {
+            "control_channels": [463612500],
+            "type": "dmr",
+            "squelch": -60,
+            "shortName": "trbo",
+            "talkgroupsFile": "talkgroups.csv",
+            "lcnTable": {
+                "1":  463112500,
+                "2":  463162500,
+                "3":  463612500,
+                "4":  463362500
+            }
+        }
+    ],
+    "frequencyFormat": "mhz",
+    "logLevel": "info",
+    "logFile": true
+}
