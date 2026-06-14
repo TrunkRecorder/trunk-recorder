@@ -333,6 +333,7 @@ public:
   void add_lcn_freq(int lcn, double freq) override;
   double get_lcn_freq(int lcn) override;
   size_t lcn_count() override;
+  double next_unmapped_channel() override;
   void set_dmr_rest_lcn(int lcn) override;
   int get_dmr_rest_lcn() override;
   void set_dmr_variant(const std::string &v) override;

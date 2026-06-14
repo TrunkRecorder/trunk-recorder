@@ -70,7 +70,25 @@ TrunkMessage DmrParser::blank_message(System *system) {
 
 double DmrParser::lcn_to_freq(System *system, int lcn) {
   if (!system) return 0;
-  return system->get_lcn_freq(lcn);
+  double freq = system->get_lcn_freq(lcn);
+  if (freq != 0) return freq;
+
+  // Unknown LCN. If the user gave us a candidate channel list (instead of an
+  // explicit lcnTable), claim the next unused freq for this LCN and record
+  // the mapping so subsequent grants hit the fast path. The first call on
+  // each LCN may land on the wrong physical channel if the user listed
+  // freqs in the wrong order — once the recorder tunes there and either
+  // succeeds or sees nothing, the operator can either reorder the list or
+  // leave it as-is and rely on the second-call-onward being deterministic.
+  freq = system->next_unmapped_channel();
+  if (freq != 0) {
+    system->add_lcn_freq(lcn, freq);
+    BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name()
+                            << "] DMR LCN auto-mapped: LCN " << lcn
+                            << " -> " << format_freq(freq)
+                            << " (from `channels` candidate list)";
+  }
+  return freq;
 }
 
 std::vector<TrunkMessage> DmrParser::parse_message(gr::message::sptr msg, System *system) {

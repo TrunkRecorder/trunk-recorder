@@ -250,6 +250,12 @@ public:
   virtual double get_lcn_freq(int lcn) = 0;
   virtual size_t lcn_count() = 0;
 
+  // Auto-mapping: when the user provides a `channels` list instead of an
+  // explicit `lcnTable`, the parser claims candidate frequencies on demand.
+  // next_unmapped_channel() returns the next freq in `channels` that isn't
+  // already in `lcn_freq_table`, or 0 if none are left.
+  virtual double next_unmapped_channel() = 0;
+
   // Tracks the currently-announced rest channel LCN for Capacity Plus
   // systems. -1 means "not yet seen".
   virtual void set_dmr_rest_lcn(int lcn) = 0;
