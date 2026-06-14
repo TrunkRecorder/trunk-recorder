@@ -7,6 +7,7 @@
 #include "recorders/analog_recorder.h"
 #include "recorders/debug_recorder.h"
 #include "recorders/dmr_recorder.h"
+#include "recorders/dmr_trunked_recorder.h"
 #include "recorders/p25_recorder.h"
 #include "recorders/sigmf_recorder.h"
 #include "sources/iq_file_source.h"
@@ -53,6 +54,7 @@ class Source {
   int max_debug_recorders;
   int max_sigmf_recorders;
   int max_analog_recorders;
+  int max_dmr_recorders;
   int debug_recorder_port;
   int next_selector_port;
   int silence_frames;
@@ -68,6 +70,7 @@ class Source {
   std::vector<analog_recorder_sptr> analog_recorders;
   std::vector<analog_recorder_sptr> analog_conv_recorders;
   std::vector<dmr_recorder_sptr> dmr_conv_recorders;
+  std::vector<dmr_trunked_recorder_sptr> dmr_recorders;
   std::vector<Gain_Stage_t> gain_stages;
   std::string driver;
   std::string device;
@@ -143,6 +146,7 @@ public:
   void create_sigmf_recorders(gr::top_block_sptr tb, int r);
   void create_analog_recorders(gr::top_block_sptr tb, int r);
   void create_digital_recorders(gr::top_block_sptr tb, int r);
+  void create_dmr_recorders(gr::top_block_sptr tb, int r);
 
   analog_recorder_sptr create_conventional_recorder(gr::top_block_sptr tb);
   analog_recorder_sptr create_conventional_recorder(gr::top_block_sptr tb, float tone_freq);
@@ -152,6 +156,10 @@ public:
 
   Recorder *get_digital_recorder(Call *call);
   Recorder *get_digital_recorder(Talkgroup *talkgroup, int priority, Call *call);
+  Recorder *get_dmr_recorder(Call *call);
+  Recorder *get_dmr_recorder(Talkgroup *talkgroup, int priority, Call *call);
+  int dmr_recorder_count();
+  int get_num_available_dmr_recorders();
   Recorder *get_analog_recorder(Call *call);
   Recorder *get_analog_recorder(Talkgroup *talkgroup, int priority, Call *call);
   Recorder *get_debug_recorder();

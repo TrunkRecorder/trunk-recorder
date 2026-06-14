@@ -1,4 +1,5 @@
 #include "iq_file_source.h"
+#include <cstdlib>
 
 
 iq_file_source::sptr
@@ -15,7 +16,12 @@ iq_file_source::iq_file_source(std::string filename,  double rate, bool repeat=f
       d_repeat(repeat) {
 
     file_source = gr::blocks::file_source::make(sizeof(gr_complex), filename.c_str(), repeat);
-    throttle = gr::blocks::throttle::make(sizeof(gr_complex), rate);
+    // Allow IQ playback faster than wall-clock by overriding throttle. Useful
+    // for offline analysis on short captures; setting TR_IQ_FILE_THROTTLE_X to
+    // 10 plays the file 10x real time.
+    const char *thx = std::getenv("TR_IQ_FILE_THROTTLE_X");
+    double throttle_x = thx ? std::atof(thx) : 1.0;
+    throttle = gr::blocks::throttle::make(sizeof(gr_complex), rate * throttle_x);
     connect(file_source, 0, throttle, 0);
     connect(throttle, 0, self(), 0);
 }

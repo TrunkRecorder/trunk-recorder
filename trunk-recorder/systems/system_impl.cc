@@ -206,6 +206,8 @@ System_impl::System_impl(int sys_num) {
   retune_attempts = 0;
   message_count = 0;
   decode_rate = 0;
+  dmr_rest_lcn = -1;
+  dmr_variant = "";
   msg_queue = gr::msg_queue::make(100);
   audio_postprocess_enabled = false;
   audio_highpass_hz = 0;
@@ -909,4 +911,39 @@ std::string System_impl::get_filename_format() {
 
 void System_impl::set_filename_format(std::string format) {
   this->filename_format = format;
+}
+
+void System_impl::add_lcn_freq(int lcn, double freq) {
+  lcn_freq_table[lcn] = freq;
+}
+
+double System_impl::get_lcn_freq(int lcn) {
+  auto it = lcn_freq_table.find(lcn);
+  if (it == lcn_freq_table.end()) return 0;
+  return it->second;
+}
+
+size_t System_impl::lcn_count() {
+  return lcn_freq_table.size();
+}
+
+void System_impl::set_dmr_rest_lcn(int lcn) {
+  dmr_rest_lcn = lcn;
+}
+
+int System_impl::get_dmr_rest_lcn() {
+  return dmr_rest_lcn;
+}
+
+void System_impl::set_dmr_variant(const std::string &v) {
+  // First fingerprint wins — log when we change to flag anomalies.
+  if (!dmr_variant.empty() && dmr_variant != v) {
+    BOOST_LOG_TRIVIAL(warning) << "[" << short_name << "] DMR variant fingerprint changed: "
+                               << dmr_variant << " -> " << v;
+  }
+  dmr_variant = v;
+}
+
+std::string System_impl::get_dmr_variant() {
+  return dmr_variant;
 }

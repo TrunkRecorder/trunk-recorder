@@ -241,5 +241,23 @@ public:
 
   virtual std::string get_filename_format() = 0;
   virtual void set_filename_format(std::string format) = 0;
+
+  // ----- Trunked DMR support -----
+  //
+  // LCN -> Hz mapping used by Connect Plus / Capacity Plus / Capacity Max
+  // grants. Returns 0 if no mapping is configured for `lcn`.
+  virtual void add_lcn_freq(int lcn, double freq) = 0;
+  virtual double get_lcn_freq(int lcn) = 0;
+  virtual size_t lcn_count() = 0;
+
+  // Tracks the currently-announced rest channel LCN for Capacity Plus
+  // systems. -1 means "not yet seen".
+  virtual void set_dmr_rest_lcn(int lcn) = 0;
+  virtual int get_dmr_rest_lcn() = 0;
+
+  // Variant name as inferred from CACH SLC / CSBK fingerprints. One of
+  // "connect_plus", "capacity_plus", "capacity_max", or "" (unknown).
+  virtual void set_dmr_variant(const std::string &v) = 0;
+  virtual std::string get_dmr_variant() = 0;
 };
 #endif

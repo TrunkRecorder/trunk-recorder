@@ -62,6 +62,7 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   max_debug_recorders = 0;
   max_sigmf_recorders = 0;
   max_analog_recorders = 0;
+  max_dmr_recorders = 0;
   debug_recorder_port = 0;
   attached_detector = false;
   attached_selector = false;
@@ -214,6 +215,7 @@ void Source::set_iq_source(std::string iq_file, bool repeat, double center, doub
   max_debug_recorders = 0;
   max_sigmf_recorders = 0;
   max_analog_recorders = 0;
+  max_dmr_recorders = 0;
   debug_recorder_port = 0;
   attached_detector = false;
   attached_selector = false;
@@ -595,6 +597,21 @@ void Source::create_digital_recorders(gr::top_block_sptr tb, int r) {
   }
 }
 
+void Source::create_dmr_recorders(gr::top_block_sptr tb, int r) {
+  if (r > 0) {
+    attach_selector(tb);
+  }
+  max_dmr_recorders = r;
+
+  for (int i = 0; i < max_dmr_recorders; i++) {
+    dmr_trunked_recorder_sptr log = make_dmr_trunked_recorder(this);
+    dmr_recorders.push_back(log);
+    log->set_selector_port(next_selector_port);
+    tb->connect(recorder_selector, next_selector_port, log, 0);
+    next_selector_port++;
+  }
+}
+
 void Source::create_sigmf_recorders(gr::top_block_sptr tb, int r) {
   max_sigmf_recorders = r;
 
@@ -766,6 +783,62 @@ Recorder *Source::get_digital_recorder(Call *call) {
   return NULL;
 }
 
+Recorder *Source::get_dmr_recorder(Talkgroup *talkgroup, int priority, Call *call) {
+  int num_available_recorders = get_num_available_dmr_recorders();
+  std::string loghdr = log_header(call->get_short_name(), call->get_call_num(),
+                                  call->get_talkgroup_display(), call->get_freq());
+
+  if (talkgroup && (priority == -1)) {
+    call->set_state(MONITORING);
+    call->set_monitoring_state(IGNORED_TG);
+    BOOST_LOG_TRIVIAL(info) << loghdr << "Not recording talkgroup - Priority is -1 (Disabled).";
+    return NULL;
+  }
+
+  if (talkgroup && priority > num_available_recorders) {
+    call->set_state(MONITORING);
+    call->set_monitoring_state(NO_RECORDER);
+    BOOST_LOG_TRIVIAL(error) << loghdr << "Not recording talkgroup. Priority is " << priority
+                             << " but only " << num_available_recorders << " DMR recorders are available.";
+    return NULL;
+  }
+
+  return get_dmr_recorder(call);
+}
+
+Recorder *Source::get_dmr_recorder(Call *call) {
+  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    dmr_trunked_recorder_sptr rx = *it;
+    if (rx->get_state() == AVAILABLE) {
+      return (Recorder *)rx.get();
+    }
+  }
+  std::string loghdr = log_header(call->get_short_name(), call->get_call_num(),
+                                  call->get_talkgroup_display(), call->get_freq());
+  BOOST_LOG_TRIVIAL(error) << loghdr << "[ " << device << " ] No DMR Recorders Available.";
+  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    dmr_trunked_recorder_sptr rx = *it;
+    BOOST_LOG_TRIVIAL(info) << "[ " << rx->get_num() << " ] State: "
+                            << format_state(rx->get_state()) << " Freq: " << rx->get_freq();
+  }
+  return NULL;
+}
+
+int Source::get_num_available_dmr_recorders() {
+  int num = 0;
+  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    if ((*it)->get_state() == AVAILABLE) num++;
+  }
+  return num;
+}
+
+int Source::dmr_recorder_count() {
+  return dmr_recorders.size();
+}
+
 Recorder *Source::get_debug_recorder() {
   for (std::vector<debug_recorder_sptr>::iterator it = debug_recorders.begin();
        it != debug_recorders.end(); it++) {
@@ -825,6 +898,12 @@ void Source::print_recorders() {
        it != dmr_conv_recorders.end(); it++) {
     dmr_recorder_sptr rx = *it;
 
+    BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << "\tState: " << format_state(rx->get_state());
+  }
+
+  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    dmr_trunked_recorder_sptr rx = *it;
     BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << "\tState: " << format_state(rx->get_state());
   }
 
