@@ -16,12 +16,15 @@
             "squelch": -60,
             "shortName": "trbo",
             "talkgroupsFile": "talkgroups.csv",
+            "_comment_lcnTable": "If you know LCN<->freq, use lcnTable:",
             "lcnTable": {
                 "1":  463112500,
                 "2":  463162500,
                 "3":  463612500,
                 "4":  463362500
-            }
+            },
+            "_comment_channels": "If you don't, drop lcnTable and supply `channels` instead. The decoder will claim a freq for each new LCN it sees, in the order you list them. lcnTable and channels can also be combined: lcnTable wins, channels covers the rest.",
+            "_example_channels_only": [463112500, 463162500, 463612500, 463362500]
         }
     ],
     "frequencyFormat": "mhz",

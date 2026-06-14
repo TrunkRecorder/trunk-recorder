@@ -927,6 +927,23 @@ size_t System_impl::lcn_count() {
   return lcn_freq_table.size();
 }
 
+double System_impl::next_unmapped_channel() {
+  // Return the first freq in `channels` that isn't already in lcn_freq_table.
+  // Used by DmrParser when a grant arrives for an LCN we haven't yet seen and
+  // the user gave us a candidate channel list instead of an explicit lcnTable.
+  for (double freq : channels) {
+    bool mapped = false;
+    for (auto &kv : lcn_freq_table) {
+      if (kv.second == freq) {
+        mapped = true;
+        break;
+      }
+    }
+    if (!mapped) return freq;
+  }
+  return 0;
+}
+
 void System_impl::set_dmr_rest_lcn(int lcn) {
   dmr_rest_lcn = lcn;
 }

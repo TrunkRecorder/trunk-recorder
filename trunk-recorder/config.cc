@@ -331,20 +331,33 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
             BOOST_LOG_TRIVIAL(info) << "Custom Frequency Table File: " << custom_freq_table_file;
           }
 
-          // DMR trunked systems use an LCN -> frequency table because grants
-          // identify the voice repeater by LCN id, not Hz. Schema:
-          //   "lcnTable": { "1": 463.1125e6, "2": 463.6125e6, ... }
+          // DMR trunked systems map grants to voice frequencies via either
+          // an explicit `lcnTable` ({ "<lcn>": <hz>, ... }) or a `channels`
+          // candidate list (auto-mapped on first sighting of each LCN).
+          // At least one of the two must be present.
           if (system->get_system_type() == "dmr") {
-            if (!element.contains("lcnTable")) {
-              BOOST_LOG_TRIVIAL(error) << "Trunked DMR system requires \"lcnTable\" mapping LCN id -> frequency (Hz)";
+            bool has_lcn_table = element.contains("lcnTable");
+            bool has_channels  = element.contains("channels");
+            if (!has_lcn_table && !has_channels) {
+              BOOST_LOG_TRIVIAL(error) << "Trunked DMR system requires either \"lcnTable\" (LCN id -> Hz) or \"channels\" (candidate voice freqs to auto-map on demand)";
               return false;
             }
-            BOOST_LOG_TRIVIAL(info) << "DMR LCN Table:";
-            for (auto &entry : element["lcnTable"].items()) {
-              int lcn = std::stoi(entry.key());
-              double freq = entry.value();
-              system->add_lcn_freq(lcn, freq);
-              BOOST_LOG_TRIVIAL(info) << "  LCN " << lcn << " -> " << format_freq(freq);
+            if (has_lcn_table) {
+              BOOST_LOG_TRIVIAL(info) << "DMR LCN Table:";
+              for (auto &entry : element["lcnTable"].items()) {
+                int lcn = std::stoi(entry.key());
+                double freq = entry.value();
+                system->add_lcn_freq(lcn, freq);
+                BOOST_LOG_TRIVIAL(info) << "  LCN " << lcn << " -> " << format_freq(freq);
+              }
+            }
+            if (has_channels) {
+              BOOST_LOG_TRIVIAL(info) << "DMR auto-mapping candidate channels:";
+              std::vector<double> dmr_channels = element["channels"];
+              for (auto &freq : dmr_channels) {
+                system->add_channel(freq);
+                BOOST_LOG_TRIVIAL(info) << "  " << format_freq(freq);
+              }
             }
           }
 
