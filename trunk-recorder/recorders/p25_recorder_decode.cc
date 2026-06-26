@@ -6,6 +6,7 @@
 #include "../formatter.h"
 #include "../unit_tags_ota.h"
 #include <chrono>
+#include <tuple>
 
 p25_recorder_decode_sptr make_p25_recorder_decode(Recorder *recorder, int silence_frames, bool d_soft_vocoder) {
   p25_recorder_decode *decoder = new p25_recorder_decode(recorder);
@@ -36,7 +37,14 @@ void p25_recorder_decode::start(Call *call) {
   } else {
     wav_sink->start_recording(call);
   }
-  
+
+  // Load encryption keys from system config
+  op25_frame_assembler->crypt_reset();
+  const auto& keys = call->get_system()->get_encryption_keys();
+  for (const auto& k : keys) {
+    op25_frame_assembler->crypt_key(std::get<0>(k), std::get<1>(k), std::get<2>(k));
+  }
+
   d_call = call;
 }
 
@@ -99,7 +107,7 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
   bool do_msgq = 1;
   bool do_audio_output = 1;
   bool do_tdma = 0;
-  bool do_nocrypt = 1;
+  bool do_nocrypt = 0;
 
   op25_frame_assembler = gr::op25_repeater::p25_frame_assembler::make(silence_frames, d_soft_vocoder, udp_host, udp_port, verbosity, do_imbe, do_output, do_msgq, rx_queue, do_audio_output, do_tdma, do_nocrypt);
   op25_frame_assembler->set_voice_codec_callback(voice_codec_cb_handler, this);
@@ -312,7 +320,17 @@ void p25_recorder_decode::check_message_queue() {
       try {
         auto j = nlohmann::json::parse(msg_str);
         
-        if (j.contains("type")) {
+        if (j.contains("encrypted")) {
+          bool encrypted = j["encrypted"].get<int>() != 0;
+          d_call->set_encrypted(encrypted);
+
+          if (encrypted) {
+            int algid = j.value("algid", 0);
+            int keyid = j.value("keyid", 0);
+            BOOST_LOG_TRIVIAL(debug) << "P25 encryption status: encrypted=1 algid=0x"
+                                     << std::hex << algid << " keyid=0x" << keyid << std::dec;
+          }
+        } else if (j.contains("type")) {
           std::string json_msg_type = j["type"];
           
           if (json_msg_type == "motorola_alias_p1" || json_msg_type == "motorola_alias_p2" ||

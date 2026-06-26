@@ -411,11 +411,17 @@ namespace gr {
             process_voice(A, FT_LDU2);
 
             // replace existing ess with newly received data now that voice processing is complete
+            // if new ess was not received correctly, compute the next ess_mi from the last one
             if (next_ess_valid) {
                 ess_algid = next_algid;
                 ess_keyid = next_keyid;
                 memcpy(ess_mi, next_mi, sizeof(next_mi));
+            } else {
+                p25_crypt_algs::cycle_p25_mi(ess_mi);
             }
+
+            std::string encr = "{\"encrypted\": " + std::to_string(encrypted() ? 1 : 0) + ", \"algid\": " + std::to_string(ess_algid) + ", \"keyid\": " + std::to_string(ess_keyid) + "}";
+            send_msg(encr, M_P25_JSON_DATA);
         }
 
         void p25p1_fdma::process_TTDU() {
@@ -901,7 +907,7 @@ namespace gr {
                     }
 
                     if (d_do_audio_output) {
-                        if ( !encrypted()) {
+                        if (audio_valid) {
                             // This is the Vocoder that OP25 currently uses.
 
                             if (d_soft_vocoder) {
