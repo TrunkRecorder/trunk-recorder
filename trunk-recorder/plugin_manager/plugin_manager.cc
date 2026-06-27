@@ -336,6 +336,14 @@ void plugman_unit_answer_request(System *system, long source_id, long talkgroup)
     }
   }
 }
+void plugman_unit_call_alert(System *system, long source_id, long talkgroup) {
+  for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
+    Plugin *plugin = *it;
+    if (plugin->state == PLUGIN_RUNNING) {
+      plugin->api->unit_call_alert(system, source_id, talkgroup);
+    }
+  }
+}
 void plugman_unit_location(System *system, long source_id, long talkgroup_num) {
   for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
     Plugin *plugin = *it;
