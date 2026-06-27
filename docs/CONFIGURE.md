@@ -323,17 +323,17 @@ Each system can optionally define an `audio_postprocess` object to control clean
 
 ```json
 "audio_postprocess": {
-"enabled": false,
+"enabled": true,
 "outputRawAudio": false,
-"highpass_hz": 0,
-"lowpass_hz": 0,
+"highpass_hz": 300,
+"lowpass_hz": 3000,
 "bandreject_hz": 0,
 "bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": true,
 "loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"loudnorm_tp": -1.5,
+"loudnorm_lra": 7.0,
+"final_limiter": true,
 "ffmpeg_filter": ""
 }
 ```
@@ -342,74 +342,102 @@ Each system can optionally define an `audio_postprocess` object to control clean
 
 | Key                 | Required | Default Value | Type                  | Description |
 | ------------------- | :------: | ------------- | --------------------- | ----------- |
-| enabled             |          | false         | **true** / **false**  | Enables the structured cleanup filter chain. This controls `highpass_hz`, `lowpass_hz`, `bandreject_hz`, `bandreject_width_hz`, and use of `ffmpeg_filter` as the base filter chain. It does **not** control loudnorm. |
-| outputRawAudio      |          | false         | **true** / **false**  | When enabled, saves an additional `.raw.wav` file alongside the normal call output. This file is a verbatim concatenation of the raw transmission recordings with no filtering, resampling, or loudness normalization applied — the original sample rate and bit depth are preserved exactly. Useful for comparing the effect of post-processing settings or diagnosing audio quality issues. See **Raw Audio Output** below. |
-| highpass_hz         |          | 0             | number                | Adds an FFmpeg highpass filter when greater than 0. |
-| lowpass_hz          |          | 0             | number                | Adds an FFmpeg lowpass filter when greater than 0. |
-| bandreject_hz       |          | 0             | number                | Adds an FFmpeg bandreject filter center frequency when greater than 0. |
-| bandreject_width_hz |          | 0             | number                | Width for the FFmpeg bandreject filter. Must be greater than 0 to be used. |
-| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization independently of `enabled`. |
-| loudnorm_two_pass   |          | true          | **true** / **false**  | When `true`, attempts two-pass loudnorm and falls back to single-pass when unavailable. When `false`, uses single-pass loudnorm directly. |
-| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target. |
-| loudnorm_tp         |          | -0.1          | number                | FFmpeg loudnorm true peak target. |
-| loudnorm_lra        |          | 11.0          | number                | FFmpeg loudnorm loudness range target. |
-| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain used as the base filter chain when `enabled=true`. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
+| enabled             |          | true          | **true** / **false**  | **Master switch** for the post-processing pipeline. When `false`, cleanup, loudnorm, and final_limiter are all skipped and the call's main file is a stream-copy concat of the raw transmission WAVs. When `true`, the full pipeline runs. |
+| outputRawAudio      |          | false         | **true** / **false**  | Always writes an additional `<stem>.raw.wav` side file (verbatim concat of raw transmissions). Honored regardless of `enabled`. When `enabled=false`, the main file and the `.raw.wav` will be byte-identical. |
+| highpass_hz         |          | 300           | number                | Per-transmission FFmpeg highpass cutoff in Hz. Set to 0 to disable. Default matches the bandpass that used to live inside the analog recorder. |
+| lowpass_hz          |          | 3000          | number                | Per-transmission FFmpeg lowpass cutoff in Hz. Set to 0 to disable. Default matches the bandpass that used to live inside the analog recorder. |
+| bandreject_hz       |          | 0             | number                | Per-transmission FFmpeg bandreject center frequency. Set to 0 to disable. |
+| bandreject_width_hz |          | 0             | number                | Width for the bandreject filter. Must be greater than 0 for the filter to apply. |
+| loudnorm            |          | true          | **true** / **false**  | Enables built-in loudness normalization. Loudnorm runs **per transmission** so individual transmissions land at the same target loudness regardless of capture level. Only meaningful when `enabled=true`. |
+| loudnorm_i          |          | -16.0         | number                | FFmpeg loudnorm integrated loudness target (LUFS). |
+| loudnorm_tp         |          | -1.5          | number                | FFmpeg loudnorm true peak target (dBFS). Also determines the final limiter ceiling, which sits 0.5 dB above this value. |
+| loudnorm_lra        |          | 7.0           | number                | FFmpeg loudnorm loudness range target (LU). 7 is voice-optimized; raise it (toward 11) to preserve more dynamics, lower it (toward 5) to crush them further. |
+| final_limiter       |          | true          | **true** / **false**  | Applies a brick-wall `alimiter` inside each per-transmission chain as a safety net against clipping. Ceiling is derived from `loudnorm_tp + 0.5` dB. Only meaningful when `enabled=true`. |
+| ffmpeg_filter       |          | ""            | string                | Optional custom FFmpeg filter chain that **replaces** the structured cleanup (highpass/lowpass/bandreject) when `enabled=true`. Applied per transmission. If this already includes `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization. |
 
 
 ### How it works
 
-`audio_postprocess.enabled` only controls the base cleanup filter chain. It does **not** enable or disable loudness normalization.
+Each call typically contains several transmissions, captured back-to-back as units key up and down on the channel. When `enabled=true` (the default), Trunk Recorder renders the call's audio in a single FFmpeg invocation that processes each transmission **independently** before joining them:
 
-When `enabled` is `true`, Trunk Recorder builds a base filter chain from the structured cleanup settings below:
+```
+[tx1]→cleanup→loudnorm→limiter─┐
+[tx2]→cleanup→loudnorm→limiter─┼→ concat → final audio
+[tx3]→cleanup→loudnorm→limiter─┘
+```
 
-- `highpass_hz`
-- `lowpass_hz`
-- `bandreject_hz`
-- `bandreject_width_hz`
+Because every stage runs per transmission, a quiet transmission and a loud transmission in the same call end up at the same target loudness — listeners no longer hear "whisper then shout" within one call.
 
-If `ffmpeg_filter` is provided and `enabled` is `true`, that string is used as the base filter chain instead of the structured cleanup filters.
+When `enabled=false`, the entire pipeline is skipped. The call's main file is just `ffmpeg -f concat -c:a copy` of the raw transmission WAVs — no decoding, filtering, or normalization. This mirrors what `outputRawAudio=true` produces, just to the main file instead of a side file.
 
-Loudness normalization is controlled separately by `loudnorm`. It defaults to `true`, even when `audio_postprocess.enabled` is `false`.
+### Voice-band bandpass
+
+In older versions, analog recorders applied a hardcoded 300 Hz / 3000 Hz FIR bandpass inside the GNURadio chain. That bandpass now lives in post-processing as `highpass_hz=300` and `lowpass_hz=3000` (the defaults). This makes the bandpass user-tunable per system, lets you disable it for diagnostic listening, and means the original transmission WAV files written by the recorder are true post-demod/post-deemph **discriminator audio** — useful when `outputRawAudio` or `transmissionArchive` is enabled with `enabled=false`.
+
+The FFmpeg `highpass`/`lowpass` filters are 2nd-order biquads; the previous GR-chain filters were linear-phase FIRs. The difference is inaudible for voice content but technically detectable in critical A/B testing.
 
 ### Loudnorm behavior
 
-When `loudnorm` is enabled, Trunk Recorder applies FFmpeg loudnorm using these defaults:
+When `loudnorm` is enabled (and `enabled=true`), Trunk Recorder applies FFmpeg `loudnorm` to each transmission using these defaults:
 
-- `I=-16.0`
-- `TP=-0.1`
-- `LRA=11.0`
+- `I=-16.0` (integrated loudness target, LUFS)
+- `TP=-1.5` (true peak target, dBFS)
+- `LRA=7.0` (loudness range target, LU — tuned for voice)
 
-If `loudnorm_two_pass` is `true`, Trunk Recorder first attempts loudnorm analysis and then renders using two-pass loudnorm.
+The defaults are voice-tuned: `TP=-1.5` leaves headroom for the final limiter, and `LRA=7` compresses the dynamic range more aggressively than the broadcast default (LRA=11) so quiet speech and loud speech end up closer together.
 
-If two-pass loudnorm cannot be used for a call, such as when the call is too short or the first-pass analysis fails, Trunk Recorder automatically falls back to single-pass loudnorm rendering.
+### Final limiter
 
-If `loudnorm_two_pass` is `false`, Trunk Recorder skips the analysis pass and uses single-pass loudnorm directly.
+When `final_limiter` is enabled (default, requires `enabled=true`), Trunk Recorder appends an `alimiter` to each per-transmission chain. The limit ceiling is `loudnorm_tp + 0.5 dB` in linear scale — for the default `TP=-1.5`, that's about -1.0 dBFS (linear 0.8913). Attack is 1 ms and release is 50 ms.
+
+This catches any inter-sample peaks that loudnorm's true-peak estimator misses, guaranteeing the per-transmission output never clips.
 
 ### Filter order
 
-The final audio filter chain is built in this order:
+When `enabled=true`, the per-transmission chain is:
 
-1. Base cleanup filter chain or `ffmpeg_filter` override
-2. Built-in loudnorm, if enabled
+1. **Cleanup** (structured highpass/lowpass/bandreject, or `ffmpeg_filter` override if set)
+2. **Loudnorm** (if `loudnorm=true`)
+3. **Limiter** (if `final_limiter=true`)
+4. Concat all per-transmission chains
 
 ### Fallback behavior
 
-If a render using loudnorm fails, Trunk Recorder retries using the cleanup-only filter chain.
+If the full render fails, Trunk Recorder retries without loudnorm (cleanup → limiter → concat). If that fails too, it falls back to unfiltered rendering (concat only). Per-transmission archive outputs are still produced in fallback modes, just less processed.
 
-If that also fails, Trunk Recorder falls back to unfiltered rendering.
+### Transmission archive (`transmissionArchive`)
+
+When the system has `transmissionArchive: true`, each individual transmission is written to the capture directory alongside the call's main file. With `enabled=true`, those per-transmission files are **fully processed** (cleanup + loudnorm + limiter) so they're playable standalone. With `enabled=false`, they're copies of the recorder's raw transmission WAVs (now actual discriminator audio for analog systems).
 
 ### Important notes
 
-- `audio_postprocess.enabled=false` does **not** disable loudnorm
-- `ffmpeg_filter` may still be combined with built-in loudnorm
-- if `ffmpeg_filter` already contains `loudnorm`, built-in loudnorm settings are skipped to avoid duplicate normalization
-- the old implicit `dynaudnorm` fallback is no longer used
+- `enabled` is now the **master switch** for *all* post-processing. Setting `enabled=false` skips cleanup, loudnorm, and the limiter. Previously this flag only disabled cleanup — see the **Migration** note below.
+- `loudnorm` and `final_limiter` only take effect when `enabled=true`.
+- `ffmpeg_filter` is applied **per transmission**.
+- If `ffmpeg_filter` already contains `loudnorm`, the user's loudnorm runs per transmission and the built-in loudnorm settings are skipped (with a warning).
+- The old implicit `dynaudnorm` fallback is no longer used.
+- For analog recorders, the GR-chain 300/3000 Hz bandpass has been removed; it now runs in ffmpeg post-processing via the cleanup defaults. Existing analog recordings sound essentially unchanged; the underlying transmission WAVs are now raw discriminator audio.
+
+### Migration (from prior versions)
+
+If your config explicitly set `audio_postprocess.enabled: false`, the new semantics will skip loudnorm and the limiter too (not just cleanup). The daemon logs a one-line WARNING at startup when this case is detected. To restore the old behavior — cleanup off, loudnorm on — set:
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"highpass_hz": 0,
+"lowpass_hz": 0,
+"loudnorm": true
+}
+```
 
 ### Raw Audio Output
 
-When `outputRawAudio` is `true`, Trunk Recorder writes an additional file named `<stem>.raw.wav` to the capture directory after each call concludes.
+When `outputRawAudio` is `true`, Trunk Recorder writes an additional file named `<stem>.raw.wav` to the capture directory after each call concludes — **regardless** of the `enabled` flag. If you ask for it, you get it.
 
-The debug file is produced by concatenating the raw transmission recordings using an FFmpeg stream copy — no decoding, re-encoding, filtering, resampling, or loudness normalization is applied. The audio is bit-for-bit identical to what the recorder wrote, just joined into a single file.
+The debug file is a stream-copy concatenation of the raw transmission recordings: no decoding, re-encoding, filtering, resampling, or normalization. The audio is bit-for-bit what the recorder wrote, just joined into a single file. For analog systems this is now true discriminator audio (post-demod, post-deemph, post-decimation — but no bandpass).
+
+If you set `enabled=false` AND `outputRawAudio=true`, you'll get two byte-identical files. That's intentional: the configuration was explicit.
 
 **File retention:**
 
@@ -420,11 +448,12 @@ The debug file is produced by concatenating the raw transmission recordings usin
 
 - Comparing processed output against the unmodified source to evaluate filter or loudnorm settings.
 - Diagnosing audio artifacts introduced by post-processing.
+- Inspecting actual discriminator audio for analog systems (CTCSS/DCS subaudible signaling, hum, hiss — content normally removed by the 300/3000 bandpass).
 - Retaining a pristine archive copy while still distributing the normalized version.
 
 ### Example configurations
 
-#### Cleanup filters only
+#### Cleanup filters only (no loudnorm, no limiter)
 
 ```json
 "audio_postprocess": {
@@ -434,68 +463,61 @@ The debug file is produced by concatenating the raw transmission recordings usin
 "bandreject_hz": 4000,
 "bandreject_width_hz": 180,
 "loudnorm": false,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"final_limiter": false,
 "ffmpeg_filter": ""
 }
 ```
 
-#### Loudnorm only
+#### Loudnorm + limiter only (no cleanup bandpass)
 
-```json
-"audio_postprocess": {
-"enabled": false,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
-"loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": "",
-"outputRawAudio": false
-}
-```
-
-#### Custom filter chain plus built-in loudnorm
+Skip the default 300/3000 bandpass but keep loudnorm and the limiter. Useful when you want the wider frequency range (e.g. for evaluating raw discriminator audio) but still want consistent loudness.
 
 ```json
 "audio_postprocess": {
 "enabled": true,
 "highpass_hz": 0,
 "lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": false,
+"final_limiter": true
+}
+```
+
+#### Disable all post-processing (raw mode)
+
+Main file is the byte-identical concat of raw transmission WAVs. Loudnorm and limiter are skipped.
+
+```json
+"audio_postprocess": {
+"enabled": false
+}
+```
+
+#### Custom cleanup chain plus built-in loudnorm
+
+The custom `ffmpeg_filter` is applied per transmission, then built-in loudnorm runs per transmission, then transmissions are concatenated and the limiter is applied.
+
+```json
+"audio_postprocess": {
+"enabled": true,
+"loudnorm": true,
 "loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
+"loudnorm_tp": -1.5,
+"loudnorm_lra": 7.0,
+"final_limiter": true,
 "ffmpeg_filter": "highpass=f=200,bandreject=f=4000:w=180"
 }
 ```
 
 #### Fully custom loudnorm in `ffmpeg_filter`
 
-If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped.
+If you include `loudnorm` directly in `ffmpeg_filter`, the built-in loudnorm settings are skipped — but your custom chain still runs per transmission, and the final limiter still applies (unless you disable it).
 
 ```json
 "audio_postprocess": {
 "enabled": true,
-"highpass_hz": 0,
-"lowpass_hz": 0,
-"bandreject_hz": 0,
-"bandreject_width_hz": 0,
 "loudnorm": true,
-"loudnorm_two_pass": true,
-"loudnorm_i": -16.0,
-"loudnorm_tp": -0.1,
-"loudnorm_lra": 11.0,
-"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-0.1:LRA=11"
+"ffmpeg_filter": "highpass=f=200,loudnorm=I=-16:TP=-1.5:LRA=7",
+"final_limiter": true
 }
 ```
 
