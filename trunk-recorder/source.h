@@ -7,7 +7,6 @@
 #include "recorders/analog_recorder.h"
 #include "recorders/debug_recorder.h"
 #include "recorders/dmr_recorder.h"
-#include "recorders/dmr_trunked_recorder.h"
 #include "recorders/p25_recorder.h"
 #include "recorders/sigmf_recorder.h"
 #include "sources/iq_file_source.h"
@@ -69,8 +68,12 @@ class Source {
   std::vector<sigmf_recorder_sptr> sigmf_conv_recorders;
   std::vector<analog_recorder_sptr> analog_recorders;
   std::vector<analog_recorder_sptr> analog_conv_recorders;
-  std::vector<dmr_recorder_sptr> dmr_conv_recorders;
-  std::vector<dmr_trunked_recorder_sptr> dmr_recorders;
+  // All DMR recorders (conventional and trunked) live in one vector. A
+  // recorder's `conventional` flag distinguishes the two cases for allocation:
+  // conventional recorders are dedicated to a fixed channel from the config and
+  // are never handed out to trunked grants. The allocator (get_dmr_recorder)
+  // filters by the call's conventional flag.
+  std::vector<dmr_recorder_sptr> dmr_recorders;
   std::vector<Gain_Stage_t> gain_stages;
   std::string driver;
   std::string device;

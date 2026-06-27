@@ -34,8 +34,6 @@ std::string Recorder::get_type_string() {
       return "P25C";
     case DMR:
       return "DMR";
-    case DMR_TRUNKED:
-      return "DMRT";
     default:
       return "Unknown";
   }

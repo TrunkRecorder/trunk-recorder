@@ -278,7 +278,6 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/recorders/sigmf_recorder_impl.cc
   trunk-recorder/recorders/analog_recorder.cc
   trunk-recorder/recorders/dmr_recorder_impl.cc
-  trunk-recorder/recorders/dmr_trunked_recorder_impl.cc
   trunk-recorder/recorders/p25_recorder_impl.cc
   trunk-recorder/recorders/p25_recorder_fsk4_demod.cc
   trunk-recorder/recorders/p25_recorder_qpsk_demod.cc

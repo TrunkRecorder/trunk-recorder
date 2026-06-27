@@ -16,22 +16,22 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
         channel_added = true;
       }
 
-      Call_conventional *call = NULL;
-      if (system->has_channel_file()) {
-        Talkgroup *tg = system->find_talkgroup_by_freq(frequency);
-        tone_freq = tg->tone;
-
-        // If there is a per channel squelch setting, use it, otherwise use the system squelch setting
-        if (tg->squelch_db != DB_UNSET) {
-          call = new Call_conventional(tg->number, tg->freq, system, config, tg->squelch_db, tg->signal_detection);
+      auto make_conv_call = [&](int slot) -> Call_conventional * {
+        Call_conventional *c = NULL;
+        if (system->has_channel_file()) {
+          Talkgroup *tg = system->find_talkgroup_by_freq(frequency);
+          tone_freq = tg->tone;
+          double sq = (tg->squelch_db != DB_UNSET) ? tg->squelch_db : system->get_squelch_db();
+          c = new Call_conventional(tg->number, tg->freq, system, config, sq, tg->signal_detection);
+          c->set_talkgroup_tag(tg->alpha_tag);
         } else {
-          call = new Call_conventional(tg->number, tg->freq, system, config, system->get_squelch_db(), tg->signal_detection);
+          c = new Call_conventional(channel_index, frequency, system, config, system->get_squelch_db(), true);
         }
-        
-        call->set_talkgroup_tag(tg->alpha_tag);
-      } else {
-        call = new Call_conventional(channel_index, frequency, system, config, system->get_squelch_db(), true);  // signal detection is always true when a channel file is not used
-      }
+        c->set_tdma_slot(slot);
+        return c;
+      };
+
+      Call_conventional *call = make_conv_call(0);
 
       BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring " << system->get_system_type() << " channel: " << format_freq(frequency) << " Talkgroup: " << channel_index;
       if (system->get_system_type() == "conventional") {
@@ -51,14 +51,18 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
         plugman_setup_recorder((Recorder *)rec.get());
         plugman_call_start(call);
       } else if (system->get_system_type() == "conventionalDMR") {
-        // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
-        // This has something to do with the way the Selector block works.
-        // the manage_conventional_calls() function handles adding and starting the P25 Recorder
-        dmr_recorder_sptr rec;
-        rec = source->create_dmr_conventional_recorder(tb);
+        // Conventional DMR is dual-slot. One recorder hosts both slots; each
+        // slot gets its own Call so that talkgroup, duration and end-of-call
+        // are tracked independently. The recorder is started lazily in
+        // manage_conventional_calls() once the flowgraph has been unlocked.
+        dmr_recorder_sptr rec = source->create_dmr_conventional_recorder(tb);
         call->set_recorder((Recorder *)rec.get());
         system->add_conventionalDMR_recorder(rec);
         calls.push_back(call);
+
+        Call_conventional *slot1_call = make_conv_call(1);
+        slot1_call->set_recorder((Recorder *)rec.get());
+        calls.push_back(slot1_call);
       } else if (system->get_system_type() == "conventionalP25") { // has to be "conventional P25"
         // Because of dynamic mod assignment we can not start the recorder until the graph has been unlocked.
         // This has something to do with the way the Selector block works.

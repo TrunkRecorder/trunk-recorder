@@ -117,7 +117,6 @@ enum Recorder_Type { DEBUG,
                       P25,
                       P25C,
                       DMR,
-                      DMR_TRUNKED,
                       SMARTNET };
 
 struct Call_Data_t {

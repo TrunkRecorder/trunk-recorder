@@ -27,8 +27,11 @@ void Call_conventional::restart_call() {
   last_update = time(NULL);
   state = RECORDING;
   debug_recording = false;
-  phase2_tdma = false;
-  tdma_slot = 0;
+  // Don't reset tdma_slot or phase2_tdma here — those are identity, not per-
+  // transmission state. For DMR a conventional Call_conventional is permanently
+  // bound to one slot of its recorder; clobbering tdma_slot would cause the
+  // restart to attach to the wrong slot (and likely fail if the other slot is
+  // still busy).
   encrypted = false;
   emergency = false;
   this->update_talkgroup_display();

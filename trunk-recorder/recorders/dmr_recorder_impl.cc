@@ -1,23 +1,23 @@
-
 #include "dmr_recorder_impl.h"
 
+#include "../call_conventional.h"
 #include "../formatter.h"
 #include "../gr_blocks/plugin_wrapper_impl.h"
 #include "../plugin_manager/plugin_manager.h"
+#include <algorithm>
 #include <boost/log/trivial.hpp>
 
-dmr_recorder_sptr make_dmr_recorder(Source *src, Recorder_Type type) {
-  dmr_recorder *recorder = new dmr_recorder_impl(src, type);
-
+dmr_recorder_sptr make_dmr_recorder(Source *src, bool conventional) {
+  dmr_recorder *recorder = new dmr_recorder_impl(src, conventional);
   return gnuradio::get_initial_sptr(recorder);
 }
 
-dmr_recorder_impl::dmr_recorder_impl(Source *src, Recorder_Type type)
+dmr_recorder_impl::dmr_recorder_impl(Source *src, bool conv)
     : gr::hier_block2("dmr_recorder",
                       gr::io_signature::make(1, 1, sizeof(gr_complex)),
                       gr::io_signature::make(0, 0, sizeof(float))),
-      Recorder(type) {
-  conventional = true;
+      Recorder(DMR) {
+  conventional = conv;
   initialize(src);
 }
 
@@ -26,84 +26,88 @@ void dmr_recorder_impl::initialize(Source *src) {
   chan_freq = source->get_center();
   center_freq = source->get_center();
   config = source->get_config();
-  d_soft_vocoder = config->soft_vocoder;
+  d_soft_vocoder = config ? config->soft_vocoder : false;
   input_rate = source->get_rate();
   silence_frames = source->get_silence_frames();
   squelch_db = 0;
 
-  talkgroup = 0;
-  d_phase2_tdma = true;
   rec_num = rec_counter++;
   recording_count = 0;
   recording_duration = 0;
 
-  bool use_streaming = false;
-
-  if (config != NULL) {
-    use_streaming = config->enable_audio_streaming;
-  }
-
-  state = INACTIVE;
+  set_enable_audio_streaming(config ? config->enable_audio_streaming : false);
 
   timestamp = time(NULL);
   starttime = time(NULL);
 
-  prefilter = xlat_channelizer::make(input_rate, channelizer::phase1_samples_per_symbol, channelizer::phase1_symbol_rate, xlat_channelizer::channel_bandwidth, center_freq, conventional);
+  for (int i = 0; i < 2; i++) {
+    slots[i].call = nullptr;
+    slots[i].active = false;
+  }
 
-  /* FSK4 Demod */
+  prefilter = xlat_channelizer::make(input_rate,
+                                     channelizer::phase1_samples_per_symbol,
+                                     channelizer::phase1_symbol_rate,
+                                     xlat_channelizer::channel_bandwidth,
+                                     center_freq, conventional);
+
+  // FSK4 demod chain — locked at Phase 1 rates because DMR voice is always 4-FSK
+  // at 4800 sym/s.
   const double phase1_channel_rate = phase1_symbol_rate * phase1_samples_per_symbol;
   const double pi = M_PI;
-
-  // FSK4: Phase Loop Lock - can only be Phase 1, so locking at that rate.
   double freq_to_norm_radians = pi / (phase1_channel_rate / 2.0);
   double fc = 0.0;
   double fd = 600.0;
   double pll_demod_gain = 1.0 / (fd * freq_to_norm_radians);
   double samples_per_symbol = 5;
-  pll_freq_lock = gr::analog::pll_freqdet_cf::make((phase1_symbol_rate / 2.0 * 1.2) * freq_to_norm_radians, (fc + (3 * fd * 1.9)) * freq_to_norm_radians, (fc + (-3 * fd * 1.9)) * freq_to_norm_radians);
+
+  pll_freq_lock = gr::analog::pll_freqdet_cf::make(
+      (phase1_symbol_rate / 2.0 * 1.2) * freq_to_norm_radians,
+      (fc + (3 * fd * 1.9)) * freq_to_norm_radians,
+      (fc + (-3 * fd * 1.9)) * freq_to_norm_radians);
   pll_amp = gr::blocks::multiply_const_ff::make(pll_demod_gain * 1.0);
 
-  // FSK4: noise filter - can only be Phase 1, so locking at that rate.
 #if GNURADIO_VERSION < 0x030900
-  baseband_noise_filter_taps = gr::filter::firdes::low_pass_2(1.0, phase1_channel_rate, phase1_symbol_rate / 2.0 * 1.175, phase1_symbol_rate / 2.0 * 0.125, 20.0, gr::filter::firdes::WIN_KAISER, 6.76);
+  baseband_noise_filter_taps = gr::filter::firdes::low_pass_2(
+      1.0, phase1_channel_rate,
+      phase1_symbol_rate / 2.0 * 1.175,
+      phase1_symbol_rate / 2.0 * 0.125,
+      20.0, gr::filter::firdes::WIN_KAISER, 6.76);
 #else
-  baseband_noise_filter_taps = gr::filter::firdes::low_pass_2(1.0, phase1_channel_rate, phase1_symbol_rate / 2.0 * 1.175, phase1_symbol_rate / 2.0 * 0.125, 20.0, gr::fft::window::WIN_KAISER, 6.76);
-
+  baseband_noise_filter_taps = gr::filter::firdes::low_pass_2(
+      1.0, phase1_channel_rate,
+      phase1_symbol_rate / 2.0 * 1.175,
+      phase1_symbol_rate / 2.0 * 0.125,
+      20.0, gr::fft::window::WIN_KAISER, 6.76);
 #endif
   noise_filter = gr::filter::fft_filter_fff::make(1.0, baseband_noise_filter_taps);
-
-  // FSK4: Symbol Taps
-  double symbol_decim = 1;
 
   for (int i = 0; i < samples_per_symbol; i++) {
     sym_taps.push_back(1.0 / samples_per_symbol);
   }
-  sym_filter = gr::filter::fir_filter_fff::make(symbol_decim, sym_taps);
+  sym_filter = gr::filter::fir_filter_fff::make(1, sym_taps);
 
-  // FSK4: FSK4 Demod - locked at Phase 1 rates, since it can only be Phase 1
   tune_queue = gr::msg_queue::make(20);
   fsk4_demod = gr::op25_repeater::fsk4_demod_ff::make(tune_queue, phase1_channel_rate, phase1_symbol_rate);
 
-  /* P25 Decode */
-  // OP25 Slicer
   const float l[] = {-2.0, 0.0, 2.0, 4.0};
-  const int msgq_id = 0;
-  const int debug = 0;
   std::vector<float> slices(l, l + sizeof(l) / sizeof(l[0]));
-  slicer = gr::op25_repeater::fsk4_slicer_fb::make(msgq_id, debug, slices);
-  wav_sink_slot0 = gr::blocks::transmission_sink::make(1, 8000, 16);
-  wav_sink_slot1 = gr::blocks::transmission_sink::make(1, 8000, 16);
+  slicer = gr::op25_repeater::fsk4_slicer_fb::make(0, 0, slices);
 
-  // OP25 Frame Assembler
-  traffic_queue = gr::msg_queue::make(2);
   rx_queue = gr::msg_queue::make(100);
-  int verbosity = 0; // 10 = lots of debug messages
-
-  framer = gr::op25_repeater::frame_assembler::make("file:///tmp/out1.raw", verbosity, 1, rx_queue, d_soft_vocoder);
+  framer = gr::op25_repeater::frame_assembler::make("", 0, 1, rx_queue, d_soft_vocoder);
   framer->set_voice_codec_callback(voice_codec_cb_handler, this);
-  levels = gr::blocks::multiply_const_ff::make(1);
-  plugin_sink_slot0 = gr::blocks::plugin_wrapper_impl::make(std::bind(&dmr_recorder_impl::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
-  plugin_sink_slot1 = gr::blocks::plugin_wrapper_impl::make(std::bind(&dmr_recorder_impl::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
+
+  // Per-slot sinks. Both are always connected — the framer always emits both
+  // slot outputs, and a sink with no Call attached drops samples (see
+  // transmission_sink::work() when d_current_call is null). This means we never
+  // need to rewire the flowgraph when slots come and go.
+  for (int i = 0; i < 2; i++) {
+    slots[i].wav_sink = gr::blocks::transmission_sink::make(1, 8000, 16);
+    slots[i].plugin_sink = gr::blocks::plugin_wrapper_impl::make(
+        std::bind(&dmr_recorder_impl::plugin_callback_handler, this, i,
+                  std::placeholders::_1, std::placeholders::_2));
+  }
 
   connect(self(), 0, prefilter, 0);
   connect(prefilter, 0, pll_freq_lock, 0);
@@ -113,32 +117,33 @@ void dmr_recorder_impl::initialize(Source *src) {
   connect(sym_filter, 0, fsk4_demod, 0);
   connect(fsk4_demod, 0, slicer, 0);
   connect(slicer, 0, framer, 0);
-  connect(framer, 0, wav_sink_slot0, 0);
-  connect(framer, 1, wav_sink_slot1, 0);
+  connect(framer, 0, slots[0].wav_sink, 0);
+  connect(framer, 1, slots[1].wav_sink, 0);
 
-  if (use_streaming) {
-    connect(framer, 0, plugin_sink_slot0, 0);
-    connect(framer, 1, plugin_sink_slot1, 0);
+  if (get_enable_audio_streaming()) {
+    connect(framer, 0, slots[0].plugin_sink, 0);
+    connect(framer, 1, slots[1].plugin_sink, 0);
   }
 }
 
-void dmr_recorder_impl::plugin_callback_handler(int16_t *samples, int sampleCount) {
-  plugman_audio_callback(call, this, samples, sampleCount);
+void dmr_recorder_impl::plugin_callback_handler(int slot, int16_t *samples, int sampleCount) {
+  if (slots[slot].call) {
+    plugman_audio_callback(slots[slot].call, this, samples, sampleCount);
+  }
 }
 
-void dmr_recorder_impl::voice_codec_cb_handler(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data) {
+void dmr_recorder_impl::voice_codec_cb_handler(int codec_type, long tgid, uint32_t src_id,
+                                               const uint32_t *params, int param_count,
+                                               int errs, void *user_data) {
+  // The framer doesn't tell us which slot the codec data came from, so we route
+  // to whichever slot currently has the matching talkgroup. If both slots are
+  // active on the same TG (unusual) we attribute to slot 0.
   dmr_recorder_impl *self = static_cast<dmr_recorder_impl *>(user_data);
-  if (self->call) {
-    plugman_voice_codec_data(self->call, codec_type, tgid, src_id, params, param_count, errs);
-  }
-}
-
-void dmr_recorder_impl::switch_tdma(bool phase2) {
-}
-
-void dmr_recorder_impl::set_tdma(bool phase2) {
-  if (phase2 != d_phase2_tdma) {
-    switch_tdma(phase2);
+  for (int i = 0; i < 2; i++) {
+    if (self->slots[i].call && self->slots[i].call->get_talkgroup() == tgid) {
+      plugman_voice_codec_data(self->slots[i].call, codec_type, tgid, src_id, params, param_count, errs);
+      return;
+    }
   }
 }
 
@@ -150,32 +155,16 @@ int dmr_recorder_impl::get_num() {
   return rec_num;
 }
 
-double dmr_recorder_impl::since_last_write() {
-  time_t now = time(NULL);
-  return now - wav_sink_slot0->get_stop_time();
+double dmr_recorder_impl::get_freq() {
+  return chan_freq;
 }
 
-State dmr_recorder_impl::get_state() {
-  return wav_sink_slot0->get_state();
-}
-
-bool dmr_recorder_impl::is_active() {
-  if (state == ACTIVE) {
-    return true;
-  } else {
-    return false;
-  }
-}
-bool dmr_recorder_impl::is_enabled() {
-  return source->is_selector_port_enabled(selector_port);
-}
-
-void dmr_recorder_impl::set_enabled(bool enabled) {
-  source->set_selector_port_enabled(selector_port, enabled);
+int dmr_recorder_impl::get_freq_error() {
+  return prefilter->get_freq_error();
 }
 
 bool dmr_recorder_impl::is_squelched() {
-  if (state == ACTIVE) {
+  if (slots[0].active || slots[1].active) {
     return prefilter->is_squelched();
   }
   return true;
@@ -183,31 +172,6 @@ bool dmr_recorder_impl::is_squelched() {
 
 double dmr_recorder_impl::get_pwr() {
   return prefilter->get_pwr();
-}
-
-bool dmr_recorder_impl::is_idle() {
-  /*
-    if ((wav_sink_slot0->get_state() == IDLE) || (wav_sink_slot0->get_state() == STOPPED)) {
-      return true;
-    }
-
-    return false;*/
-  if (state == ACTIVE) {
-    return prefilter->is_squelched();
-  }
-  return true;
-}
-
-double dmr_recorder_impl::get_freq() {
-  return chan_freq;
-}
-
-int dmr_recorder_impl::get_freq_error() { // get frequency error from FLL and convert to Hz
-  return prefilter->get_freq_error();
-}
-
-double dmr_recorder_impl::get_current_length() {
-  return wav_sink_slot0->total_length_in_seconds();
 }
 
 int dmr_recorder_impl::lastupdate() {
@@ -220,98 +184,182 @@ long dmr_recorder_impl::elapsed() {
 
 void dmr_recorder_impl::tune_freq(double f) {
   chan_freq = f;
-  float freq = (center_freq - f);
-  prefilter->tune_offset(freq);
+  prefilter->tune_offset(center_freq - f);
 }
 
-bool compareTransmissions(Transmission t1, Transmission t2) {
-  return (t1.start_time < t2.start_time);
+bool dmr_recorder_impl::is_enabled() {
+  return source->is_selector_port_enabled(selector_port);
 }
 
-std::vector<Transmission> dmr_recorder_impl::get_transmission_list() {
-  std::vector<Transmission> return_list = wav_sink_slot0->get_transmission_list();
-  std::vector<Transmission> second_list = wav_sink_slot1->get_transmission_list();
-  BOOST_LOG_TRIVIAL(info) << "Slot 0: " << return_list.size() << " Slot 1: " << second_list.size();
-  return_list.insert(return_list.end(), second_list.begin(), second_list.end());
-  BOOST_LOG_TRIVIAL(info) << "Combined: " << return_list.size();
-  sort(return_list.begin(), return_list.end(), compareTransmissions);
-  BOOST_LOG_TRIVIAL(info) << "Sorted: " << return_list.size();
-  return return_list;
+void dmr_recorder_impl::set_enabled(bool enabled) {
+  source->set_selector_port_enabled(selector_port, enabled);
 }
 
-std::vector<Transmission> dmr_recorder_impl::get_transmission_list(int slot) {
-  std::vector<Transmission> return_list;
-  if (slot == 0) {
-    return_list = wav_sink_slot0->get_transmission_list();
-  } else {
-    return_list = wav_sink_slot1->get_transmission_list();
-  }
-  BOOST_LOG_TRIVIAL(info) << "Slot " << slot << ": " << return_list.size();
-  return return_list;
+// ---- Per-slot lifecycle ---------------------------------------------------
+
+bool dmr_recorder_impl::is_slot_available(int slot) {
+  return !slots[slot].active;
 }
 
-void dmr_recorder_impl::stop() {
-  if (state == ACTIVE) {
-
-    recording_duration += wav_sink_slot0->total_length_in_seconds();
-    
-    //std::string loghdr = log_header(this->call->get_short_name(),this->call->get_call_num(),this->call->get_talkgroup_display(),chan_freq);
-    // BOOST_LOG_TRIVIAL(info) << loghdr << "Stopping P25 Recorder Num [" << rec_num << "]\tTDMA: " << d_phase2_tdma << "\tSlot: " << tdma_slot;
-
-    state = INACTIVE;
-    set_enabled(false);
-    wav_sink_slot0->stop_recording();
-    wav_sink_slot1->stop_recording();
-  } else {
-    BOOST_LOG_TRIVIAL(error) << "dmr_recorder.cc: Trying to Stop an Inactive Logger!!!";
-  }
-}
-
-void dmr_recorder_impl::set_tdma_slot(int slot) {
-  tdma_slot = slot;
+bool dmr_recorder_impl::is_fully_available() {
+  return !slots[0].active && !slots[1].active;
 }
 
 bool dmr_recorder_impl::start(Call *call) {
-  if (state == INACTIVE) {
-    System *system = call->get_system();
-    set_tdma_slot(0);
-
-    timestamp = time(NULL);
-    starttime = time(NULL);
-
-    talkgroup = call->get_talkgroup();
-    short_name = call->get_short_name();
-    chan_freq = call->get_freq();
-    this->call = call;
-    std::string loghdr = log_header(this->call->get_short_name(),this->call->get_call_num(),this->call->get_talkgroup_display(),chan_freq);
-    BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[32mStarting DMR Recorder Num [" << rec_num << "]\u001b[0m\tTDMA: " << call->get_phase2_tdma() << "\tSlot: " << call->get_tdma_slot();
-
-    int offset_amount = (center_freq - chan_freq);
-
-    prefilter->tune_offset(offset_amount);
-    levels->set_k(call->get_system()->get_digital_levels());
-    wav_sink_slot0->start_recording(call, 0);
-    wav_sink_slot1->start_recording(call, 1);
-    state = ACTIVE;
-
-  if (conventional) {
-    Call_conventional *conventional_call = dynamic_cast<Call_conventional *>(call);
-    squelch_db = conventional_call->get_squelch_db();
-    if (conventional_call->get_signal_detection()) {
-      set_enabled(false);
-    } else {
-      set_enabled(true); // If signal detection is not being used, open up the Value/Selector from the start
-    }
-  } else {
-    squelch_db = system->get_squelch_db();
-    set_enabled(true);
-  }
-  prefilter->set_squelch_db(squelch_db);
-
-    recording_count++;
-  } else {
-    BOOST_LOG_TRIVIAL(error) << "dmr_recorder.cc: Trying to Start an already Active Logger!!!";
+  int slot = call->get_tdma_slot();
+  if (slots[slot].active) {
+    BOOST_LOG_TRIVIAL(error) << "dmr_recorder: tried to start slot " << slot
+                             << " on recorder " << rec_num << " but slot is busy";
     return false;
   }
+
+  bool was_fully_idle = is_fully_available();
+  System *system = call->get_system();
+  double call_freq = call->get_freq();
+
+  // If the recorder was fully idle, this is the first slot starting — tune to
+  // the call's freq. If the other slot is already active, the freqs must match
+  // (the allocator guarantees this); we never retune a recorder out from under
+  // an active slot.
+  if (was_fully_idle) {
+    chan_freq = call_freq;
+    prefilter->tune_offset(center_freq - chan_freq);
+    if (call->is_conventional()) {
+      Call_conventional *conv = dynamic_cast<Call_conventional *>(call);
+      squelch_db = conv ? conv->get_squelch_db() : system->get_squelch_db();
+    } else {
+      squelch_db = system->get_squelch_db();
+    }
+    prefilter->set_squelch_db(squelch_db);
+  } else if (call_freq != chan_freq) {
+    BOOST_LOG_TRIVIAL(error) << "dmr_recorder: rec " << rec_num
+                             << " slot " << slot << " freq " << call_freq
+                             << " does not match active recorder freq " << chan_freq;
+    return false;
+  }
+
+  slots[slot].call = call;
+  slots[slot].active = true;
+  slots[slot].wav_sink->start_recording(call, slot);
+
+  timestamp = time(NULL);
+  starttime = time(NULL);
+
+  std::string loghdr = log_header(call->get_short_name(), call->get_call_num(),
+                                  call->get_talkgroup_display(), chan_freq);
+  BOOST_LOG_TRIVIAL(info) << loghdr << "[32mStarting DMR Recorder Num ["
+                          << rec_num << "][0m\tSlot: " << slot;
+
+  // Conventional with signal detection waits for the detector to open the gate;
+  // everything else opens immediately.
+  bool enable_now = true;
+  if (call->is_conventional()) {
+    Call_conventional *conv = dynamic_cast<Call_conventional *>(call);
+    if (conv && conv->get_signal_detection()) {
+      enable_now = false;
+    }
+  }
+  if (enable_now) {
+    set_enabled(true);
+  }
+
+  recording_count++;
   return true;
+}
+
+void dmr_recorder_impl::stop(int slot) {
+  if (!slots[slot].active) {
+    BOOST_LOG_TRIVIAL(error) << "dmr_recorder: stop on inactive slot " << slot
+                             << " of rec " << rec_num;
+    return;
+  }
+
+  recording_duration += slots[slot].wav_sink->total_length_in_seconds();
+  slots[slot].wav_sink->stop_recording();
+  slots[slot].active = false;
+  slots[slot].call = nullptr;
+
+  std::string short_name;
+  if (slots[0].call) short_name = slots[0].call->get_short_name();
+  else if (slots[1].call) short_name = slots[1].call->get_short_name();
+  BOOST_LOG_TRIVIAL(info) << "[" << short_name << "]\t[33mStopping DMR Recorder Num ["
+                          << rec_num << "][0m\tSlot: " << slot;
+
+  // Only disable the pipeline when both slots have released — otherwise we'd
+  // cut samples to the active slot's sink.
+  if (is_fully_available()) {
+    set_enabled(false);
+  }
+}
+
+void dmr_recorder_impl::stop() {
+  for (int i = 0; i < 2; i++) {
+    if (slots[i].active) stop(i);
+  }
+}
+
+// ---- Per-slot queries -----------------------------------------------------
+
+State dmr_recorder_impl::get_state(int slot) {
+  return slots[slot].wav_sink->get_state();
+}
+
+bool dmr_recorder_impl::is_active(int slot) {
+  return slots[slot].active;
+}
+
+bool dmr_recorder_impl::is_idle(int slot) {
+  // Per-slot idle is sink-state. The prefilter squelch is per-channel — it tells
+  // us about RF on the repeater, not about voice on a specific slot.
+  State s = slots[slot].wav_sink->get_state();
+  return (s == IDLE) || (s == STOPPED);
+}
+
+double dmr_recorder_impl::since_last_write(int slot) {
+  return time(NULL) - slots[slot].wav_sink->get_stop_time();
+}
+
+double dmr_recorder_impl::get_current_length(int slot) {
+  return slots[slot].wav_sink->total_length_in_seconds();
+}
+
+std::vector<Transmission> dmr_recorder_impl::get_transmission_list(int slot) {
+  return slots[slot].wav_sink->get_transmission_list();
+}
+
+// ---- Aggregate (slot-less) overrides --------------------------------------
+
+State dmr_recorder_impl::get_state() {
+  // For status reporting: prefer "more active" of the two slots.
+  State s0 = slots[0].wav_sink->get_state();
+  State s1 = slots[1].wav_sink->get_state();
+  if (s0 == RECORDING || s1 == RECORDING) return RECORDING;
+  if (s0 == IDLE || s1 == IDLE) return IDLE;
+  if (s0 == STOPPED || s1 == STOPPED) return STOPPED;
+  return AVAILABLE;
+}
+
+bool dmr_recorder_impl::is_active() {
+  return slots[0].active || slots[1].active;
+}
+
+bool dmr_recorder_impl::is_idle() {
+  return is_idle(0) && is_idle(1);
+}
+
+double dmr_recorder_impl::since_last_write() {
+  return std::min(since_last_write(0), since_last_write(1));
+}
+
+double dmr_recorder_impl::get_current_length() {
+  return std::max(get_current_length(0), get_current_length(1));
+}
+
+std::vector<Transmission> dmr_recorder_impl::get_transmission_list() {
+  std::vector<Transmission> out = slots[0].wav_sink->get_transmission_list();
+  std::vector<Transmission> s1 = slots[1].wav_sink->get_transmission_list();
+  out.insert(out.end(), s1.begin(), s1.end());
+  std::sort(out.begin(), out.end(),
+            [](const Transmission &a, const Transmission &b) { return a.start_time < b.start_time; });
+  return out;
 }

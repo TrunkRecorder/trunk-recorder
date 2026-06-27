@@ -520,8 +520,9 @@ std::vector<Recorder *> Source::find_conventional_recorders_by_freq(Detected_Sig
     }
   }
 
-  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_conv_recorders.begin(); it != dmr_conv_recorders.end(); it++) {
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin(); it != dmr_recorders.end(); it++) {
     dmr_recorder_sptr rx = *it;
+    if (!rx->is_conventional()) continue;  // only conventional DMR is signal-detected
     double recorder_freq = rx->get_freq();
 
     if (std::abs(freq - recorder_freq) < max_freq_diff) {
@@ -603,8 +604,11 @@ void Source::create_dmr_recorders(gr::top_block_sptr tb, int r) {
   }
   max_dmr_recorders = r;
 
+  // Preallocate N DMR recorder pipelines for trunked use. Each recorder hosts
+  // up to two simultaneous calls (one per TDMA slot), so N recorders can sink
+  // up to 2N concurrent calls — provided no more than 2 share the same RF freq.
   for (int i = 0; i < max_dmr_recorders; i++) {
-    dmr_trunked_recorder_sptr log = make_dmr_trunked_recorder(this);
+    dmr_recorder_sptr log = make_dmr_recorder(this, /*conventional=*/false);
     dmr_recorders.push_back(log);
     log->set_selector_port(next_selector_port);
     tb->connect(recorder_selector, next_selector_port, log, 0);
@@ -683,13 +687,15 @@ p25_recorder_sptr Source::create_digital_conventional_recorder(gr::top_block_spt
 }
 
 dmr_recorder_sptr Source::create_dmr_conventional_recorder(gr::top_block_sptr tb) {
-  // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.
-  // Conventional recorders are tracked seperately in digital_conv_recorders
+  // Conventional DMR recorders are dedicated to a fixed channel from the config
+  // and are not eligible for trunked grants. They live in the same dmr_recorders
+  // vector as trunked recorders; the allocator filters by the `conventional`
+  // flag on the recorder.
   attach_detector(tb);
   attach_selector(tb);
 
-  dmr_recorder_sptr log = make_dmr_recorder(this, DMR);
-  dmr_conv_recorders.push_back(log);
+  dmr_recorder_sptr log = make_dmr_recorder(this, /*conventional=*/true);
+  dmr_recorders.push_back(log);
   log->set_selector_port(next_selector_port);
   tb->connect(recorder_selector, next_selector_port, log, 0);
   next_selector_port++;
@@ -807,36 +813,71 @@ Recorder *Source::get_dmr_recorder(Talkgroup *talkgroup, int priority, Call *cal
 }
 
 Recorder *Source::get_dmr_recorder(Call *call) {
-  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+  // Trunked DMR allocation has two passes:
+  //   1) Find an existing recorder already tuned to this freq with the wanted
+  //      slot free. This is the common Cap Plus / Connect Plus case where both
+  //      slots of a repeater pair are active and share one RF pipeline.
+  //   2) Otherwise take a fully-idle recorder and let start() retune it.
+  // A recorder with one slot busy cannot be retuned without disrupting the
+  // other slot, so it's only reusable when its freq matches the new call.
+  int wanted_slot = call->get_tdma_slot();
+  double wanted_freq = call->get_freq();
+
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
        it != dmr_recorders.end(); it++) {
-    dmr_trunked_recorder_sptr rx = *it;
-    if (rx->get_state() == AVAILABLE) {
+    dmr_recorder_sptr rx = *it;
+    if (rx->is_conventional()) continue;
+    if (rx->get_freq() == wanted_freq && rx->is_slot_available(wanted_slot)) {
       return (Recorder *)rx.get();
     }
   }
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    dmr_recorder_sptr rx = *it;
+    if (rx->is_conventional()) continue;
+    if (rx->is_fully_available()) {
+      return (Recorder *)rx.get();
+    }
+  }
+
   std::string loghdr = log_header(call->get_short_name(), call->get_call_num(),
                                   call->get_talkgroup_display(), call->get_freq());
   BOOST_LOG_TRIVIAL(error) << loghdr << "[ " << device << " ] No DMR Recorders Available.";
-  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
        it != dmr_recorders.end(); it++) {
-    dmr_trunked_recorder_sptr rx = *it;
+    dmr_recorder_sptr rx = *it;
+    if (rx->is_conventional()) continue;
     BOOST_LOG_TRIVIAL(info) << "[ " << rx->get_num() << " ] State: "
-                            << format_state(rx->get_state()) << " Freq: " << rx->get_freq();
+                            << format_state(rx->get_state())
+                            << " Freq: " << rx->get_freq()
+                            << " Slot0: " << (rx->is_slot_available(0) ? "free" : "busy")
+                            << " Slot1: " << (rx->is_slot_available(1) ? "free" : "busy");
   }
   return NULL;
 }
 
 int Source::get_num_available_dmr_recorders() {
+  // Counts the number of slots available across all trunked DMR recorders. A
+  // recorder with both slots free contributes 2; with one slot free contributes
+  // 1. Conventional recorders don't count — they aren't available to grants.
   int num = 0;
-  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
        it != dmr_recorders.end(); it++) {
-    if ((*it)->get_state() == AVAILABLE) num++;
+    dmr_recorder_sptr rx = *it;
+    if (rx->is_conventional()) continue;
+    if (rx->is_slot_available(0)) num++;
+    if (rx->is_slot_available(1)) num++;
   }
   return num;
 }
 
 int Source::dmr_recorder_count() {
-  return dmr_recorders.size();
+  int num = 0;
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
+       it != dmr_recorders.end(); it++) {
+    if (!(*it)->is_conventional()) num++;
+  }
+  return num;
 }
 
 Recorder *Source::get_debug_recorder() {
@@ -894,17 +935,10 @@ void Source::print_recorders() {
     BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << "\tState: " << format_state(rx->get_state());
   }
 
-  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_conv_recorders.begin();
-       it != dmr_conv_recorders.end(); it++) {
-    dmr_recorder_sptr rx = *it;
-
-    BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << "\tState: " << format_state(rx->get_state());
-  }
-
-  for (std::vector<dmr_trunked_recorder_sptr>::iterator it = dmr_recorders.begin();
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin();
        it != dmr_recorders.end(); it++) {
-    dmr_trunked_recorder_sptr rx = *it;
-    BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << "\tState: " << format_state(rx->get_state());
+    dmr_recorder_sptr rx = *it;
+    BOOST_LOG_TRIVIAL(info) << "\t[ " << std::setw(2) << rx->get_num() << " ] " << rx->get_type_string() << (rx->is_conventional() ? "C" : "") << "\tState: " << format_state(rx->get_state());
   }
 
   for (std::vector<analog_recorder_sptr>::iterator it = analog_recorders.begin();
@@ -923,7 +957,7 @@ void Source::print_recorders() {
 }
 
 int Source::digital_recorder_count() {
-  return digital_recorders.size() + digital_conv_recorders.size() + dmr_conv_recorders.size();
+  return digital_recorders.size() + digital_conv_recorders.size() + dmr_recorders.size();
 }
 
 int Source::analog_recorder_count() {
@@ -979,7 +1013,7 @@ std::vector<Recorder *> Source::get_recorders() {
     recorders.push_back((Recorder *)rx.get());
   }
 
-  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_conv_recorders.begin(); it != dmr_conv_recorders.end(); it++) {
+  for (std::vector<dmr_recorder_sptr>::iterator it = dmr_recorders.begin(); it != dmr_recorders.end(); it++) {
     dmr_recorder_sptr rx = *it;
     recorders.push_back((Recorder *)rx.get());
   }

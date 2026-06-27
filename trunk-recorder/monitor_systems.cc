@@ -243,55 +243,47 @@ void print_status(std::vector<Source *> &sources, std::vector<System *> &systems
 }
 
 void manage_conventional_call(Call *call, Config &config) {
+  Recorder *recorder = call->get_recorder();
+  if (!recorder) return;
 
-  if (call->get_recorder()) {
-    // if any recording has happened
+  // All lifecycle queries are slot-aware. For non-DMR recorders the slot
+  // argument is ignored (the base Recorder defaults delegate to the slot-less
+  // method). For DMR this routes to the right transmission_sink so two calls
+  // sharing a recorder don't see each other's idle/length state.
+  int slot = call->get_tdma_slot();
 
-    if (call->get_current_length() > 0) {
+  if (call->get_current_length() > 0) {
+    BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Call Length: " << call->get_current_length() << "s\t Idle: " << recorder->is_idle(slot) << "\t Squelched: " << recorder->is_squelched() << " Idle Count: " << call->get_idle_count();
 
-      BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Call Length: " << call->get_current_length() << "s\t Idle: " << call->get_recorder()->is_idle() << "\t Squelched: " << call->get_recorder()->is_squelched() << " Idle Count: " << call->get_idle_count();
-
-      // means that the squelch is on and it has stopped recording
-      if (call->get_recorder()->is_idle()) {
-        // increase the number of periods it has not been recording for
-        call->set_noise(call->get_recorder()->get_pwr());
-        call->increase_idle_count();
-      } else {
-        call->set_signal(call->get_recorder()->get_pwr());
-        if (call->get_idle_count() > 0) {
-          // if it starts recording again, then reset the idle count
-          call->reset_idle_count();
-        }
+    if (recorder->is_idle(slot)) {
+      call->set_noise(recorder->get_pwr());
+      call->increase_idle_count();
+    } else {
+      call->set_signal(recorder->get_pwr());
+      if (call->get_idle_count() > 0) {
+        call->reset_idle_count();
       }
-
-      // if no additional recording has happened in the past X periods, stop and open new file
-      if (call->get_idle_count() > config.call_timeout) {
-        Recorder *recorder = call->get_recorder();
-        call->conclude_call();
-        call->restart_call();
-        if (recorder != NULL) {
-          plugman_setup_recorder(recorder);
-          plugman_call_start(call);
-        }
-      } else if ((call->get_current_length() > call->get_system()->get_max_duration()) && (call->get_system()->get_max_duration() > 0)) {
-        Recorder *recorder = call->get_recorder();
-        call->conclude_call();
-        call->restart_call();
-        if (recorder != NULL) {
-          plugman_setup_recorder(recorder);
-          plugman_call_start(call);
-        }
-      }
-    } else if (!call->get_recorder()->is_active()) {
-      // P25 Conventional and DMR Recorders need a have the graph unlocked before they can start recording.
-      Recorder *recorder = call->get_recorder();
-      recorder->start(call);
-      call->set_state(RECORDING);
-      plugman_call_start(call);
-      BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Starting P25 Convetional Recorder ";
-
-      // plugman_setup_recorder((Recorder *)recorder->get());
     }
+
+    if (call->get_idle_count() > config.call_timeout) {
+      call->conclude_call();
+      call->restart_call();
+      plugman_setup_recorder(recorder);
+      plugman_call_start(call);
+    } else if ((call->get_current_length() > call->get_system()->get_max_duration()) && (call->get_system()->get_max_duration() > 0)) {
+      call->conclude_call();
+      call->restart_call();
+      plugman_setup_recorder(recorder);
+      plugman_call_start(call);
+    }
+  } else if (!recorder->is_active(slot)) {
+    // Conventional P25 and DMR recorders are started here (not in setup) because
+    // the flowgraph has to be unlocked first. For DMR each slot's call hits
+    // this branch independently and starts only its own slot.
+    recorder->start(call);
+    call->set_state(RECORDING);
+    plugman_call_start(call);
+    BOOST_LOG_TRIVIAL(trace) << "[" << call->get_short_name() << "]\t\033[0;34m" << call->get_call_num() << "C\033[0m Starting Conventional Recorder slot " << slot;
   }
 }
 
@@ -322,9 +314,10 @@ void manage_calls(Config &config, std::vector<Call *> &calls) {
       // Stop the call if:
       // - there hasn't been an UPDATE for it on the Control Channel in X seconds AND the recorder hasn't written anything in X seconds
 
-      if ((recorder->since_last_write() > config.call_timeout) && (call->since_last_update() > config.call_timeout)) {
+      int slot = call->get_tdma_slot();
+      if ((recorder->since_last_write(slot) > config.call_timeout) && (call->since_last_update() > config.call_timeout)) {
         std::string loghdr = log_header( call->get_short_name(), call->get_call_num(), call->get_talkgroup_display(), call->get_freq());
-        BOOST_LOG_TRIVIAL(trace) << loghdr << "\u001b[36m Stopping Call because of Recorder \u001b[0m Rec last write: " << recorder->since_last_write() << " State: " << format_state(recorder->get_state());
+        BOOST_LOG_TRIVIAL(trace) << loghdr << "\u001b[36m Stopping Call because of Recorder \u001b[0m Rec last write: " << recorder->since_last_write(slot) << " State: " << format_state(recorder->get_state(slot));
         call->conclude_call();
         // The State of the Recorders has changed, so lets send an update
         ended_call = true;
@@ -337,8 +330,9 @@ void manage_calls(Config &config, std::vector<Call *> &calls) {
       }
     } else if (call->since_last_update() > config.call_timeout) {
       Recorder *recorder = call->get_recorder();
+      int slot = call->get_tdma_slot();
       std::string loghdr = log_header( call->get_short_name(), call->get_call_num(), call->get_talkgroup_display(), call->get_freq());
-      BOOST_LOG_TRIVIAL(trace) << loghdr << "\u001b[36m  Call UPDATEs has been inactive for more than " << config.call_timeout << " Sec \u001b[0m Rec last write: " << recorder->since_last_write() << " State: " << format_state(recorder->get_state());
+      BOOST_LOG_TRIVIAL(trace) << loghdr << "\u001b[36m  Call UPDATEs has been inactive for more than " << config.call_timeout << " Sec \u001b[0m Rec last write: " << recorder->since_last_write(slot) << " State: " << format_state(recorder->get_state(slot));
     }
     ++it;
   } // foreach loggers
