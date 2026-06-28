@@ -105,6 +105,20 @@ public:
   virtual bool is_squelched() { return true; };
   virtual double get_current_length() { return 0; };
   virtual double since_last_write() { return 0; };
+
+  // Slot-aware overloads. DMR splits one RF pipeline across two independent TDMA
+  // slots, each hosting its own Call. Non-DMR recorders only ever have one stream,
+  // so they fall through to the slot-less versions. Always call these from a Call
+  // context (passing the call's tdma_slot) — never use the slot-less form from
+  // call lifecycle code, because aggregate recorder state cannot distinguish
+  // which slot a particular Call belongs to.
+  virtual void stop(int slot) { stop(); }
+  virtual std::vector<Transmission> get_transmission_list(int slot) { return get_transmission_list(); }
+  virtual State get_state(int slot) { return get_state(); }
+  virtual bool is_active(int slot) { return is_active(); }
+  virtual bool is_idle(int slot) { return is_idle(); }
+  virtual double get_current_length(int slot) { return get_current_length(); }
+  virtual double since_last_write(int slot) { return since_last_write(); }
   virtual void clear(){};
   virtual boost::property_tree::ptree get_stats();
   virtual int get_recording_count() { return recording_count; }

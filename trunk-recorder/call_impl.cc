@@ -121,7 +121,7 @@ void Call_impl::stop_call() {
   if (this->get_recorder() != NULL) {
     // If the call is being recorded, check to see if the recorder is currently in an INACTIVE state. This means that the recorder is not
     // doing anything and can be stopped.
-    if ((state == RECORDING) && this->get_recorder()->is_idle()) {
+    if ((state == RECORDING) && this->get_recorder()->is_idle(tdma_slot)) {
       std::string loghdr = log_header( sys->get_short_name(), this->get_call_num(), this->get_talkgroup_display(), this->get_freq());
       BOOST_LOG_TRIVIAL(info) << loghdr << "Stopping Recorded Call_impl - Last Update: " << this->since_last_update() << "s";
     }
@@ -143,31 +143,33 @@ void Call_impl::conclude_call() {
     if (!recorder) {
       BOOST_LOG_TRIVIAL(error) << "Call_impl::end_call() State is recording, but no recorder assigned!";
     } else {
-      final_length = recorder->get_current_length();
-
+      final_length = recorder->get_current_length(tdma_slot);
     }
 
 
     if (this->is_conventional()) {
-      // Update the signal and noise levels for the call
-      // the squelch could be open if the program is being forced to stop
-      if (this->get_recorder()->is_idle()) {
-        this->set_noise(this->get_recorder()->get_pwr());
+      // Signal/noise reads come from the prefilter, which is shared across DMR
+      // slots — only one RF channel per recorder. Idle is per-slot.
+      if (recorder->is_idle(tdma_slot)) {
+        this->set_noise(recorder->get_pwr());
       } else {
-        this->set_signal(this->get_recorder()->get_pwr());
+        this->set_signal(recorder->get_pwr());
       }
         std::string loghdr = log_header( sys->get_short_name(), this->get_call_num(), this->get_talkgroup_display(), this->get_freq());
-        BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[33mConcluding Recorded Call\u001b[0m - Last Update: " << this->since_last_update() << "s\tRecorder last write:" << recorder->since_last_write() << "\tCall Elapsed: " << this->elapsed() << "\t Signal: " << floor(this->get_signal()) << "dBm\t Noise: " << floor(this->get_noise()) << "dBm";
+        BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[33mConcluding Recorded Call\u001b[0m - Last Update: " << this->since_last_update() << "s\tRecorder last write:" << recorder->since_last_write(tdma_slot) << "\tCall Elapsed: " << this->elapsed() << "\t Signal: " << floor(this->get_signal()) << "dBm\t Noise: " << floor(this->get_noise()) << "dBm";
     } else {
         std::string loghdr = log_header( sys->get_short_name(), this->get_call_num(), this->get_talkgroup_display(), this->get_freq());
-        BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[33mConcluding Recorded Call\u001b[0m - Last Update: " << this->since_last_update() << "s\tRecorder last write:" << recorder->since_last_write() << "\tCall Elapsed: " << this->elapsed();
+        BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[33mConcluding Recorded Call\u001b[0m - Last Update: " << this->since_last_update() << "s\tRecorder last write:" << recorder->since_last_write(tdma_slot) << "\tCall Elapsed: " << this->elapsed();
     }
     if (was_update) {
       std::string loghdr = log_header( sys->get_short_name(), this->get_call_num(), this->get_talkgroup_display(), this->get_freq());
       BOOST_LOG_TRIVIAL(info) << loghdr << "\u001b[33mCall was UPDATE not GRANT\u001b[0m";
     }
-    freq_error = this->get_recorder()->get_freq_error();
-    this->get_recorder()->stop();
+    freq_error = recorder->get_freq_error();
+    // Stop only this call's slot. DMR may have a companion slot recording a
+    // different call that must not be interrupted. Non-DMR recorders ignore
+    // the slot arg and stop the whole recorder.
+    recorder->stop(tdma_slot);
 
     if (this->get_sigmf_recording() == true) {
       this->get_sigmf_recorder()->stop();
@@ -177,21 +179,11 @@ void Call_impl::conclude_call() {
       this->get_debug_recorder()->stop();
     }
 
-    if (this->sys->get_system_type() == "conventionalDMR") {
-      dmr_recorder *recorder = dynamic_cast<dmr_recorder *>(this->get_recorder());
-      // Conventional DMR is recorded on two slots, so we need to conclude the call for each slot
-      transmission_list = recorder->get_transmission_list(0);
-      tdma_slot = 0;
-      Call_Concluder::conclude_call(this, sys, config);
-      transmission_list = recorder->get_transmission_list(1);
-      tdma_slot = 1;
-      Call_Concluder::conclude_call(this, sys, config);
-    } else {
-      // All other system types do not have multiple recorders
-      transmission_list = this->get_recorder()->get_transmission_list();
-      Call_Concluder::conclude_call(this, sys, config);
-   }
-
+    // Each Call owns exactly one slot's worth of transmissions. DMR's
+    // dual-slot is no longer special-cased here — both conventional and
+    // trunked DMR funnel through this path.
+    transmission_list = recorder->get_transmission_list(tdma_slot);
+    Call_Concluder::conclude_call(this, sys, config);
   }
 }
 void Call_impl::set_sigmf_recorder(Recorder *r) {
@@ -232,13 +224,12 @@ double Call_impl::get_final_length() {
 
 double Call_impl::get_current_length() {
   if ((state == RECORDING) && recorder) {
-    if (!recorder) {
-      BOOST_LOG_TRIVIAL(error) << "Call_impl::get_current_length() State is recording, but no recorder assigned!";
-    }
-    return get_recorder()->get_current_length(); // This could SegFault
-  } else {
-    return 0; // time(NULL) - start_time;
+    // Pass tdma_slot so DMR returns the per-slot sink's length. Non-DMR
+    // recorders ignore the slot arg and return the same value as the slot-less
+    // version.
+    return get_recorder()->get_current_length(tdma_slot);
   }
+  return 0;
 }
 
 std::int64_t Call_impl::get_start_time_ms() {
@@ -373,10 +364,9 @@ void Call_impl::set_noise(double n) {
 }
 
 void Call_impl::set_tdma_slot(int m) {
+  // Slot can be 0 or 1 for any TDMA-capable system. phase2_tdma is specifically
+  // a P25 Phase 2 flag and is independent of DMR's slot usage.
   tdma_slot = m;
-  if (!phase2_tdma && tdma_slot) {
-    BOOST_LOG_TRIVIAL(error) << "WHAT! SLot is 1 and TDMA is off";
-  }
 }
 
 int Call_impl::get_tdma_slot() {
@@ -441,7 +431,7 @@ double Call_impl::since_last_voice_update() {
   if (state == RECORDING) {
     Recorder *rec = this->get_recorder();
     if (rec != NULL) {
-      return rec->since_last_write();
+      return rec->since_last_write(tdma_slot);
     }
   }
   return -1;

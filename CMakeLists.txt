@@ -272,6 +272,8 @@ list(APPEND trunk_recorder_sources
   trunk-recorder/systems/smartnet_impl.cc
   trunk-recorder/systems/smartnet_fsk2_demod.cc
   trunk-recorder/systems/system_impl.cc
+  trunk-recorder/systems/dmr_trunking.cc
+  trunk-recorder/systems/dmr_parser.cc
   trunk-recorder/recorders/debug_recorder_impl.cc
   trunk-recorder/recorders/sigmf_recorder_impl.cc
   trunk-recorder/recorders/analog_recorder.cc

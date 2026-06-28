@@ -1,6 +1,9 @@
 Trunk Recorder ChangeLog
 ========================
 ### Unreleased
+* Add trunked DMR support (`"type": "dmr"`) for MOTOTRBO Capacity Plus, Capacity Max, Connect Plus and ETSI Tier III systems with a dedicated control channel; new per-slot `dmr_trunked_recorder` modelled on P25 Phase 2. LCN-to-frequency mapping can be provided explicitly via `lcnTable`, or as a `channels` candidate list that the decoder auto-claims as new LCNs appear.
+* Fix iqfile source ctor arg order in config.cc (center/rate/repeat were mis-ordered, leaving iqfile sources mis-configured)
+* Add optional `TR_IQ_FILE_THROTTLE_X` env var to play `iqfile` sources faster than wall-clock for offline analysis
 * Update simpstream.cc by @aaknitt in #1024
 * Multisite should be boolean, not string by @ancker010 #1026
 * Some documentation updates by @SimonSheehan in #1019 and #1023
