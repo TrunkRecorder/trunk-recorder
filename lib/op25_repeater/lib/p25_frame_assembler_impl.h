@@ -91,6 +91,8 @@ public:
       void clear_silence_frame_count();
       void clear();
       void set_voice_codec_callback(voice_codec_cb_t cb, void *user_data);
+      void crypt_key(uint16_t keyid, uint8_t algid, const std::vector<uint8_t> &key);
+      void crypt_reset();
       log_ts logts;
     };
 

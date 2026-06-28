@@ -1241,7 +1241,8 @@ void Call_Concluder::conclude_call(Call *call, System *sys, const Config &config
     return;
   }
 
-  if (call_info.encrypted) {
+  // Clean up after encrypted calls without keys.
+  if (call_info.encrypted && sys->get_encryption_keys().empty()) {
     if (!call_info.transmission_list.empty() || call_info.min_transmissions_removed > 0) {
       if (create_call_json(call_info) < 0)
         BOOST_LOG_TRIVIAL(error) << loghdr

@@ -63,12 +63,14 @@ bool start_recorder(Call *call, TrunkMessage message, Config &config, System *sy
     call->set_talkgroup_tag("-");
   }
 
+  const bool has_encryption_keys = !sys->get_encryption_keys().empty();
+
   if (call->get_encrypted() == true || (talkgroup && (talkgroup->mode.compare("E") == 0 || talkgroup->mode.compare("TE") == 0 || talkgroup->mode.compare("DE") == 0))) {
     if (talkgroup && (talkgroup->mode.compare("E") == 0 || talkgroup->mode.compare("TE") == 0 || talkgroup->mode.compare("DE") == 0)) {
       call->set_encrypted(true);
     }
     
-    if (!sys->get_monitorEncrypted()) {
+    if (!sys->get_monitorEncrypted() && !has_encryption_keys) {
       call->set_state(MONITORING);
       call->set_monitoring_state(ENCRYPTED);
       if (sys->get_hideEncrypted() == false) {
