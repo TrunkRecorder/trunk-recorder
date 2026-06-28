@@ -367,14 +367,20 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         }
 
         bool qpsk_mod = true;
+        std::string analog_modulation = "fm";
         double digital_levels = element.value("digitalLevels", 1.0);
         double analog_levels = element.value("analogLevels", 8.0);
         double squelch_db = element.value("squelch", -160.0);
         float tau = element.value("deemphasisTau", 0.000750);  // Default to 750us if not specified
         int max_dev = element.value("maxDev", 5000);
         double filter_width = element.value("filterWidth", 1.0);
+        // Analog-only knobs; 0 => the analog recorder picks an FM- or AM-appropriate default.
+        double channel_bandwidth = element.value("bandwidth", 0.0);
+        int audio_passband_low = element.value("audioHighpass", 0);
+        int audio_passband_high = element.value("audioLowpass", 0);
         bool conversation_mode = element.value("conversationMode", true);
         bool mod_exists = element.contains("modulation");
+        bool is_conventional_analog = (system->get_system_type() == "conventional");
 
         if (mod_exists) {
           system_modulation = element["modulation"];
@@ -385,11 +391,21 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
           } else if (boost::iequals(system_modulation, "fsk4")) {
             qpsk_mod = false;
             BOOST_LOG_TRIVIAL(info) << "Modulation: fsk4";
+          } else if (boost::iequals(system_modulation, "fm")) {
+            analog_modulation = "fm";
+            BOOST_LOG_TRIVIAL(info) << "Modulation: fm";
+          } else if (boost::iequals(system_modulation, "am")) {
+            analog_modulation = "am";
+            BOOST_LOG_TRIVIAL(info) << "Modulation: am";
           } else {
-            qpsk_mod = true;
-            BOOST_LOG_TRIVIAL(error) << "! System Modulation specified but not recognized, it needs to be either \"fsk4\" or \"qpsk\", assuming qpsk";
+            if (is_conventional_analog) {
+              BOOST_LOG_TRIVIAL(error) << "! Conventional Modulation specified but not recognized, it needs to be \"fm\" or \"am\", assuming fm";
+            } else {
+              qpsk_mod = true;
+              BOOST_LOG_TRIVIAL(error) << "! System Modulation specified but not recognized, it needs to be either \"fsk4\" or \"qpsk\", assuming qpsk";
+            }
           }
-        } else {
+        } else if (!is_conventional_analog) {
           BOOST_LOG_TRIVIAL(info) << "Modulation: qpsk";
           qpsk_mod = true;
         }
@@ -400,12 +416,28 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
         system->set_qpsk_mod(qpsk_mod);
         system->set_max_dev(max_dev);
         system->set_filter_width(filter_width);
+        system->set_analog_modulation(analog_modulation);
+        system->set_channel_bandwidth(channel_bandwidth);
+        system->set_audio_passband_low(audio_passband_low);
+        system->set_audio_passband_high(audio_passband_high);
         system->set_conversation_mode(conversation_mode);
         BOOST_LOG_TRIVIAL(info) << "Conversation Mode: " << conversation_mode;
         BOOST_LOG_TRIVIAL(info) << "Analog Recorder Maximum Deviation: " << element.value("maxDev", 5000);
         BOOST_LOG_TRIVIAL(info) << "Filter Width: " << filter_width;
         BOOST_LOG_TRIVIAL(info) << "Squelch: " << element.value("squelch", -160);
         BOOST_LOG_TRIVIAL(info) << "De-emphasis Tau: " << tau;
+        if (is_conventional_analog) {
+          BOOST_LOG_TRIVIAL(info) << "Analog Modulation: " << analog_modulation;
+          if (channel_bandwidth > 0) {
+            BOOST_LOG_TRIVIAL(info) << "Channel Bandwidth: " << channel_bandwidth << " Hz";
+          }
+          if (audio_passband_low > 0) {
+            BOOST_LOG_TRIVIAL(info) << "Audio Passband Low (HPF): " << audio_passband_low << " Hz";
+          }
+          if (audio_passband_high > 0) {
+            BOOST_LOG_TRIVIAL(info) << "Audio Passband High (LPF): " << audio_passband_high << " Hz";
+          }
+        }
         system->set_api_key(element.value("apiKey", ""));
         BOOST_LOG_TRIVIAL(info) << "API Key: " << system->get_api_key();
         system->set_bcfy_api_key(element.value("broadcastifyApiKey", ""));

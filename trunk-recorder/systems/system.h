@@ -138,6 +138,14 @@ public:
   virtual int get_max_dev() = 0;
   virtual void set_filter_width(double f) = 0;
   virtual double get_filter_width() = 0;
+  virtual void set_analog_modulation(std::string m) = 0;
+  virtual std::string get_analog_modulation() = 0;
+  virtual void set_channel_bandwidth(double b) = 0;
+  virtual double get_channel_bandwidth() = 0;
+  virtual void set_audio_passband_low(int hz) = 0;
+  virtual int get_audio_passband_low() = 0;
+  virtual void set_audio_passband_high(int hz) = 0;
+  virtual int get_audio_passband_high() = 0;
   virtual gr::msg_queue::sptr get_msg_queue() = 0;
   virtual std::string get_system_type() = 0;
   virtual unsigned long get_sys_id() = 0;

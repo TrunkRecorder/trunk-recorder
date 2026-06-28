@@ -1,0 +1,34 @@
+{
+    "ver": 2,
+    "sources": [{
+        "center": 123500000,
+        "rate": 2400000,
+        "error": 0,
+        "gain": 40,
+        "agc": false,
+        "digitalRecorders": 0,
+        "analogRecorders": 0,
+        "driver": "osmosdr"
+    }],
+    "systems": [
+        {
+            "type": "conventional",
+            "modulation": "am",
+            "shortName": "airband",
+            "channels": [
+                121500000,
+                122850000,
+                123450000,
+                124200000,
+                124750000
+            ],
+            "squelch": -60,
+            "bandwidth": 8000,
+            "audioHighpass": 300,
+            "audioLowpass": 3000,
+            "analogLevels": 8,
+            "callLog": true,
+            "audioArchive": true
+        }
+    ]
+}

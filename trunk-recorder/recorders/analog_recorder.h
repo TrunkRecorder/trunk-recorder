@@ -29,6 +29,8 @@
 #include <gnuradio/blocks/multiply_const.h>
 #include <gnuradio/filter/fir_filter_blk.h>
 #endif
+#include <gnuradio/blocks/add_const_ff.h>
+#include <gnuradio/blocks/complex_to_mag.h>
 #include <gnuradio/filter/fft_filter_ccf.h>
 #include <gnuradio/filter/firdes.h>
 #include <gnuradio/filter/iir_filter_ffd.h>
@@ -67,12 +69,14 @@ int plugman_signal(long unitId, const char *signaling_type, gr::blocks::SignalTy
 
 analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type);
 analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq);
+analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq, bool am_mode, double channel_bandwidth);
 class analog_recorder : public gr::hier_block2, public Recorder {
   friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type);
   friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq);
+  friend analog_recorder_sptr make_analog_recorder(Source *src, Recorder_Type type, float tone_freq, bool am_mode, double channel_bandwidth);
 
 protected:
-  analog_recorder(Source *src, System *system, Recorder_Type type, float tone_freq);
+  analog_recorder(Source *src, System *system, Recorder_Type type, float tone_freq, bool am_mode, double channel_bandwidth);
 
 public:
   ~analog_recorder();
@@ -121,6 +125,10 @@ private:
   time_t timestamp;
   time_t starttime;
   bool use_tone_squelch;
+  bool am_mode;
+  double d_channel_bandwidth;
+  int d_audio_high_hz;
+  int d_audio_low_hz;
 
   State state;
   std::vector<float> channel_lpf_taps;
@@ -156,6 +164,8 @@ private:
   gr::analog::ctcss_squelch_ff::sptr tone_squelch;
 
   gr::analog::quadrature_demod_cf::sptr demod;
+  gr::blocks::complex_to_mag::sptr am_envelope;
+  gr::blocks::add_const_ff::sptr am_dc_remove;
   gr::blocks::float_to_short::sptr converter;
 
   gr::blocks::transmission_sink::sptr wav_sink;

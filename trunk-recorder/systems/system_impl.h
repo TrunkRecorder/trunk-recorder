@@ -85,6 +85,10 @@ public:
   int bandplan_offset;
   int max_dev;
   double filter_width;
+  std::string analog_modulation;
+  double channel_bandwidth;
+  int audio_passband_low;
+  int audio_passband_high;
   double min_call_duration;
   double max_call_duration;
   double min_transmission_duration;
@@ -225,6 +229,14 @@ public:
   int get_max_dev() override;
   void set_filter_width(double f) override;
   double get_filter_width() override;
+  void set_analog_modulation(std::string m) override;
+  std::string get_analog_modulation() override;
+  void set_channel_bandwidth(double b) override;
+  double get_channel_bandwidth() override;
+  void set_audio_passband_low(int hz) override;
+  int get_audio_passband_low() override;
+  void set_audio_passband_high(int hz) override;
+  int get_audio_passband_high() override;
   gr::msg_queue::sptr get_msg_queue() override;
   std::string get_system_type() override;
   unsigned long get_sys_id() override;

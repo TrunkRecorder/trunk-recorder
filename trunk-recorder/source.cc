@@ -659,6 +659,22 @@ analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb)
   next_selector_port++;
   return log;
 }
+
+analog_recorder_sptr Source::create_conventional_recorder(gr::top_block_sptr tb, float tone_freq, bool am_mode, double channel_bandwidth) {
+  // AM/FM-aware variant used by setup_conventional_channel when a system
+  // declares modulation="am" or supplies a custom channel bandwidth. The
+  // existing FM-only variants stay in place so call sites that don't care
+  // about modulation don't need to change.
+  attach_detector(tb);
+  attach_selector(tb);
+
+  analog_recorder_sptr log = make_analog_recorder(this, ANALOGC, tone_freq, am_mode, channel_bandwidth);
+  analog_conv_recorders.push_back(log);
+  log->set_selector_port(next_selector_port);
+  tb->connect(recorder_selector, next_selector_port, log, 0);
+  next_selector_port++;
+  return log;
+}
 sigmf_recorder_sptr Source::create_sigmf_conventional_recorder(gr::top_block_sptr tb) {
   // Not adding it to the vector of digital_recorders. We don't want it to be available for trunk recording.
   // Conventional recorders are tracked seperately in digital_conv_recorders

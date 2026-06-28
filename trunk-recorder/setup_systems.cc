@@ -36,7 +36,14 @@ bool setup_conventional_channel(System *system, double frequency, long channel_i
       BOOST_LOG_TRIVIAL(info) << "[" << system->get_short_name() << "]\tMonitoring " << system->get_system_type() << " channel: " << format_freq(frequency) << " Talkgroup: " << channel_index;
       if (system->get_system_type() == "conventional") {
         analog_recorder_sptr rec;
-        if (tone_freq > 0.0) {
+        bool am_mode = (system->get_analog_modulation() == "am");
+        double channel_bandwidth = system->get_channel_bandwidth();
+        if (am_mode || channel_bandwidth > 0) {
+          // AM-aware path. CTCSS doesn't apply to AM, so a configured tone is
+          // intentionally ignored when am_mode is true (the recorder also
+          // guards against this internally).
+          rec = source->create_conventional_recorder(tb, tone_freq, am_mode, channel_bandwidth);
+        } else if (tone_freq > 0.0) {
           rec = source->create_conventional_recorder(tb, tone_freq);
         } else {
           rec = source->create_conventional_recorder(tb);

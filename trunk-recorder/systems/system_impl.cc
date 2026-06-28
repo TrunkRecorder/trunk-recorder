@@ -221,6 +221,10 @@ System_impl::System_impl(int sys_num) {
   audio_loudnorm_lra = 11.0;
   audio_ffmpeg_filter = "";
   audio_output_raw_audio = false;
+  analog_modulation = "fm";
+  channel_bandwidth = 0;       // 0 => use mode-appropriate default in the recorder
+  audio_passband_low = 0;      // 0 => use mode-appropriate default in the recorder
+  audio_passband_high = 0;     // 0 => use mode-appropriate default in the recorder
 }
 
 void System_impl::set_xor_mask(unsigned long sys_id, unsigned long wacn, unsigned long nac) {
@@ -345,6 +349,38 @@ void System_impl::set_max_dev(int max_dev) {
 
 int System_impl::get_max_dev() {
   return max_dev;
+}
+
+void System_impl::set_analog_modulation(std::string m) {
+  this->analog_modulation = m;
+}
+
+std::string System_impl::get_analog_modulation() {
+  return analog_modulation;
+}
+
+void System_impl::set_channel_bandwidth(double b) {
+  this->channel_bandwidth = b;
+}
+
+double System_impl::get_channel_bandwidth() {
+  return channel_bandwidth;
+}
+
+void System_impl::set_audio_passband_low(int hz) {
+  this->audio_passband_low = hz;
+}
+
+int System_impl::get_audio_passband_low() {
+  return audio_passband_low;
+}
+
+void System_impl::set_audio_passband_high(int hz) {
+  this->audio_passband_high = hz;
+}
+
+int System_impl::get_audio_passband_high() {
+  return audio_passband_high;
 }
 
 void System_impl::set_analog_levels(double r) {
