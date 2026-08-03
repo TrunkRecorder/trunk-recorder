@@ -180,6 +180,7 @@ struct Call_Data_t {
 
   std::vector<int> plugin_retry_list;
   nlohmann::ordered_json call_json;
+  bool started_from_update = false;
 };
 
 #endif
