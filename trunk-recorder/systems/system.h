@@ -155,6 +155,8 @@ public:
   virtual std::string get_unit_tags_file() = 0;
   virtual Source *get_source() = 0;
   virtual void set_source(Source *) = 0;
+  virtual bool get_source_affinity() = 0;
+  virtual void set_source_affinity(bool) = 0;
   virtual Talkgroup *find_talkgroup(long tg) = 0;
   virtual Talkgroup *find_talkgroup_by_freq(double freq) = 0;
   virtual std::string find_unit_tag(long unitID) = 0;

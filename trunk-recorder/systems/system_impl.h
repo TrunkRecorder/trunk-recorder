@@ -92,6 +92,7 @@ public:
   std::string audio_bitrate;
   bool conversation_mode;
   bool qpsk_mod;
+  bool source_affinity;
   double squelch_db;
   float tau;
   double analog_levels;
@@ -242,6 +243,8 @@ public:
   std::string get_unit_tags_file() override;
   Source *get_source() override;
   void set_source(Source *) override;
+  bool get_source_affinity() override;
+  void set_source_affinity(bool) override;
   Talkgroup *find_talkgroup(long tg) override;
   Talkgroup *find_talkgroup_by_freq(double freq) override;
   std::string find_unit_tag(long unitID) override;
