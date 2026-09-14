@@ -283,6 +283,8 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
 
         system->set_system_type(element["type"]);
         BOOST_LOG_TRIVIAL(info) << "System Type: " << system->get_system_type();
+        system->set_source_affinity(element.value("sourceAffinity", false));
+        BOOST_LOG_TRIVIAL(info) << "Control Channel Source Affinity: " << system->get_source_affinity();
 
         // If it is a conventional System
         if ((system->get_system_type() == "conventional") || (system->get_system_type() == "conventionalP25") || (system->get_system_type() == "conventionalDMR") || (system->get_system_type() == "conventionalSIGMF")) {

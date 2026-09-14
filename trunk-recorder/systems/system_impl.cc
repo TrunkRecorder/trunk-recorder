@@ -206,6 +206,7 @@ System_impl::System_impl(int sys_num) {
   retune_attempts = 0;
   message_count = 0;
   decode_rate = 0;
+  source_affinity = false;
   dmr_rest_lcn = -1;
   dmr_variant = "";
   msg_queue = gr::msg_queue::make(100);
@@ -498,6 +499,14 @@ Source *System_impl::get_source() {
 
 void System_impl::set_source(Source *s) {
   this->source = s;
+}
+
+bool System_impl::get_source_affinity() {
+  return source_affinity;
+}
+
+void System_impl::set_source_affinity(bool enabled) {
+  source_affinity = enabled;
 }
 
 Talkgroup *System_impl::find_talkgroup(long tg_number) {

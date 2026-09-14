@@ -1,5 +1,6 @@
 #include "monitor_systems.h"
 #include "recorders/p25_recorder.h"
+#include "systems/control_channel_source_affinity.h"
 #include "systems/dmr_parser.h"
 #include <chrono>
 #include <boost/log/sinks/text_file_backend.hpp>
@@ -704,13 +705,20 @@ void handle_message(std::vector<TrunkMessage> messages, System *sys, Config &con
 void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &sources) {
   System_impl *system = (System_impl *)sys;
   bool source_found = false;
+  bool source_affinity_blocked = false;
   Source *current_source = system->get_source();
   double control_channel_freq = system->get_next_control_channel();
+  bool current_source_covers_control_channel =
+      (current_source->get_min_hz() <= control_channel_freq) &&
+      (current_source->get_max_hz() >= control_channel_freq);
+  ControlChannelRetuneSourceAction source_action =
+      control_channel_retune_source_action(
+          system->get_source_affinity(),
+          current_source_covers_control_channel);
 
   BOOST_LOG_TRIVIAL(error) << "[" << system->get_short_name() << "] Retuning to Control Channel: " << format_freq(control_channel_freq);
 
-  if ((current_source->get_min_hz() <= control_channel_freq) &&
-      (current_source->get_max_hz() >= control_channel_freq)) {
+  if (source_action == ControlChannelRetuneSourceAction::RetuneOnCurrentSource) {
     source_found = true;
     BOOST_LOG_TRIVIAL(info) << "\t - System Source " << current_source->get_num() << " - Min Freq: " << format_freq(current_source->get_min_hz()) << " Max Freq: " << format_freq(current_source->get_max_hz());
     // The source can cover the System's control channel, break out of the
@@ -727,6 +735,15 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
     } else {
       BOOST_LOG_TRIVIAL(error) << "\t - Unknown system type for Retune";
     }
+  } else if (source_action == ControlChannelRetuneSourceAction::BlockCrossSourceRetune) {
+    source_affinity_blocked = true;
+    BOOST_LOG_TRIVIAL(warning)
+        << "\t - Source affinity blocked cross-source control-channel retune for "
+        << system->get_short_name() << ": requested "
+        << format_freq(control_channel_freq) << " is outside assigned Source "
+        << current_source->get_num() << " ("
+        << format_freq(current_source->get_min_hz()) << " - "
+        << format_freq(current_source->get_max_hz()) << ").";
   } else {
     for (vector<Source *>::iterator src_it = sources.begin(); src_it != sources.end(); src_it++) {
       Source *source = *src_it;
@@ -776,9 +793,9 @@ void retune_system(System *sys, gr::top_block_sptr &tb, std::vector<Source *> &s
       }
     }
   }
-  if (!source_found) {
+  if (!source_found && !source_affinity_blocked) {
     BOOST_LOG_TRIVIAL(error) << "\t - Unable to retune System control channel, freq not covered by any source.";
-  } else {
+  } else if (source_found) {
     if ((system->get_source()->get_autotune_source()) && (system->get_system_type() == "p25")) {
       // If control channel source has autotune enabled, perform adjustments after retune completes
       // Don't store measurements since the control channel recorder just started

@@ -424,3 +424,14 @@ if (GR_IIO_FOUND)
 endif()
 
 install(TARGETS trunk-recorder RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(control_channel_source_affinity_tests
+    tests/control_channel_source_affinity_tests.cc
+  )
+  target_include_directories(control_channel_source_affinity_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+  )
+  add_test(NAME control_channel_source_affinity_tests COMMAND control_channel_source_affinity_tests)
+endif()
