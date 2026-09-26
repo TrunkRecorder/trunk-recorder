@@ -56,7 +56,6 @@ namespace gr {
 
         p25p1_fdma::~p25p1_fdma()
         {
-            if (capture_file_) { fclose(capture_file_); capture_file_ = nullptr; }
             delete framer;
         }
 
@@ -243,12 +242,6 @@ namespace gr {
 			rx_status.last_update = time(NULL);
 			for (int i=0; i<20; i++)
 				error_history[i] = -1;
-			// Pick up env-var-based IMBE capture directory. Cleared on dtor.
-			const char* env_cap = std::getenv("OP25_IMBE_CAPTURE_DIR");
-			if (env_cap && env_cap[0]) {
-				capture_dir_ = env_cap;
-				fprintf(stderr, "[IMBE capture] enabled, dir=%s\n", env_cap);
-			}
 		}
 
 		void p25p1_fdma::reset_rx_status() {
@@ -432,6 +425,7 @@ namespace gr {
             reset_ess();
 
             if ((d_do_imbe || d_do_audio_output) && (framer->duid == 0x3 || framer->duid == 0xf)) {  // voice termination
+                monitor.end_transmission();
                 op25audio.send_audio_flag(op25_audio::DRAIN);
 				terminate_call = std::pair<bool,long>(true, output_queue.size());
             }
@@ -850,59 +844,6 @@ namespace gr {
 
                     errs = imbe_header_decode(cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
 
-                    // IMBE frame capture for offline tuning. Open a per-call
-                    // file the first time we see a frame after a clear(), and
-                    // append one fixed-size record per frame.
-                    if (!capture_dir_.empty()) {
-                        // Start a new file when the talkgroup changes or voice
-                        // resumes after a gap. Done here, on the decoder thread,
-                        // because clear() is called from the main thread and
-                        // must not touch the FILE*.
-                        struct timeval now;
-                        gettimeofday(&now, NULL);
-                        double gap = (now.tv_sec - capture_last_.tv_sec) + (now.tv_usec - capture_last_.tv_usec) / 1e6;
-                        capture_last_ = now;
-                        if (capture_file_ && (gap > 2.0 || capture_tgid_ != vf_tgid)) {
-                            fclose(capture_file_);
-                            capture_file_ = nullptr;
-                        }
-                        if (capture_file_ == nullptr) {
-                            capture_tgid_ = vf_tgid;
-                            // Filename: <dir>/p25imbe_<tgid>_<epoch_ms>.imbe
-                            char fname[1024];
-                            uint64_t ms = (uint64_t)now.tv_sec * 1000ULL + now.tv_usec / 1000;
-                            snprintf(fname, sizeof(fname),
-                                     "%s/p25imbe_tg%u_%llu.imbe",
-                                     capture_dir_.c_str(),
-                                     (unsigned)vf_tgid,
-                                     (unsigned long long)ms);
-                            capture_file_ = fopen(fname, "wb");
-                            if (capture_file_) {
-                                fprintf(stderr, "[IMBE capture] -> %s\n", fname);
-                                // 16-byte header: "P25IMBE\0" magic + uint32 version + uint32 reserved
-                                const char magic[8] = {'P','2','5','I','M','B','E','\0'};
-                                uint32_t ver = 1, reserved = 0;
-                                fwrite(magic, 1, 8, capture_file_);
-                                fwrite(&ver, 4, 1, capture_file_);
-                                fwrite(&reserved, 4, 1, capture_file_);
-                            } else {
-                                // Disable further attempts so we don't spam errors
-                                // every 20 ms; user can re-enable by restarting.
-                                fprintf(stderr, "[IMBE capture] fopen failed for %s: %s — disabling capture\n",
-                                        fname, std::strerror(errno));
-                                capture_dir_.clear();
-                            }
-                        }
-                        if (capture_file_) {
-                            // 40-byte record: u[0..7] (8 u32) + E0 (u32) + ET (u32)
-                            uint32_t rec[10] = {
-                                u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7],
-                                E0, ET
-                            };
-                            fwrite(rec, 4, 10, capture_file_);
-                        }
-                    }
-
                     if (d_debug >= 9) {
                         packed_codeword p_cw;
                         imbe_pack(p_cw, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7]);
@@ -966,9 +907,11 @@ namespace gr {
                         if ( !encrypted()) {
                             // This is the Vocoder that OP25 currently uses.
 
+                            ImbeFrameInfo info;
                             if (d_soft_vocoder) {
                                 // This is vocoder that is for half-rate
                                 software_decoder.decode_fullrate(snd, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
+                                info = software_decoder.last_frame_info();
                             } else {
                                 // This is the older, fullrate vocoder
                                 // it was copied from p25p1_voice_decode.cc
@@ -978,8 +921,11 @@ namespace gr {
                                     frame_vector[i] = u[i] & 0xFFFF;
                                 }
                                 frame_vector[7] >>= 1;
-                                vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
+                                info.status = vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
+                                info.cause = vocoder.last_cause();
+                                info.er = vocoder.last_er();
                             }
+                            monitor.frame(vf_tgid, framer->nac, cached_src_id, u, E0, ET, false, &info, snd, SND_FRAME);
 
                             if (op25audio.enabled()) {      // decoded audio goes out via UDP (normal code path)
                                 op25audio.send_audio(snd, SND_FRAME * sizeof(int16_t));
@@ -989,6 +935,7 @@ namespace gr {
                                 }
                             }
                         } else {
+                            monitor.frame(vf_tgid, framer->nac, cached_src_id, u, E0, ET, true, nullptr, nullptr, 0);
 		                    // For encrypted voice without a valid key, push silent audio frames
                             // If monitoring for metadata, this will allow tags to pass and preserve call flow
                             if (!op25audio.enabled()) {

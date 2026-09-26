@@ -142,6 +142,27 @@ struct VocoderParams {
 };
 
 /**
+ * What the decoder did with the last frame, for reception statistics
+ * (vocoder_monitor). Shared by the float and fixed-point decoders.
+ */
+struct ImbeFrameInfo {
+	enum Status { DECODED = 0, REPEATED = 1, MUTED = 2 };
+	enum Cause {                // why a frame was repeated or muted (bitmask)
+		CAUSE_B0     = 1,   // b0 > 207 (invalid pitch / silence / tone)
+		CAUSE_E0     = 2,   // Golay errors in u0 at the repeat threshold
+		CAUSE_ET     = 4,   // total corrected errors over ET threshold
+		CAUSE_ER     = 8,   // smoothed error rate over mute threshold
+		CAUSE_MAXREP = 16   // too many consecutive repeats
+	};
+	int status = DECODED;
+	int cause = 0;
+	float w0 = 0.0f;            // fundamental, radians/sample (0 if unknown)
+	int L = 0;                  // harmonics
+	int n_voiced = -1;          // voiced harmonics (-1 if unknown)
+	float er = 0.0f;            // smoothed error rate after this frame
+};
+
+/**
  * A software implementation of the imbe_decoder interface.
  */
 class software_imbe_decoder : public imbe_decoder {
@@ -172,6 +193,11 @@ public:
 	 */
 	void set_params(const VocoderParams& p) { params_ = p; }
 	const VocoderParams& get_params() const { return params_; }
+
+	/**
+	 * What happened to the frame most recently passed to decode_fullrate().
+	 */
+	const ImbeFrameInfo& last_frame_info() const { return last_info_; }
 
 	/**
 	 * Multi-pass / offline support: capture the per-band voicing decision
@@ -227,7 +253,8 @@ private:
 	int vee_history[57][4];		// past voicing decisions per harmonic (newest at [0])
 	int vee_override_[57];		// one-shot override of vee[][New] for offline multi-pass
 	bool vee_override_active_;	// one-shot flag; consumed by decode_fullrate
-	VocoderParams params_;		// runtime tuning; defaults set in struct
+	VocoderParams params_;
+	ImbeFrameInfo last_info_;		// runtime tuning; defaults set in struct
 
 	int Old;
 	int New;
