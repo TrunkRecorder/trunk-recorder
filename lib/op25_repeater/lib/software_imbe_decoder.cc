@@ -1452,7 +1452,10 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
 	//synth:
-	synth_unvoiced();// ToDo: make suv return value?
+	if (params_.uv_synth_mode == 1)
+		synth_unvoiced_smooth();
+	else
+		synth_unvoiced();// ToDo: make suv return value?
 	synth_voiced(); // ToDo: make sv return value?
 
 	//output:
