@@ -501,32 +501,6 @@ All fields of `VocoderParams` (declared in [`software_imbe_decoder.h`](../../lib
 
 ---
 
-## Measuring / tuning
-
-### Live telemetry
-
-Setting the environment variable `OP25_DEBUG_VOCODER=1` before launching
-`trunk-recorder` enables a static aggregator inside `software_imbe_decoder`
-that collects per-frame stats across every P25 call handled by every
-recorder. Every 60 seconds (`TELEMETRY_WINDOW_SEC`) it writes a summary to
-stderr, like:
-
-```
-[VOCODER STATS] 60s window  audio=42s  frames=2103  uv->v=87
-  frames    : muted=1.3%  repeated=3.2%
-  voicing   : 6.4 band-flips/sec
-  pitch     : 1.1% of frames with |dw0|/w0 > 0.25
-  ER        : mean=0.0091  p95=0.0334   (mute threshold 0.0875)
-  model     : L mean=22.4 (range 11-43)  Luv mean=7.2
-  output    : crest=5.13  SFM=0.184
-  hints     : (metrics in healthy ranges)
-```
-
-The telemetry is off by default and zero-cost when the env var isn't set
-(one `getenv` on the first frame, then an early-return).
-
----
-
 ## Implementation gaps and assumptions
 
 Patents typically describe *what* a technique does and *why* it works, but
@@ -816,22 +790,17 @@ for historical context.
 
 ### Possible follow-ups (not implemented)
 
-Other multi-pass / quality-latency tradeoffs that could be added if
+Quality / latency tradeoffs that could be added if
 ear-truth says they're worth the complexity. None are in code today;
 listed here so the next iteration knows where to look.
 
 | Idea | Mechanism | Likely impact |
 |---|---|---|
-| Centered pitch (`w0`) median | Same 2-pass pattern: capture per-frame `w0`, median across window, override before pass 2. Requires also interpolating `M[l]` to the corrected harmonic grid (per US6912496); not trivial. | Catches occasional octave-error frames that produce audible glitches. |
+| Centered pitch (`w0`) median | Two-pass decode: capture per-frame `w0`, median across window, override before pass 2. Requires also interpolating `M[l]` to the corrected harmonic grid (per US6912496); not trivial. | Catches occasional octave-error frames that produce audible glitches. |
 | Adaptive mute threshold | Pass 1 collects the per-frame ER distribution; pass 2 uses a threshold set relative to that call's typical ER instead of the fixed 0.0875. | Frees normal-noise frames from being muted on quiet/distant calls; tightens threshold on clean calls. |
 | Whole-call AGC | After pass 2, post-process the output WAV to normalize peak / RMS to a target. Pure Python, no decoder change. | Useful when systems have very mixed loudness across talkgroups. |
 | Sub-frame interpolation (Gap 8) | Restructure `synth_voiced` to do M synthesis passes per 20 ms frame (M=2 or 3), interpolating `L`, `w0`, `M[l]`, `vee[l]` between frames. Patent US6131084 describes this. | Smoother sustained vowels, less frame-boundary artifact. |
 | Frame-buffered live decoder | Buffer N IMBE frames inside `p25p1_fdma` before emitting audio; smoothing then uses past + future. Adds N·20 ms output delay. | Brings centered-voicing-smoothing benefit to live recordings (currently offline-only). |
-
-If any of these turn out to be wanted, the existing voicing hooks
-(`get_decoded_voicing`, `set_voicing_override`) are the template - add the
-corresponding accessor / override pair on the parameter you want to smooth
-across the call.
 
 ---
 

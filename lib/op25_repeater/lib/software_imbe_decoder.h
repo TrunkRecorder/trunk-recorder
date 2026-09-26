@@ -260,25 +260,6 @@ public:
 	const ImbeFrameInfo& last_frame_info() const { return last_info_; }
 
 	/**
-	 * Multi-pass / offline support: capture the per-band voicing decision
-	 * of the last decoded frame (post-smoothing, post-override). out[1..56]
-	 * are populated; out[0] = 0.
-	 */
-	void get_decoded_voicing(int out[57]) const;
-
-	/**
-	 * Multi-pass / offline support: pre-set the voicing decision for the
-	 * NEXT call to decode_fullrate. Override is applied AFTER
-	 * smooth_voicing_decisions and BEFORE compute_envelope_phases /
-	 * postfilter / synth, so it controls what the synthesizer sees.
-	 * Consumed (cleared) after one decode call. Use in a pass-2 decode
-	 * with externally-smoothed voicing from a pass-1 capture.
-	 *
-	 * in[1..56] are read; in[0] is ignored.
-	 */
-	void set_voicing_override(const int in[57]);
-
-	/**
 	 * Decode the compressed audio.
 	 *
 	 * \cw in IMBE codeword (including parity check bits).
@@ -312,8 +293,6 @@ private:
 	uint32_t voiced_phase_seed;	// xorshift32 state for per-frame voiced phase regen
 	uint32_t unvoiced_noise_state;	// full 32-bit xorshift32 state for unvoiced excitation
 	int vee_history[57][4];		// past voicing decisions per harmonic (newest at [0])
-	int vee_override_[57];		// one-shot override of vee[][New] for offline multi-pass
-	bool vee_override_active_;	// one-shot flag; consumed by decode_fullrate
 	VocoderParams params_;
 	ImbeFrameInfo last_info_;		// runtime tuning; defaults set in struct
 
