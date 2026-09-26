@@ -1076,18 +1076,12 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	u7 >>= 1;
     int b0 = ((u0 >> 4) & 0xfc) | ((u7 >> 1) & 0x3);
 
-	int cause = 0;
 	ER = (0.95 * ER) + (0.000365 * ET);
 	if( ER > params_.mute_er) {                                  // Frame Muting per TIA-102-BABA-A section 7.8
 		muted = true;
-		cause = ImbeFrameInfo::CAUSE_ER;
 	} else if(b0 > 207 || (int)E0 >= params_.repeat_e0 || ET >= (params_.repeat_et_base + params_.repeat_et_slope * ER)) { // Frame Repeat per TIA-102-BABA-A section 7.7
-		if (b0 > 207) cause |= ImbeFrameInfo::CAUSE_B0;
-		if ((int)E0 >= params_.repeat_e0) cause |= ImbeFrameInfo::CAUSE_E0;
-		if (ET >= (params_.repeat_et_base + params_.repeat_et_slope * ER)) cause |= ImbeFrameInfo::CAUSE_ET;
 		if (repeat_last()) {                                     // mute if repeat not allowed
 			muted = true;
-			cause |= ImbeFrameInfo::CAUSE_MAXREP;
 		} else {
 			repeated = true;
 		}
@@ -1165,15 +1159,6 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		}
 		samples[en] = sample;
 	}
-
-	last_info_.status = muted ? ImbeFrameInfo::MUTED : (repeated ? ImbeFrameInfo::REPEATED : ImbeFrameInfo::DECODED);
-	last_info_.cause = cause;
-	last_info_.w0 = w0;
-	last_info_.L = L;
-	last_info_.n_voiced = 0;
-	for (int l = 1; l <= L; l++)
-		if (vee[l][New]) last_info_.n_voiced++;
-	last_info_.er = ER;
 
 	OldL = L;
 	Oldw0 = w0;

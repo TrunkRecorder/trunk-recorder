@@ -36,12 +36,7 @@ public:
 	// Decode with frame repeat / mute (TIA-102.BABA-A §7.7-7.8) driven by
 	// the FEC error counts from imbe_header_decode(). frame_vector[7] must
 	// already be shifted right by one, as for imbe_decode().
-	// Returns 0 = decoded, 1 = repeated, 2 = muted (ImbeFrameInfo::Status);
-	// last_cause() gives the ImbeFrameInfo::Cause bits and last_er() the
-	// smoothed error rate.
-	int imbe_decode_checked(int16_t *frame_vector, uint32_t E0, uint32_t ET, int16_t *snd);
-	int last_cause() const { return d_last_cause; }
-	float last_er() const { return d_er; }
+	void imbe_decode_checked(int16_t *frame_vector, uint32_t E0, uint32_t ET, int16_t *snd);
 	// Frame repeat (TIA-102.BABA-A §7.7): re-synthesize the last good frame's
 	// parameters without touching the spectral-amplitude prediction memory.
 	// (Re-decoding the previous bit vector instead would apply its prediction
@@ -61,7 +56,6 @@ private:
 	bool have_last_param;
 	float d_er;			// smoothed error rate for imbe_decode_checked()
 	int d_rpt_ctr;			// consecutive repeated frames
-	int d_last_cause;		// cause bits of the last repeat/mute
 
 	/* data items originally static (moved from individual c++ sources) */
 	Word16 prev_pitch, prev_prev_pitch, prev_e_p, prev_prev_e_p;

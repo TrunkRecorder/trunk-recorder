@@ -32,7 +32,6 @@
 #include "op25_audio.h"
 #include "p25_framer.h"
 #include "software_imbe_decoder.h"
-#include "vocoder_monitor.h"
 #include "p25_crypt_algs.h"
 #include "p25p1_voice_encode.h"
 #include "p25p1_voice_decode.h"
@@ -119,9 +118,6 @@ namespace gr {
 
                 imbe_vocoder vocoder; // for original full rate vocoder
 
-                // Per-transmission reception stats and IMBE capture
-                // (OP25_VOCODER_STATS / OP25_IMBE_CAPTURE_DIR).
-                vocoder_monitor monitor;
 
                 typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
                 voice_codec_cb_t voice_codec_cb_;

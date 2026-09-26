@@ -425,7 +425,6 @@ namespace gr {
             reset_ess();
 
             if ((d_do_imbe || d_do_audio_output) && (framer->duid == 0x3 || framer->duid == 0xf)) {  // voice termination
-                monitor.end_transmission();
                 op25audio.send_audio_flag(op25_audio::DRAIN);
 				terminate_call = std::pair<bool,long>(true, output_queue.size());
             }
@@ -907,11 +906,9 @@ namespace gr {
                         if ( !encrypted()) {
                             // This is the Vocoder that OP25 currently uses.
 
-                            ImbeFrameInfo info;
                             if (d_soft_vocoder) {
                                 // This is vocoder that is for half-rate
                                 software_decoder.decode_fullrate(snd, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
-                                info = software_decoder.last_frame_info();
                             } else {
                                 // This is the older, fullrate vocoder
                                 // it was copied from p25p1_voice_decode.cc
@@ -921,11 +918,8 @@ namespace gr {
                                     frame_vector[i] = u[i] & 0xFFFF;
                                 }
                                 frame_vector[7] >>= 1;
-                                info.status = vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
-                                info.cause = vocoder.last_cause();
-                                info.er = vocoder.last_er();
+                                vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
                             }
-                            monitor.frame(vf_tgid, framer->nac, cached_src_id, u, E0, ET, false, &info, snd, SND_FRAME);
 
                             if (op25audio.enabled()) {      // decoded audio goes out via UDP (normal code path)
                                 op25audio.send_audio(snd, SND_FRAME * sizeof(int16_t));
@@ -935,7 +929,6 @@ namespace gr {
                                 }
                             }
                         } else {
-                            monitor.frame(vf_tgid, framer->nac, cached_src_id, u, E0, ET, true, nullptr, nullptr, 0);
 		                    // For encrypted voice without a valid key, push silent audio frames
                             // If monitoring for metadata, this will allow tags to pass and preserve call flow
                             if (!op25audio.enabled()) {
