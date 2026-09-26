@@ -7,6 +7,9 @@ For each decoded WAV, reports:
   STOI     short-time objective intelligibility, against the reference
   DNSMOS   Microsoft DNSMOS P.835 SIG / BAK / OVRL (non-intrusive, no reference
            needed - use it for live recordings)
+  FLUX     peak-to-mean (dB) of spectral flux folded onto the 160-sample
+           synthesis frame; natural speech ~0.1 dB, a decoder whose frame
+           transitions are abrupt shows more (non-intrusive)
 
 Decoded files are matched to references by basename prefix: with --ref-dir,
 "<name>.<tag>.wav" is scored against "<ref-dir>/<name>.wav". Without
@@ -80,6 +83,23 @@ def dnsmos(path):
     return tuple(np.mean(scores, axis=0))
 
 
+def frame_flux(path):
+    """Spectral flux vs. position within the 20 ms frame; peak/mean in dB."""
+    from scipy.signal import stft
+    x = load(path, 8000).astype('float64')
+    hop, win = 4, 64
+    f, _, Z = stft(x, 8000, nperseg=win, noverlap=win - hop, nfft=128, boundary=None, padded=False)
+    band = (f > 200) & (f < 3600)
+    S = np.log(np.abs(Z[band]) + 1e-6)
+    energy = (np.abs(Z[band]) ** 2).sum(0)
+    act = energy > np.percentile(energy, 50)
+    flux = np.abs(np.diff(S, axis=1)).mean(0)
+    a = act[1:] & act[:-1]
+    pos = ((np.arange(1, S.shape[1]) * hop + win // 2) % 160) // hop
+    prof = np.array([flux[a & (pos == k)].mean() for k in range(160 // hop)])
+    return float(20 * np.log10(prof.max() / prof.mean()))
+
+
 def align(ref, deg, max_lag=400):
     """Remove the decoder's fixed delay by cross-correlation."""
     n = min(len(ref), len(deg))
@@ -98,6 +118,7 @@ def score(job):
         out['pesq'] = pesq(8000, ref, deg, 'nb')
         out['stoi'] = stoi(ref, deg, 8000)
     out['sig'], out['bak'], out['ovrl'] = dnsmos(deg_path)
+    out['flux'] = frame_flux(deg_path)
     return out
 
 
@@ -127,7 +148,7 @@ def main():
     with ProcessPoolExecutor(args.jobs, initializer=_worker_init) as ex:
         results = list(ex.map(score, jobs))
 
-    cols = (['pesq', 'stoi'] if args.ref_dir else []) + ['sig', 'bak', 'ovrl']
+    cols = (['pesq', 'stoi'] if args.ref_dir else []) + ['sig', 'bak', 'ovrl', 'flux']
     print(f"{'file':50s}" + ''.join(f'{c:>8s}' for c in cols))
     for r in results:
         print(f"{os.path.basename(r['file'])[:50]:50s}" + ''.join(f'{r[c]:8.3f}' for c in cols))

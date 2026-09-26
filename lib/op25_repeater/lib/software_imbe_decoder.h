@@ -110,14 +110,40 @@ struct VocoderParams {
 	// Loosens the TIA fine-transition gate (ell < 8, |dw0|/w0 < 0.1) so the
 	// quadratic-phase + linear-amplitude smooth path runs on more frames.
 
-	// Max harmonic eligible for fine transition. 8 = TIA spec (default),
-	// 12 = smoother sustained vowels, 16 = smoothest (may smear fast
-	// consonant transitions).
-	int   interp_max_l          = 8;
-	// Max |w0 - Oldw0| / w0 ratio for fine transition. 0.10 = TIA spec
-	// (default), 0.15 = catches normal pitch wobble, 0.20 = includes vibrato
-	// (risks smearing real pitch jumps).
-	float interp_pitch_tol      = 0.1f;
+	// Max harmonic eligible for fine transition. 8 = TIA spec; 57 = all
+	// (default). Above harmonic 8 the TIA path cross-fades two sinusoids at
+	// different frequencies over ~6 ms, which breaks the upper harmonics into
+	// beads on a spectrogram. Interpolating every harmonic: live DNSMOS OVRL
+	// +0.07, frame-transition spectral flux 0.66 -> 0.42 dB, PESQ unchanged.
+	int   interp_max_l          = 57;
+	// Max |w0 - Oldw0| / w0 ratio for fine transition. 0.10 = TIA spec,
+	// 0.20 = default (0.15-0.30 measured the same); larger pitch jumps still
+	// use the cross-fade.
+	float interp_pitch_tol      = 0.2f;
+
+	// -- Smooth synthesis (frame transitions spread over the whole frame) -----
+	// The TIA synthesis changes the spectrum only inside a ~6 ms cross-fade
+	// (samples 56-104 of each 20 ms frame) and holds it for the other 14 ms,
+	// which shows up as a stepped spectrogram.
+	//
+	// Unvoiced synthesis. 0 = TIA (211-sample window, 49-sample cross-fade);
+	// 1 = colored noise per frame, cross-faded with power-complementary
+	// weights over uv_xfade samples (default; the noise spectrum glides from
+	// one frame to the next with no dip in level). Mode 1 brings the
+	// frame-transition flux close to natural speech (0.17 vs 0.1 dB; TIA
+	// 0.46) and scores slightly higher on live DNSMOS, at -0.05 PESQ-NB on
+	// the lab corpus.
+	int   uv_synth_mode         = 1;
+	// Gain of the smooth unvoiced path relative to the TIA path's level.
+	float uv_smooth_gain        = 1.0f;
+	// Length in samples of the smooth path's power-complementary cross-fade,
+	// centered on sample 80 of the frame. 160 = the whole frame; 49 matches
+	// the TIA cross-fade length.
+	int   uv_xfade              = 160;
+	// Voiced harmonics that start or stop in this frame. 0 = TIA (fade in
+	// over samples 56-159 / fade out over 0-105 with the trapezoid window);
+	// 1 = linear ramp over the whole frame (measured worse: DNSMOS -0.04).
+	int   onset_ramp_mode       = 0;
 
 	// -- Repeated-frame amplitude decay ---------------------------------------
 	// On the repeat path, M[l][New] = decay * M[l][Old] each frame.
@@ -245,6 +271,7 @@ private:
 	float sv[160];				// Voiced samples
 	float log2Mu[58][2];
 	float Olduw[256];
+	float uv_tail_[160];			// second half of the previous smooth-unvoiced segment
 	float psi1;
 	float phi[57][2];
 	uint32_t u[211];
@@ -283,6 +310,7 @@ private:
 	void ifft(float i[], float q[], float[]);
 	uint16_t rearrange(uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7);
 	void synth_unvoiced();
+	void synth_unvoiced_smooth();
 	void synth_voiced();
 	void unpack(uint8_t *buf, uint32_t& u0, uint32_t& u1, uint32_t& u2, uint32_t& u3, uint32_t& u4, uint32_t& u5, uint32_t& u6, uint32_t& u7, uint32_t& E0, uint32_t& ET);
 	int repeat_last();

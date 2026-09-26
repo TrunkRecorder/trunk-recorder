@@ -1123,6 +1123,7 @@ software_imbe_decoder::clear()
       }
    }
    memset(Olduw, 0, sizeof(Olduw));
+   memset(uv_tail_, 0, sizeof(uv_tail_));
    memset(sv,    0, sizeof(sv));
    memset(suv,   0, sizeof(suv));
 
@@ -1348,7 +1349,10 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
 	//synth:
-	synth_unvoiced();// ToDo: make suv return value?
+	if (params_.uv_synth_mode == 1)
+		synth_unvoiced_smooth();
+	else
+		synth_unvoiced();// ToDo: make suv return value?
 	synth_voiced(); // ToDo: make sv return value?
 
 	//output:
@@ -2312,6 +2316,96 @@ software_imbe_decoder::synth_unvoiced()
    }
 }
 
+// In-place radix-2 complex FFT; inverse when inv is true (unscaled).
+static void
+fft_radix2(float re[], float im[], int n, bool inv)
+{
+   for (int i = 1, j = 0; i < n; i++) {
+      int bit = n >> 1;
+      for (; j & bit; bit >>= 1) j ^= bit;
+      j ^= bit;
+      if (i < j) { float t = re[i]; re[i] = re[j]; re[j] = t; t = im[i]; im[i] = im[j]; im[j] = t; }
+   }
+   for (int len = 2; len <= n; len <<= 1) {
+      float ang = (inv ? 2.0f : -2.0f) * (float)M_PI / len;
+      float wr = cosf(ang), wi = sinf(ang);
+      for (int i = 0; i < n; i += len) {
+         float cr = 1.0f, ci = 0.0f;
+         for (int k = 0; k < len / 2; k++) {
+            int a = i + k, b = i + k + len / 2;
+            float tr = re[b] * cr - im[b] * ci, ti = re[b] * ci + im[b] * cr;
+            re[b] = re[a] - tr; im[b] = im[a] - ti;
+            re[a] += tr; im[a] += ti;
+            float ncr = cr * wr - ci * wi; ci = cr * wi + ci * wr; cr = ncr;
+         }
+      }
+   }
+}
+
+void
+software_imbe_decoder::synth_unvoiced_smooth()
+{
+   // Colored noise for this frame's unvoiced bands: complex Gaussian bins whose
+   // mean power is proportional to M_l^2 - M_l is a spectral density, as in
+   // the TIA path, so a band's power grows with its width - inverse FFT to a
+   // stationary 512-sample segment. Samples 0-159 are cross-faded in over
+   // this output frame and samples 160-319 carry on into the next one, so
+   // each frame's noise is fully present from where the TIA path would have
+   // finished its cross-fade until the next frame's cross-fade.
+   const int N = 512;
+   const float UV_DENSITY = 0.85f;   // calibrated to the TIA path's level
+   float re[N], im[N];
+   for (int i = 0; i < N; i++) { re[i] = 0.0f; im[i] = 0.0f; }
+
+   Luv = 0;
+   for (int ell = 1; ell <= L; ell++) {
+      if (vee[ell][New]) continue;
+      Luv = Luv + 1;
+      int lo = (int)ceilf((ell - 0.5f) * w0 * N / (2.0f * (float)M_PI));
+      int hi = (int)ceilf((ell + 0.5f) * w0 * N / (2.0f * (float)M_PI));
+      if (lo < 1) lo = 1;
+      if (hi > N / 2) hi = N / 2;
+      int nb = hi - lo;
+      if (nb <= 0) continue;
+      float sigma = params_.uv_smooth_gain * UV_DENSITY * M[ell][New] * (float)N;
+      float band_pow = 0.0f;
+      for (int k = lo; k < hi; k++) {
+         // Box-Muller from the full-period xorshift generator
+         float u1 = (next_u(0) + 1.0f) / 53126.0f, u2 = next_u(0) / 53125.0f;
+         float r = sqrtf(-logf(u1));
+         re[k] = r * cosf(2.0f * (float)M_PI * u2);
+         im[k] = r * sinf(2.0f * (float)M_PI * u2);
+         band_pow += r * r;
+      }
+      // Scale the band to exactly its target power (as the TIA path does);
+      // with only a few bins per band, random bin magnitudes would otherwise
+      // make the band level jump from frame to frame.
+      float g = (band_pow > 0.0f) ? sigma * sqrtf(nb / band_pow) : 0.0f;
+      for (int k = lo; k < hi; k++) {
+         re[k] *= g;
+         im[k] *= g;
+         re[N - k] = re[k];
+         im[N - k] = -im[k];
+      }
+   }
+   fft_radix2(re, im, N, true);
+   // The previous frame's noise continues through this frame (uv_tail_ holds
+   // its unwindowed continuation); cross-fade to this frame's noise with
+   // sin/cos weights so the two uncorrelated signals keep constant power.
+   int X = params_.uv_xfade < 2 ? 2 : (params_.uv_xfade > 160 ? 160 : params_.uv_xfade);
+   int x0 = 80 - X / 2;
+   for (int en = 0; en < 160; en++) {
+      float p = (en + 0.5f - x0) / X;
+      p = p < 0.0f ? 0.0f : (p > 1.0f ? 1.0f : p);
+      float w_new = sinf(0.5f * (float)M_PI * p);
+      float w_old = cosf(0.5f * (float)M_PI * p);
+      suv[en] = w_old * uv_tail_[en] + w_new * re[en] / N;
+      uv_tail_[en] = re[en + 160] / N;
+   }
+   // keep the TIA path's overlap memory consistent in case the mode changes
+   memset(Olduw, 0, sizeof(Olduw));
+}
+
 void
 software_imbe_decoder::synth_voiced()
 {
@@ -2383,6 +2477,10 @@ software_imbe_decoder::synth_voiced()
                   sv[en] = sv[en] + ws[en-55] * MNew * cos(w0 *(en - 160) * ell + phi[ell][ New]);
                }
             }
+         } else if (params_.onset_ramp_mode == 1) {
+            for(en = 0; en <= 159; en++) {
+               sv[en] = sv[en] + ((en + 0.5f) / 160.0f) * MNew * cos(w0 *(en - 160) * ell + phi[ell][ New]);
+            }
          } else {
             for(en = 56; en <= 159; en++) {
                sv[en] = sv[en] + ws[en-55] * MNew * cos(w0 *(en - 160) * ell + phi[ell][ New]);
@@ -2390,8 +2488,14 @@ software_imbe_decoder::synth_voiced()
          }
       } else {
          if( vee[ell][Old]) {
-            for(en = 0; en <= 105; en++) {
-               sv[en] = sv[en] + ws[en+105] * MOld * cos(Oldw0 * en * ell + phi[ell][ Old]);
+            if (params_.onset_ramp_mode == 1) {
+               for(en = 0; en <= 159; en++) {
+                  sv[en] = sv[en] + (1.0f - (en + 0.5f) / 160.0f) * MOld * cos(Oldw0 * en * ell + phi[ell][ Old]);
+               }
+            } else {
+               for(en = 0; en <= 105; en++) {
+                  sv[en] = sv[en] + ws[en+105] * MOld * cos(Oldw0 * en * ell + phi[ell][ Old]);
+               }
             }
          }
       }

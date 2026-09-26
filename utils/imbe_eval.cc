@@ -174,6 +174,10 @@ static void apply_param_overrides(software_imbe_decoder &dec) {
   F("VP_repeat_et_base", vp.repeat_et_base);
   F("VP_repeat_et_slope", vp.repeat_et_slope);
   I("VP_max_repeats", vp.max_repeats);
+  I("VP_uv_synth_mode", vp.uv_synth_mode);
+  F("VP_uv_smooth_gain", vp.uv_smooth_gain);
+  I("VP_uv_xfade", vp.uv_xfade);
+  I("VP_onset_ramp_mode", vp.onset_ramp_mode);
   dec.set_params(vp);
 }
 

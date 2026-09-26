@@ -135,6 +135,34 @@ branch's float decoder was −0.12 and −0.20.
 - Repeat amplitude decay 0.85 vs 1.0 and ET threshold 10 vs 6 or 14: no
   consistent difference.
 
+### Smooth synthesis (Sep 2026, live traffic)
+
+Spectrograms of the decoder output showed a stepped texture: the TIA
+synthesis changes the spectrum only inside a ~6 ms cross-fade (samples
+56-104 of each 20 ms frame) and holds it for the rest. Folding spectral
+flux onto the frame position makes this measurable: natural speech is flat
+(peak/mean ~0.1 dB), the TIA decoder peaks at 0.6-0.7 dB inside the
+cross-fade. On live wmata speech the upper harmonics (above harmonic 8,
+which the TIA path cross-fades instead of interpolating) break into beads.
+
+Two defaults changed, scored on the lab corpus and on 80 live captured
+transmissions (dcfd + wmata, decoded directly from their IMBE frames):
+
+| | PESQ clean | DNSMOS live | SIG live | flux corpus | flux live |
+|---|---|---|---|---|---|
+| TIA synthesis | 3.132 | 2.488 | 2.873 | 0.61 | 0.66 |
+| + all harmonics interpolated (`interp_max_l` 57, `interp_pitch_tol` 0.2) | 3.135 | 2.557 | 2.944 | 0.46 | 0.42 |
+| + smooth unvoiced synthesis (`uv_synth_mode` 1) | 3.089 | 2.560 | 2.956 | 0.17 | 0.34 |
+
+The smooth unvoiced path generates each frame's colored noise with exact
+band energies (M is a spectral density, as in the TIA path) and cross-fades
+consecutive frames with power-complementary weights across the whole frame.
+It costs about 0.04 PESQ on the lab corpus at every error rate; set
+`uv_synth_mode = 0` to go back to the TIA noise. Tried and rejected:
+full-frame onset/offset ramps for harmonics that start or stop (worse on
+every metric) and a noise floor in voiced bands (0.05-0.2 of the band
+amplitude; worse on every metric).
+
 ### Recommendation for live systems
 
 With these fixes the float decoder is the best or tied-best variant in
