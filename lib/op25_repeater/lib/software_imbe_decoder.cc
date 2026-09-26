@@ -36,173 +36,10 @@
 #include <math.h>
 #include <string.h>
 
-// =============================================================================
-// AUDIO TUNING PARAMETERS  (reference documentation)
-// =============================================================================
-//
-// As of Phase 2 these knobs live in the VocoderParams struct in
-// software_imbe_decoder.h - this block is just the long-form documentation
-// for what each one does. Edit the defaults in the struct (or override at
-// runtime via software_imbe_decoder::set_params()) and rebuild.
-//
-// Each block names a single stage of the synthesis pipeline; defaults reflect
-// the values that sounded best on the WMATA (P25 Phase 1) test recording.
-//
-// Pipeline order:
-//   decode_spectral_amplitudes -> enhance_spectral_amplitudes (TIA spec)
-//     -> adaptive_smoothing (TIA spec, error-rate gated)
-//     -> POSTFILTER  (FMT_*, below)        magnitude domain - shapes formants
-//     -> synth_unvoiced (FFT-style)
-//     -> synth_voiced  (PHASE_*, below)    sinusoidal - regenerates phase
-//
-// -----------------------------------------------------------------------------
-// Formant postfilter (apply_formant_postfilter, after US5241650, expired 2009)
-// -----------------------------------------------------------------------------
-// Emphasize formant peaks and attenuate inter-formant valleys in the
-// magnitude domain.  M'[l] = M[l] * 2^(alpha * (log2 M[l] - log2 M_smooth[l]))
-// where M_smooth is a (2W+1)-tap centered moving average across harmonics.
-// Total energy is renormalized so overall loudness doesn't change.
-//
-// FMT_ALPHA - emphasis strength.
-//   0.0  -> postfilter off (identity)
-//   0.15 -> very mild brightening
-//   0.25 -> mild (recommended default)
-//   0.35 -> noticeable formant shape, edges of "tinny"
-//   0.5+ -> aggressive, often too sharp / sibilant
-//
-// FMT_W - half-width of the smoothing window in harmonics (window = 2*W+1).
-//   2 -> 5-tap, narrower formants get more boost
-//   3 -> 7-tap, ~1 formant wide (recommended default)
-//   5 -> 11-tap, smoother result, less emphasis per peak
-
-// -----------------------------------------------------------------------------
-// Voiced phase regeneration (synth_voiced)
-// -----------------------------------------------------------------------------
-// Replaces the TIA-spec random-phase term (which sounded buzzy/comb-filtered
-// in our use) with three layered effects:
-//
-//   1. Linear phase psi1*l    - glottal-pulse alignment (TIA spec).
-//   2. Spectral-envelope phase per US5701390 (DVSI, expired 2015):
-//        phi_env(l) = Sum_{m=1..D} (B[l+m] - B[l-m]) / m,  B = log2(M).
-//      A discrete Hilbert transform of log-magnitude that yields the
-//      minimum-phase response of the spectral envelope - phase correlates
-//      with formant shape, which is what natural speech does.
-//   3. Residual random phase scaled by Luv/L (TIA eq. 142) - keeps purely
-//      voiced frames from collapsing back to zero-phase buzz on locally
-//      flat spectra. Set to 0 if you want fully deterministic synthesis.
-//
-// PHASE_C_ENV - envelope-phase scaling (~2/pi for a true discrete Hilbert).
-//   0.0  -> envelope phase off, falls back to TIA random phase only
-//   0.55 -> mild, partial buzz reduction
-//   0.75 -> recommended default
-//   1.0  -> patent's nominal weight; can sound "echoey"
-//
-// PHASE_W_RAND - residual random phase weight (multiplies Luv/L*z(l)).
-//   0.0  -> deterministic envelope-only (recommended default)
-//   0.25 -> small randomness floor (TIA-like behavior layered on top)
-//   1.0  -> pure TIA eq. 142 contribution (likely brings buzz back)
-//
-// PHASE_LOW_BLEND - envelope-phase weight applied to LOW harmonics (l<=L/4).
-// Low harmonics carry the glottal-pulse phase alignment that makes voiced
-// speech sound "alive"; full envelope phase there can make the voice sound
-// reedy. Lower values preserve more of the linear-phase glottal structure.
-//   0.0  -> pure linear phase on low harmonics (very glottal/buzzy)
-//   0.40 -> recommended default
-//   0.5  -> evenly mixed with high harmonics
-//   1.0  -> same envelope weight as high harmonics (least glottal)
-//
-// PHASE_KERNEL_D - half-length of the 1/m kernel; full length = 2*D+1.
-//   Patent's preferred value is 19 (39-tap). Larger = more spectral context
-//   in each phi_l, smoother phase variation; smaller = more local. Don't
-//   bother changing unless reading the patent.
-//
-// PHASE_KERNEL_GAMMA - geometric decay applied to extrapolated B[l] for l>L
-// (so the kernel doesn't run off the end of the harmonic array). Patent's
-// value is 0.72; rarely needs tuning.
-
-// -----------------------------------------------------------------------------
-// Voicing-decision smoothing (smooth_voicing_decisions, after US6912496,
-// expired Mar 2023)
-// -----------------------------------------------------------------------------
-// IMBE voicing decisions vee[l] are per-band-per-frame, and under marginal RF
-// they can chatter (a single band flipping V/UV/V on successive frames). That
-// chatter sounds like clicks or warble at phoneme boundaries. The patent
-// applies a median filter to the voicing trajectory over a short sequence of
-// frames; here we use the current frame plus N-1 past frames so there's no
-// added latency.
-//
-// VOICING_SMOOTH_TAPS - total filter length (current + (N-1) past frames).
-//   1 -> off (no smoothing)
-//   3 -> 3-tap median, drops single-frame outliers (recommended default)
-//   5 -> 5-tap median, smoother but voicing changes lag 2 frames
-
-// -----------------------------------------------------------------------------
-// UV->V phase reset (synth_voiced, after US6963833, expired Mar 2022)
-// -----------------------------------------------------------------------------
-// At a fully-unvoiced -> voiced transition (start of a vowel after silence or
-// fricative), the running psi1 phase accumulator carries whatever value it had
-// when the last voiced segment ended. That stale phase can land harmonics in
-// alignment at sample 0 of the onset frame, producing a click. The patent's
-// fix is to initialize phases from a known clean state at UV->V transitions.
-// We implement this by resetting psi1 to 0 on detection of UV->V; the
-// envelope-derived phase term then provides natural per-harmonic offsets.
-//
-// UV_TO_V_RESET - enable the reset.
-//   false -> off (keeps prior psi1 across silence)
-//   true  -> reset psi1=0 at voicing onset (recommended default)
-
-// -----------------------------------------------------------------------------
-// Subframe-style amplitude/phase interpolation (synth_voiced, after US6131084,
-// expired ~2017)
-// -----------------------------------------------------------------------------
-// synth_voiced has two synthesis paths per voiced harmonic:
-//   - "fine transition": quadratic phase + linear amplitude interpolation
-//     across the 160-sample frame (smoothest, sounds natural).
-//   - "coarse transition": windowed overlap-add of prev and current frame
-//     params (used when pitch jumps or for high harmonics; sounds blockier
-//     on sustained vowels).
-// The TIA spec gates fine transition by ell < 8 && |dw0|/w0 < 0.1. The patent
-// describes interpolating amplitude/frequency/phase to match adjacent segments
-// for more harmonics. Loosening these gates extends the smoother path higher
-// in the spectrum and through small natural pitch wobbles.
-//
-// INTERP_MAX_L - upper harmonic limit for fine-transition interpolation.
-//    8 -> TIA spec default
-//   12 -> recommended, audibly smoother on sustained vowels
-//   16 -> smoothest, may smear fast consonant transitions
-//   L  -> always interpolate (likely too smeared)
-//
-// INTERP_PITCH_TOL - max |w0 - Oldw0| / w0 for fine transition.
-//   0.10 -> TIA spec default
-//   0.15 -> recommended, catches normal pitch wobble
-//   0.20 -> includes mild vibrato; risks smearing real pitch jumps
-
-// -----------------------------------------------------------------------------
-// Repeated-frame amplitude decay (decode_fullrate, repeat path)
-// -----------------------------------------------------------------------------
-// When a frame is gated to "repeat the last good frame's parameters" (b0>207,
-// E0>=2, or ET >= 10+40*ER, but rpt_ctr < 4), the synth re-renders the
-// previous good frame's spectral envelope. Without any decay, several
-// consecutive repeats produce a sustained tone at the last formant
-// configuration - audible as ringing / warble / buzz at the end of phonemes
-// whenever a tail of marginal frames triggers a few repeats before the
-// 4-frame mute threshold hits. A small linear decay per repeat fades the
-// held formants out naturally so the transition to silence is gradual
-// instead of "tone for 60 ms then a hard cut to zero".
-//
-// Applied only to M[l][New] (the magnitudes the synth reads). Mu/log2Mu are
-// left at full value - they're decoder memory used for parameter prediction
-// in the NEXT non-repeat frame, and decaying them would distort later
-// amplitude decoding.
-//
-// REPEAT_AMPLITUDE_DECAY - multiplier applied to M each repeat. Compounds
-// across consecutive repeats because [Old] = previous [New] after the swap.
-//   1.00 -> no decay (sustained tones, prior behavior)
-//   0.85 -> recommended; ~72% after 2 repeats, ~61% after 3
-//   0.70 -> aggressive; ~49% after 2, ~34% after 3
-//   0.50 -> very aggressive; ~25% after 2, near-silent after 3
-
-// =============================================================================
+// Tuning parameters for the synthesis and error-concealment changes on top of
+// the TIA-102.BABA-A decoder are the fields of VocoderParams in
+// software_imbe_decoder.h (defaults and measured effect of each are commented
+// there). Background and measurements: docs/Notes/VOCODER-IMPROVEMENTS.md.
 
 static const int BMTn[3600] = {
 	3, 3, 4, 5, 6, 7, 8, 3, 4, 5, 6, 7, 8, 9, 3, 4,
@@ -2209,11 +2046,9 @@ software_imbe_decoder::synth_voiced()
       MaxL = OldL;
    }
 
-   // Phase regeneration was moved to compute_envelope_phases(), which is
-   // called by decode_fullrate BEFORE apply_formant_postfilter runs. That way
-   // the Hilbert kernel sees the pre-postfilter magnitudes - the postfilter
-   // and the phase regen don't fight each other through M[l][New]. See the
-   // "Implementation gaps and assumptions" section of VOCODER-IMPROVEMENTS.md.
+   // phi[][New] is set by compute_envelope_phases(), which decode_fullrate
+   // calls before apply_formant_postfilter so the envelope phase is computed
+   // from the magnitudes before any postfilter reshapes them.
 
    for(en = 0; en <= 159; en++) {
       sv[en] = 0;

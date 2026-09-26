@@ -1,814 +1,293 @@
 # Vocoder Improvements
 
-This branch (`dev/vocoder-improvements`) layers a series of decoder-side quality
-and robustness fixes on top of the IMBE vocoder code vendored in
-`lib/op25_repeater/`. Changes are listed individually below, each with the
-problem it addresses, the technique used (with patent reference where
-applicable; all referenced patents are expired and public-domain), the code
-location, and the tuning knobs (if any).
+This branch changes the P25 Phase 1 (IMBE) voice decoders vendored in
+`lib/op25_repeater/`: the float decoder `software_imbe_decoder` (used when
+`"softVocoder": true`) and the fixed-point `imbe_vocoder` (the default). It
+fixes several decoding bugs, replaces the error concealment, and reworks the
+float decoder's synthesis. Every change was measured objectively, and the
+final settings were chosen in listening tests on live traffic from two
+systems: dcfd (P25) and wmata (SmartNet with P25 voice).
 
-For the best audio quality, set `"softVocoder": true` in `config.json` — the
-float decoder (`software_imbe_decoder`) is where most of the quality work
-lives. The fixed-point decoder (`imbe_vocoder`) gets the robustness/error-
-concealment fixes but does not get the synthesis-quality improvements.
+**Recommended setting:** `"softVocoder": true`. With these changes the float
+decoder is the best or tied-best option in every condition tested,
+including channel errors. The fixed-point decoder gets the correctness and
+error-concealment fixes but not the synthesis work.
 
-All audio-quality tuning knobs are consolidated in an `AUDIO TUNING
-PARAMETERS` block at the top of
-[software_imbe_decoder.cc](../../lib/op25_repeater/lib/software_imbe_decoder.cc).
-Each knob has an inline comment describing its range and audible effect.
-Defaults reflect what sounded best on the WMATA (P25 Phase 1) test recording.
+All float-decoder settings live in `VocoderParams`
+([software_imbe_decoder.h](../../lib/op25_repeater/lib/software_imbe_decoder.h)),
+with defaults in the struct; `software_imbe_decoder::set_params()` overrides
+them at runtime.
 
 ---
 
-## Review and measurements (Sep 2026)
+## What changed
 
-The changes below were re-checked against an objective benchmark. Several
-defaults turned out to lower quality, the float decoder had a long-standing
-bit-unpacking bug, and the TIA repeat rule was costing more than it saved.
-Where this section disagrees with the older per-feature notes further down,
-this section is current.
+### Decoding fixes (both decoders unless noted)
+
+1. **Float decoder read the 7 unprotected bits one position off.**
+   `imbe_header_decode()` returns them shifted left by one. `p25p1_fdma`
+   shifted them back for the fixed-point decoder but passed them unshifted to
+   `software_imbe_decoder`, whose `rearrange()` expects the same layout as the
+   fixed-point `ch_decode` (confirmed against mbelib and JMBE). Most frames
+   decoded with wrong pitch LSBs (77 % of frames, mean f0 error 1.2 %, up to
+   5 %), a wrong gain LSB and three wrong spectral bits, heard as rough,
+   warbly pitch. The same bug is in upstream OP25. `decode_fullrate()` now
+   does the shift itself, which also fixes `decode()` (YSF, legacy voice
+   path). +0.09 PESQ-NB on its own.
+2. **Decoder state is reset between calls.** `p25_frame_assembler_impl`
+   now calls `p1fdma.clear()`, which clears both vocoders. Previously the
+   smoothed error rate, repeat counter and synthesis state carried into the
+   next call; a call that ended noisy could start the next one muted.
+3. **No more `exit()` on bad frames.** `rearrange()` clamps an out-of-range
+   harmonic count and `mbelib.c` clamps `uvquality` instead of terminating
+   the process.
+4. **Persistent S_E.** The TIA recursion `S_E = 0.95·S_E + 0.05·R_M0` used a
+   local variable reset to 0 each frame, so it never smoothed anything.
+5. **Full-period unvoiced noise.** The LCG (period 53125 samples, ~6.6 s)
+   is replaced by xorshift32 with a full 32-bit state.
+
+### Error concealment
+
+6. **Repeat only when E0 ≥ 3** (TIA-102.BABA-A says E0 ≥ 2). Golay(23,12) is
+   a perfect code, so E0 = 2 means two errors were corrected, almost always
+   correctly; repeating that frame throws away good data. +0.30 PESQ at 2 %
+   BER and +0.19 on a fading channel. The ET and mute rules are TIA's.
+7. **Float decoder: repeats keep advancing phase, mutes fade.** The repeat
+   path used to freeze each harmonic's phase, which detuned it or cancelled
+   it in the overlap-add. A mute now synthesizes a zero-amplitude frame, so
+   the previous frame's tail fades out and the next frame fades in.
+8. **Fixed-point decoder: proper repeat and mute.** It had no concealment.
+   `imbe_vocoder::imbe_decode_checked()` applies the same rules; a repeat
+   re-synthesizes the last good frame's parameters (re-decoding the old bit
+   vector would apply its spectral prediction twice) and a mute fades out.
+   `p25p1_fdma`, `p25p1_voice_decode` and `rx_sync` all call it.
+
+### Float decoder synthesis
+
+9. **Envelope phase** (after US5701390). Each voiced harmonic's phase is the
+   linear pitch-pulse phase plus a term from a discrete Hilbert transform of
+   the log spectral envelope (the minimum-phase response of the envelope),
+   instead of pure linear phase. `phase_c_env` 0.7 matches the pulse
+   sharpness of natural speech and was preferred in listening tests.
+10. **Every harmonic glides between frames.** The TIA path interpolates
+    frequency, amplitude and phase only for harmonics below 8 and cross-fades
+    the rest over ~6 ms, which breaks upper harmonics into beads on a
+    spectrogram. All harmonics are now interpolated unless the pitch changes
+    by more than 20 %.
+11. **Smooth unvoiced synthesis.** The TIA noise changes spectrum only inside
+    a 49-sample cross-fade. Each frame's noise is now generated with exact
+    band energies and cross-faded with power-complementary weights across
+    the whole frame.
+12. **High-frequency presence lift.** +3 dB rising from 2.2 kHz to 3.7 kHz,
+    chosen in listening tests; a DVSI-derived reference decoder carries a
+    similar lift and sounded "crisper".
+13. **Smaller fixes:** the random-phase weight uses the current frame's
+    unvoiced count (it was a frame stale), and `decode_tap()` (Phase 2 path)
+    uses the same unvoiced synthesis as `decode_fullrate()`.
+
+---
+
+## Synthesis pipeline (float decoder, per 20 ms frame)
+
+`software_imbe_decoder::decode_fullrate`:
+
+1. Error gating: smoothed error rate, then mute / repeat / decode (items
+   6–7).
+2. Decode: `rearrange` → `decode_vuv` → `decode_spectral_amplitudes` →
+   `enhance_spectral_amplitudes` (TIA spectral enhancement).
+3. `adaptive_smoothing` (TIA, error-rate gated), `smooth_voicing_decisions`
+   and `smooth_amplitudes` (both off by default).
+4. `compute_envelope_phases` — linear phase plus envelope phase.
+5. `apply_formant_postfilter` (off by default).
+6. `synth_unvoiced_smooth` (or TIA `synth_unvoiced`), then `synth_voiced`;
+   output = unvoiced + 4 × voiced, clipped to 16 bits.
+
+---
+
+## Parameters (`VocoderParams`)
+
+Defaults are what runs live. Options marked *off* were measured and did not
+help; they remain for experiments.
+
+| Field | Default | What it does |
+|---|---|---|
+| `phase_c_env` | 0.7 | Envelope-phase strength. 0 = pure linear phase (buzzy). 0.7 measured closest to natural pulse sharpness; 2.0 is worse. |
+| `phase_w_rand` | 0.25 | Random phase on upper harmonics, scaled by the frame's unvoiced fraction (TIA eq. 142). 0–0.6 made no measurable difference. |
+| `phase_low_blend` | 0.4 | Envelope-phase weight on harmonics ≤ L/4. 1.0 measured worse. |
+| `phase_kernel` | 0 | 0 = odd-only Hilbert kernel 2/(πm) on mean-removed log-magnitudes; 1 = US5701390's 1/m kernel. Indistinguishable. |
+| `phase_kernel_d` | 19 | Kernel half-length. |
+| `phase_kernel_gamma` | 0.6 | Extension of the log envelope beyond the last harmonic. |
+| `phase_track` | 1.0 | How far each harmonic is steered to its new target phase per frame. Lower values reduce decoder-added frequency jitter but made no audible difference. |
+| `uv_to_v_reset` | true | Restart the pitch-phase accumulator at voicing onset. No measurable effect. |
+| `interp_max_l` | 57 | Highest harmonic interpolated between frames (TIA: 8). |
+| `interp_pitch_tol` | 0.2 | Largest relative pitch change still interpolated (TIA: 0.1); 0.15–0.3 measured the same. |
+| `uv_synth_mode` | 1 | 1 = smooth unvoiced synthesis; 0 = TIA. |
+| `uv_smooth_gain` | 1.0 | Level of the smooth unvoiced path relative to TIA's. |
+| `uv_xfade` | 160 | Cross-fade length (samples) of the smooth unvoiced path. |
+| `hf_lift_db` | 3.0 | Presence lift at 3.7 kHz; 0 = off. |
+| `hf_lift_f1` | 2200 | Frequency (Hz) where the lift starts. |
+| `fmt_alpha` | 0 (*off*) | Formant postfilter strength. Every setting tried lowered PESQ and DNSMOS; the TIA enhancement already acts as a postfilter. |
+| `fmt_w` | 7 | Postfilter smoothing half-window. |
+| `voicing_smooth_taps` | 1 (*off*) | Voicing median filter length. 3 taps cost ~0.3 PESQ at 2 % BER. |
+| `voicing_smooth_er_threshold` | 0 | Error rate above which voicing smoothing applies. |
+| `amp_smooth` | 0 (*off*) | Pull each harmonic's level toward the previous frame. Raised DNSMOS but lowered PESQ; not preferred by ear. |
+| `aper_max`, `aper_f1`, `aper_f2` | 0 (*off*), 2000, 3500 | Share of voiced power above `aper_f1` rendered as noise. Reduced measured high-band periodicity; no audible difference. |
+| `onset_ramp_mode` | 0 (*off*) | Full-frame ramps for harmonics that start or stop. Worse on every metric. |
+| `repeat_amplitude_decay` | 1.0 | Amplitude decay per consecutive repeated frame. 0.85 made no measurable difference. |
+| `mute_er` | 0.0875 | Mute when the smoothed error rate exceeds this (TIA §7.8). |
+| `repeat_e0` | 3 | Repeat when E0 ≥ this (TIA: 2). |
+| `repeat_et_base`, `repeat_et_slope` | 10, 40 | Repeat when ET ≥ base + slope × error rate (TIA §7.7). |
+| `max_repeats` | 4 | Consecutive repeats before muting (TIA). |
+
+The fixed-point decoder has no parameters; `imbe_decode_checked()` uses
+E0 ≥ 3 and TIA's other thresholds.
+
+---
+
+## Measurements
 
 ### Method
 
-An offline harness (not kept in the tree) encoded clean speech with the
-OP25 fixed-point IMBE encoder, applied the real P25 voice FEC (Golay/Hamming
-+ PN), flipped codeword bits, FEC-decoded, and decoded with either vocoder
-exactly as `p25p1_fdma` does. Output was scored with PESQ-NB (P.862) and
-STOI against the original, and with DNSMOS P.835 (non-intrusive).
+- **Lab corpus:** 11 Open Speech Repository Harvard-sentence recordings
+  (8 kHz, male and female, ~8 min), encoded with the OP25 fixed-point IMBE
+  encoder, passed through the real P25 voice FEC with bit errors, and
+  decoded exactly as `p25p1_fdma` does. Channels: random errors at 0–4 %
+  BER, and two fading channels with per-frame good/bad states — A: 0.2 % /
+  8 % (≈0.7 % average), B: 0.5 % / 15 % (≈3.9 % average). For scale, dcfd
+  averages about 0.2–0.4 corrected errors per frame and wmata about 0.8.
+- **Live traffic:** 80 transmissions (40 dcfd, 40 wmata) captured as IMBE
+  frames from the running recorders and decoded directly, so every decoder
+  saw exactly the frames the radios sent.
+- **Metrics:** PESQ-NB (P.862) and STOI against the clean original;
+  DNSMOS P.835 (no reference needed, used for live traffic); plus custom
+  measures of frame-boundary spectral flux, pitch-pulse jitter, high-band
+  periodicity and per-harmonic frequency jitter.
+- **Listening tests** on live traffic decided the final settings. The
+  metrics missed some of what was audible, in both directions.
 
-- Corpus: 11 Open Speech Repository Harvard-sentence recordings (8 kHz,
-  male and female, ~8 min).
-- Channels: random bit errors at 0 / 0.5 / 1 / 2 / 4 % BER, plus two
-  Gilbert-Elliott fading channels (per 20 ms frame, good/bad BER):
-  geA = 0.2 % / 8 %, P(g→b) 0.03, P(b→g) 0.4 (≈0.7 % average);
-  geB = 0.5 % / 15 %, 0.08, 0.3 (≈3.9 % average).
-  For scale: dcfd's per-transmission `error_count` (the sum of ET) is
-  0.20 corrected errors per frame at the median and 1.2 at p90.
-- Live material: 40 dcfd and 16 wmata transmissions from the recorders'
-  own output, re-encoded and decoded by each variant, scored with DNSMOS.
-  This is a tandem (the audio has already been through a decoder), so
-  absolute scores are low; only the differences between decoders mean
-  anything.
+The evaluation tools were built for this work and are not kept in the tree.
 
-### Results (PESQ-NB, mean of 11 files)
+### Results
+
+PESQ-NB on the lab corpus, mean of 11 files:
 
 | Decoder | clean | 1 % | 2 % | 4 % | fading A | fading B |
 |---|---|---|---|---|---|---|
 | master fixed-point (`softVocoder: false`) | 3.135 | 3.115 | 3.033 | 2.483 | 2.766 | 1.614 |
 | master float (`softVocoder: true`) | 3.010 | 2.909 | 2.635 | 2.111 | 2.762 | 1.787 |
-| previous branch, fixed-point | 3.135 | 2.996 | 2.644 | 2.029 | 2.729 | 1.695 |
-| previous branch, float | 2.605 | 2.563 | 2.325 | 1.916 | 2.421 | 1.701 |
-| **this branch, fixed-point** | 3.135 | 3.115 | 3.016 | 2.666 | 2.905 | 1.922 |
-| **this branch, float** | 3.132 | 3.093 | 3.021 | 2.721 | 2.954 | 1.949 |
+| first version of this branch, float | 2.605 | 2.563 | 2.325 | 1.916 | 2.421 | 1.701 |
+| this branch, fixed-point | 3.135 | 3.115 | 3.016 | 2.666 | 2.905 | 1.922 |
+| this branch, float, fixes only (items 1–8) | 3.132 | 3.093 | 3.021 | 2.721 | 2.954 | 1.949 |
+| + smooth synthesis (items 10–11) | 3.089 | 3.049 | 2.989 | 2.714 | 2.925 | 1.961 |
 
-DNSMOS OVRL agrees (clean / 2 % / fading A / fading B): master float
-2.963 / 2.869 / 2.912 / 2.673, previous branch float 2.884 / 2.801 / 2.878 /
-2.648, this branch float 2.996 / 2.990 / 2.999 / 2.865. On the live
-tandem material this branch's float decoder is +0.04 OVRL over master float
-on dcfd (better on 26 of 40 transmissions) and +0.02 on wmata; the previous
-branch's float decoder was −0.12 and −0.20.
+The first version of this branch had a formant postfilter on by default,
+which was its largest regression (−0.44 PESQ).
 
-### What changed in this review
+Float decoder synthesis stages, lab corpus and 80 live transmissions:
 
-1. **Float decoder read u7 one bit off (bug since upstream OP25).**
-   `imbe_header_decode()` returns the 7 unprotected bits shifted left by
-   one. `p25p1_fdma` shifts them back for the fixed-point vocoder but passed
-   them unshifted to `software_imbe_decoder`, whose `rearrange()` expects the
-   same layout as the fixed-point `ch_decode` (confirmed against mbelib and
-   JMBE). Every frame decoded with wrong pitch LSBs (77 % of frames, mean f0
-   error 1.2 %, up to 5 %), a wrong gain LSB and three wrong residual bits:
-   audible as rough, warbly pitch. `decode_fullrate()` now does the shift
-   itself, which also fixes `decode()` (YSF and the legacy voice path).
-   Worth +0.09 PESQ on its own.
-2. **Formant postfilter defaults to off** (`fmt_alpha` 0.45 → 0). It was
-   the largest regression (−0.44 PESQ). The TIA spectral enhancement in
-   `enhance_spectral_amplitudes()` is already a formant postfilter; every
-   alpha/W combination tried (0.1–0.45, 3–7) scored lower than none on both
-   PESQ and DNSMOS.
-3. **Repeat only when E0 ≥ 3** (was E0 ≥ 2, per TIA). Golay(23,12) is a
-   perfect code: E0 = 2 means two errors were corrected, almost always
-   correctly, so repeating that frame discards good data. +0.30 PESQ at 2 %
-   BER, +0.19 on fading channel A. The ET and mute rules are unchanged; on
-   fading channels removing gating altogether measured worse.
-4. **Repeated frames keep advancing phase.** The repeat path copied
-   `phi[Old]` into `phi[New]` and stopped `psi1`, which forced every
-   harmonic back to its previous end phase: detuning on the fine-transition
-   path and cancellation in the overlap-add path, on the repeat frame and
-   the frame after it.
-5. **Muted frames fade.** A mute now synthesizes a zero-amplitude frame that
-   holds the last good parameters, so the previous frame's tail fades out
-   through the synthesis window and the next frame fades in, instead of
-   hard zeros followed by a cross-fade from pre-mute audio. Old/New advance
-   on every frame again.
-6. **Fixed-point repeat re-synthesizes instead of re-decoding.** Re-decoding
-   the previous bit vector applied its spectral prediction residual a second
-   time (prediction memory lives in `sa_decode`), distorting the repeat and
-   the frames after it. `imbe_vocoder::imbe_repeat()` replays the saved
-   post-enhancement parameters; `imbe_mute()` fades out. The gating that was
-   copied into `p25p1_fdma`, `p25p1_voice_decode` and `rx_sync` (each with
-   the same u7 off-by-one in its b0 check) is now one method,
-   `imbe_vocoder::imbe_decode_checked()`.
-7. **Persistent S_E.** `SE` was a local reset to 0 every frame, so the
-   recursive `S_E = 0.95·S_E + 0.05·R_M0` never smoothed anything.
-8. **Random-phase weight uses the current frame's unvoiced count**
-   (`Luv` was one frame stale).
-9. **IMBE capture no longer closes its FILE\* from `clear()`**, which runs
-   on the main thread while the decoder thread may be writing. Files are
-   now split on the decoder thread on a talkgroup change or a 2 s gap.
-10. **UV→V phase table removed.** It seeded `phi[Old]`, which the onset
-    frame never reads (with an all-unvoiced previous frame, synthesis uses
-    only `phi[New]`); measured no effect. The `psi1` reset knob remains.
-
-### Things measured and left alone
-
-- Envelope phase regeneration (§4) gives about +0.03 PESQ over the TIA
-  linear phase. `phase_c_env` 0.7–1.3, `phase_w_rand` 0–0.6, and the
-  patent's own kernel (`phase_kernel = 1`: h(m) = 1/m over all m, scale
-  0.44, B[l>L] = 0.72·B[L]) are indistinguishable on PESQ and DNSMOS;
-  `phase_low_blend = 1` and `phase_c_env = 2` are measurably worse. Defaults
-  are unchanged. PESQ and DNSMOS are weak judges of phase, so this is where
-  listening tests would add the most.
-- Voicing smoothing (§6) stays off: 3 taps cost ~0.3 PESQ at 2 % BER even
-  with the ER gate.
-- The wider fine-transition gates (§8) were already at TIA values in the
-  code defaults.
-- Repeat amplitude decay 0.85 vs 1.0 and ET threshold 10 vs 6 or 14: no
-  consistent difference.
-
-### Smooth synthesis (Sep 2026, live traffic)
-
-Spectrograms of the decoder output showed a stepped texture: the TIA
-synthesis changes the spectrum only inside a ~6 ms cross-fade (samples
-56-104 of each 20 ms frame) and holds it for the rest. Folding spectral
-flux onto the frame position makes this measurable: natural speech is flat
-(peak/mean ~0.1 dB), the TIA decoder peaks at 0.6-0.7 dB inside the
-cross-fade. On live wmata speech the upper harmonics (above harmonic 8,
-which the TIA path cross-fades instead of interpolating) break into beads.
-
-Two defaults changed, scored on the lab corpus and on 80 live captured
-transmissions (dcfd + wmata, decoded directly from their IMBE frames):
-
-| | PESQ clean | DNSMOS live | SIG live | flux corpus | flux live |
+| | PESQ clean | PESQ fading A | DNSMOS live | DNSMOS SIG live | frame-boundary flux, live (dB) |
 |---|---|---|---|---|---|
-| TIA synthesis | 3.132 | 2.488 | 2.873 | 0.61 | 0.66 |
-| + all harmonics interpolated (`interp_max_l` 57, `interp_pitch_tol` 0.2) | 3.135 | 2.557 | 2.944 | 0.46 | 0.42 |
-| + smooth unvoiced synthesis (`uv_synth_mode` 1) | 3.089 | 2.560 | 2.956 | 0.17 | 0.34 |
+| master float | 3.010 | 2.762 | 2.497 | 2.859 | 0.74 |
+| fixes, TIA synthesis | 3.132 | 2.954 | 2.488 | 2.873 | 0.66 |
+| + all harmonics interpolated | 3.135 | 2.971 | 2.557 | 2.944 | 0.42 |
+| + smooth unvoiced synthesis | 3.089 | 2.925 | 2.560 | 2.956 | 0.34 |
+| + `phase_c_env` 0.7 | 3.101 | 2.937 | 2.565 | 2.959 | 0.48 |
+| + 3 dB presence lift (**current**) | 3.100 | 2.936 | 2.572 | 2.964 | 0.47 |
 
-The smooth unvoiced path generates each frame's colored noise with exact
-band energies (M is a spectral density, as in the TIA path) and cross-fades
-consecutive frames with power-complementary weights across the whole frame.
-It costs about 0.04 PESQ on the lab corpus at every error rate; set
-`uv_synth_mode = 0` to go back to the TIA noise. Tried and rejected:
-full-frame onset/offset ramps for harmonics that start or stop (worse on
-every metric) and a noise floor in voiced bands (0.05-0.2 of the band
-amplitude; worse on every metric).
+Frame-boundary flux is how unevenly the spectrum changes within each 20 ms
+frame (natural speech ≈ 0.1 dB). The smooth unvoiced path costs about 0.04
+PESQ on the lab corpus but scored better on live traffic and removes the
+blotchy, stepped look of the TIA noise; set `uv_synth_mode = 0` to revert
+it. `phase_c_env` 0.7 also cut pitch-pulse timing jitter on live traffic
+from 5.6 % to 3.8 %.
 
-### Live listening round (Sep 2026): warble, buzz and other decoders
+### Other IMBE decoders
 
-Reports from listening to live wmata (SmartNet, P25 voice) and dcfd (P25)
-traffic, and what the measurements showed:
+The same live frames were decoded with other open-source IMBE decoders,
+loudness-matched, and compared by measurement and by ear:
 
-- **"Buzzy"** comes from the radios' encoding. wmata's radios send brighter
-  audio (spectral tilt -6.7 vs -12.7 dB/kHz) and mark 56% of loud vowels
-  fully voiced to 3.7 kHz (dcfd 36%), so the top octave decodes as a
-  pure pulse train. A DVSI-derived reference decoder is just as periodic
-  in 2-3.7 kHz on the same frames. `aper_max` (high-band aperiodicity)
-  reduces the measured periodicity but made no audible difference.
-- **"Warble"** is in the transmitted parameters, not added by the decoder:
-  the same frames decoded by JMBE, mbelib, mbelib-neo, GopherTrunk and a
-  DVSI-derived decoder all warbled about equally in listening tests.
-  Smoothing pitch or amplitudes across frames, or removing the decoder's
-  own per-frame phase steering (`phase_track`), did not help audibly.
-- **`phase_c_env` 0.7** (now the default) was preferred over 1.3 and was
-  among the best of all decoders tested; mbelib was consistently worst.
-- The DVSI-derived decoder sounded slightly "crisper": it carries ~+1 dB
-  at 2.5-3 kHz and ~+3 dB at 3.5-3.9 kHz relative to this decoder, and a
-  ~4 dB lower noise floor between words. `hf_lift_db` reproduces the
-  former; +3 dB was chosen in listening and is the default.
+| Decoder | PESQ clean | PESQ fading A | DNSMOS live | pulse jitter | freq. jitter < / > 1.5 kHz |
+|---|---|---|---|---|---|
+| this branch (`phase_c_env` 0.7) | 3.101 | 2.937 | 2.565 | 3.9 % | 3.4 / 5.7 Hz |
+| [JMBE](https://github.com/DSheirer/jmbe) (SDRTrunk) | 3.118 | 2.753 | 2.494 | 2.2 % | 1.2 / 3.4 Hz |
+| [blip25-vocoder](https://github.com/OpenBLIP25/blip25-vocoder) (DVSI-derived) | 3.112 | 2.842 | 2.446 | 5.0 % | 4.3 / 6.4 Hz |
+| [mbelib-neo](https://github.com/arancormonk/mbelib-neo) (DSD-FME) | 2.477 | 2.408 | 2.668 | 5.3 % | 5.0 / 6.6 Hz |
+| [mbelib](https://github.com/szechyjs/mbelib) (DSD) | 2.880 | 2.468 | 2.512 | 7.1 % | 1.6 / 3.4 Hz |
+| [GopherTrunk](https://github.com/MattCheramie/GopherTrunk) | 2.063 | 1.952 | 1.962 | — | — |
 
-Offline A/B of other decoders on captured frames used their public entry
-points: mbelib / mbelib-neo `mbe_processImbe4400Data` (88 info bits + E0/
-ET), GopherTrunk `imbe.Decoder.Decode` (11 packed info bytes, recorder
-defaults), JMBE `IMBEAudioCodec.getAudio` (re-encoded, re-interleaved
-144-bit frames), blip25-vocoder `Rate::FullRate4400x4400` with
-`FrameStatus` from ET. blip25-vocoder is reverse-engineered from a DVSI
-image and licensed for research / interoperability study only; it was
-used as a listening reference, not as code for this project.
-
-### Recommendation for live systems
-
-With these fixes the float decoder is the best or tied-best variant in
-every condition tested, so `softVocoder: true` is the better setting for
-wmata as well as dcfd.
+JMBE only receives re-encoded clean frames here, so it cannot use the
+channel's error counts (hence its lower fading score). By ear, this
+branch was among the best, blip25 sounded slightly crisper (hence the
+presence lift), mbelib was consistently worst, and GopherTrunk's current
+decoder clicked and dropped out. blip25-vocoder is reverse-engineered from
+a DVSI image and licensed for research and interoperability study only; it
+was used as a listening reference, not as a source for this code.
 
 ---
 
-## 1. Robust error concealment on the fixed-point IMBE path
+## Findings from live traffic
 
-**Problem.** The fixed-point `imbe_vocoder` had no internal mute/repeat policy
-(only `software_imbe_decoder` did). Under LSM simulcast or any lossy RF, bit
-errors caused screeching/loud-noise frames instead of clean silence.
-
-A first attempt at gating used a PCM-level `memcpy` of the previous 20 ms
-buffer to "repeat" frames. That stamps the same waveform every 20 ms — a 50 Hz
-comb on top of the harmonics, audible as a kazoo / wax-paper-over-comb sound.
-
-**Fix.** TIA-102.BABA-A §7.7–7.8 mute-and-repeat policy applied to the
-fixed-point path:
-
-- Smoothed ER = 0.95 × prev + 0.000365 × ET.
-- If smoothed ER > 0.0875 → mute (zero PCM output).
-- Else if `b0 > 207 || E0 ≥ 2 || ET ≥ 10 + 40·ER` → mark frame as repeat.
-- After 4 consecutive repeats → mute.
-
-On a repeat, **re-run the vocoder with the previous good `frame_vector`** so
-synthesis re-derives output with naturally-advanced internal state (pitch,
-spectral envelope, phase). Phase continuity is preserved — no comb.
-
-Per-call state (`d_imbe_er`, `d_imbe_rpt_ctr`, `d_imbe_last_vec`) is reset in
-`clear()` so a call ending in high ER doesn't carry that into the next call.
-
-**Code.**
-- [`p25p1_fdma.cc`](../../lib/op25_repeater/lib/p25p1_fdma.cc) (P25 trunked, primary path used by trunk-recorder)
-- [`p25p1_voice_decode.cc`](../../lib/op25_repeater/lib/p25p1_voice_decode.cc) (legacy P25 voice decode)
-- [`rx_sync.cc`](../../lib/op25_repeater/lib/rx_sync.cc) (YSF fullrate)
-
-**Knobs.** None. TIA spec values used directly.
+- **wmata sounds "buzzy" because of how its radios encode.** Its radios
+  send brighter audio (spectral tilt −6.7 vs −12.7 dB/kHz on dcfd) and mark
+  56 % of loud vowels fully voiced up to 3.7 kHz (dcfd 36 %), so the top
+  octave decodes as a pure pulse train. The DVSI-derived decoder is just as
+  periodic there on the same frames.
+- **The fast "warble" is in the transmitted parameters.** Every decoder
+  above warbled about equally on the same wmata frames. Smoothing the pitch
+  or amplitude tracks, or removing this decoder's per-frame phase steering,
+  did not help audibly.
+- **Channel errors are a minor factor.** wmata has about 4× dcfd's
+  corrected-bit rate, but only ~2 % of frames are repeated or muted on
+  either system. Most repeats and mutes fall in the last few frames of a
+  transmission, where the radio has unkeyed mid-superframe and the
+  remaining frames are noise.
 
 ---
 
-## 2. Crash prevention from bit errors
-
-**Problem.** `mbelib.c` and `software_imbe_decoder::rearrange()` called
-`exit()` when bit errors produced out-of-spec IMBE parameters (e.g., `L < 9`
-or `L > 56`). A single bad frame could kill the trunk-recorder process.
-
-**Fix.** Clamp out-of-range values to the valid range. The frame's audio will
-be wrong but the caller's repeat/mute logic absorbs it.
-
-**Code.**
-- [`mbelib.c`](../../lib/op25_repeater/lib/mbelib.c)
-- [`software_imbe_decoder.cc`](../../lib/op25_repeater/lib/software_imbe_decoder.cc) (`rearrange()`)
-
-**Knobs.** None.
-
----
-
-## 3. Long-period unvoiced excitation noise
-
-**Problem.** The original noise generator was an LCG
-`next_u(u) = (171·u + 11213) mod 53125`. Period exactly 53125 samples
-(Hull-Dobell conditions all hold) ≈ 6.6 s of continuous unvoiced speech
-before repetition. Audible as "repeating noise" on long sibilants /
-fricatives.
-
-**Fix.** Replaced with `xorshift32` maintaining a full 32-bit state
-(`unvoiced_noise_state` member); the mod-53125 output is computed each
-call without overwriting the state. Period is now genuinely 2³²−1.
-
-An earlier version of this fix did `xorshift32(u) mod 53125` with the
-*folded* output passed back as next state, which capped the effective
-state space at 53125 again with no guarantee of full period. Worth
-calling out so the same trap doesn't get reintroduced.
-
-**Code.** [`software_imbe_decoder.cc`](../../lib/op25_repeater/lib/software_imbe_decoder.cc) (`next_u()`)
-
-**Knobs.** None.
-
----
-
-## 4. Voiced phase regeneration (US5701390 — expired Feb 2015)
-
-**Problem.** The TIA spec voiced synthesis sets `phi[l] = psi1·l` for low
-harmonics — linear/zero phase, all harmonics align at glottal-pulse instants,
-sounds **buzzy**. Pre-branch master had this exclusively. An attempt to add
-the TIA eq. 142 random-phase term used a static lookup table reused every
-frame — same offsets at 50 Hz cadence = **kazoo / comb-filter sound**.
-
-**Fix.** Implements DVSI's hardware approach from
-[US5701390](https://patents.google.com/patent/US5701390). For each voiced
-harmonic `l`:
-
-```
-phi_env(l) = c_env · Σ_{m odd, 1..D}  (2/(π·m)) · (B[l+m] − B[l−m])
-B = log₂(M) − mean(log₂ M[1..L])   (DC removed)
-```
-
-This is a discrete Hilbert transform of log-magnitude across harmonics, using
-the standard `2/(π·n)` kernel weights (odd n only — the zero-mean Type III
-kernel). The Hilbert transform of log-magnitude *is* the phase of the
-minimum-phase system with that magnitude — and the vocal tract is
-approximately minimum-phase. So the resulting phase correlates with formant
-shape: naturally non-aligning, no comb, no buzz.
-
-Boundary handling per patent: `B[0]=0`, `B[−l]=B[l]` (reflection),
-`B[L+k]=B[L]·γᵏ` (geometric decay outside valid harmonic range). DC is
-subtracted from B before the convolution so the boundary extensions don't
-leak DC into the phase output (the true Hilbert transform has no DC
-response; this restores that property under truncation).
-
-The phase computation runs in `compute_envelope_phases()`, called by
-`decode_fullrate` **before** `apply_formant_postfilter`. That keeps the
-two improvements orthogonal — phase regen reads the pristine spectral
-envelope, the postfilter then reshapes M only for the synthesizer to use
-in its amplitude lookup.
-
-The linear-phase term `psi1·l` is retained at reduced weight on low harmonics
-(`l ≤ L/4`) to preserve some glottal-pulse character. Optional residual TIA
-random phase can be re-enabled via a knob.
-
-**Code.** [`software_imbe_decoder.cc:compute_envelope_phases()`](../../lib/op25_repeater/lib/software_imbe_decoder.cc)
-
-**Knobs.**
-
-| Knob | Default | Effect |
-|---|---|---|
-| `PHASE_C_ENV` | 0.75 | Envelope-phase scaling. 0 disables → falls back to linear phase. ~2/π is true Hilbert. >1 sounds echoey. |
-| `PHASE_W_RAND` | 0.0 | Residual TIA-eq.142 random-phase weight (multiplies Luv/L · z(l)). 0 = deterministic. >0 brings back some buzz. |
-| `PHASE_LOW_BLEND` | 0.40 | Envelope-phase weight on low harmonics (`l ≤ L/4`). 0 = pure linear (glottal/buzzy). 1.0 = no glottal alignment (reedy). |
-| `PHASE_KERNEL_D` | 19 | 1/m kernel half-length (full kernel = 2D+1 taps). Patent's preferred. |
-| `PHASE_KERNEL_GAMMA` | 0.72 | Boundary decay for `B[l]` extrapolation. Patent value. Rarely needs change. |
-
----
-
-## 5. Adaptive formant postfilter (US5241650 — expired ~2009)
-
-**Problem.** Even with correct phase, IMBE-decoded audio sounds **synthetic /
-hollow**. Commercial parametric vocoders run a postfilter at the decoder
-output that emphasizes formant peaks and attenuates inter-formant valleys —
-this is most of the perceptual difference between "synthetic" and "natural"
-low-bitrate speech. OP25 had no postfilter.
-
-**Fix.** Magnitude-domain spectral-contrast enhancement (functionally
-similar to the patent's bandwidth-expanded LPC postfilter `H(z)=B(z)/A(z/ν)`
-but a natural fit for MBE since harmonics already sample the envelope):
-
-```
-M'[l] = M[l] · 2^(α · (log₂ M[l] − log₂ M_smooth[l]))     iff vee[l] = 1
-M'[l] = M[l]                                              if  vee[l] = 0
-```
-
-`M_smooth` is a (2W+1)-tap centered moving average over harmonics with
-symmetric reflection at the band edges, so harmonics at `l=1` and `l=L`
-see real neighbors rather than clamped copies of themselves (which used
-to over-emphasize them). The contrast emphasis is gated on the per-band
-voicing flag — unvoiced bands carry noise where there's no formant peak
-to sharpen; the patent's LPC postfilter would be broadband but a
-magnitude-contrast version should be voiced-only. Total energy is
-renormalized across all bands (voiced modifications + unchanged unvoiced)
-to preserve loudness — the patent's specific innovation, eliminating the
-"time-varying brightness modulation" of naive postfilters.
-
-**Code.** [`software_imbe_decoder.cc:apply_formant_postfilter()`](../../lib/op25_repeater/lib/software_imbe_decoder.cc)
-
-**Knobs.**
-
-| Knob | Default | Effect |
-|---|---|---|
-| `FMT_ALPHA` | 0.25 | Emphasis strength. 0 = off, 0.15 = very mild, 0.25 = mild (rec), 0.35 = noticeable, 0.5+ = tinny/sibilant. |
-| `FMT_W` | 3 | Smoothing half-window (window = 2W+1 = 7-tap, ≈1 formant wide). Smaller → only narrow peaks boosted. Larger → less per-peak emphasis. |
-
----
-
-## 6. Voicing-decision smoothing (US6912496 — expired Mar 2023)
-
-**Problem.** IMBE voicing decisions `vee[l]` are per-band-per-frame. Under
-marginal RF, individual bands can flip V/UV/V on successive frames. Audible as
-clicks or warble at phoneme boundaries.
-
-**Fix.** N-tap majority median filter on `vee[l][New]` using current +
-(N−1) past frames, **gated on smoothed ER** so it only fires on noisy
-audio. Patent specifies smoothing as a corrective step "around erroneously
-coded frames" — applying it to clean audio costs latency on legitimate
-fast V/UV transitions for no benefit. The ER gate matches that intent.
-Original (pre-smoothing) values are stored in `vee_history[]` every frame
-regardless, so when smoothing kicks in it has recent context.
-
-**Code.** [`software_imbe_decoder.cc:smooth_voicing_decisions()`](../../lib/op25_repeater/lib/software_imbe_decoder.cc)
-
-**Knobs.**
-
-| Knob | Default | Effect |
-|---|---|---|
-| `voicing_smooth_taps` | 3 | Total filter length. 1 = off, 3 = drop single-frame outliers (rec), 5 = smoother but voicing-state changes lag 2 frames. |
-| `voicing_smooth_er_threshold` | 0.01 | Minimum smoothed ER for smoothing to fire. 0.0 = always-on legacy behavior; raise to keep clean audio snappy. |
-
----
-
-## 7. UV→V phase reset (US6963833 — expired Mar 2022)
-
-**Problem.** When a voiced segment starts after silence or a fricative, the
-running `psi1` phase accumulator carries whatever value it had when the
-previous voiced segment ended (it was advancing through the unvoiced interval
-too). That stale phase can land harmonics in alignment at the onset frame,
-producing a click/pop.
-
-**Fix.** Detect fully-unvoiced → voiced transitions (no `vee[l][Old]` set,
-some `vee[l][New]` set). At the transition, reset `psi1` to 0 and
-**pre-seed `phi[l][Old]` from a 56-entry table of deliberately misaligned
-per-harmonic offsets** drawn from a fixed permutation of
-`{0, π/3, 2π/3, π, 4π/3, 5π/3}`. That's the patent's "fixed set of values
-for each harmonic" that guarantees harmonics don't align coherently at
-sample 0 regardless of whether the envelope-phase term happens to be
-small (smooth spectrum onset). Without the table, simply resetting
-`psi1=0` left a hole where flat-spectrum onsets had all phases at zero —
-exactly the alignment-and-saturation case the patent is defending
-against.
-
-**Code.** [`software_imbe_decoder.cc:compute_envelope_phases()`](../../lib/op25_repeater/lib/software_imbe_decoder.cc) (UV→V block + `uv_to_v_phase_table`)
-
-**Knobs.**
-
-| Knob | Default | Effect |
-|---|---|---|
-| `UV_TO_V_RESET` | true | Enable the reset. `false` keeps prior `psi1` across unvoiced intervals (legacy behavior). |
-
----
-
-## 8. Widened amplitude/phase interpolation (US6131084 — expired ~2017)
-
-**Problem.** `synth_voiced()` has two synthesis paths per voiced harmonic:
-
-- **Fine transition.** Quadratic phase + linear amplitude interpolation
-  across the 160-sample frame. Smoothest, sounds natural.
-- **Coarse transition.** Windowed overlap-add of previous and current frame
-  parameters. Sounds blockier on sustained vowels.
-
-The TIA spec gates fine transition by `ell < 8 && |dw0|/w0 < 0.1`. The
-patent describes interpolating amp/freq/phase to match adjacent segments for
-more of the spectrum.
-
-**Fix.** Loosen the gates — see knobs. Extends the smoother path higher in
-the spectrum and through normal pitch wobble.
-
-**Code.** [`software_imbe_decoder.cc:synth_voiced()`](../../lib/op25_repeater/lib/software_imbe_decoder.cc) (`ell < INTERP_MAX_L && ...` branch)
-
-**Knobs.**
-
-| Knob | Default | Effect |
-|---|---|---|
-| `INTERP_MAX_L` | 12 | Max harmonic for fine transition. 8 = TIA spec, 12 = recommended, 16 = smoothest (may smear consonants). |
-| `INTERP_PITCH_TOL` | 0.15 | Max `|w0−Oldw0|/w0` for fine transition. 0.10 = TIA spec, 0.15 = catches normal pitch wobble, 0.20 = includes vibrato (risks smearing real jumps). |
-
----
-
-## Combined synthesis pipeline (float decoder)
-
-For reference, the order in which the above run for each 20 ms frame
-(`software_imbe_decoder::decode_fullrate`):
-
-1. `decode_spectral_amplitudes` — raw MBE parameters from bits (TIA spec).
-2. `enhance_spectral_amplitudes` — TIA-spec spectral smoothing (existing).
-3. `adaptive_smoothing` — TIA-spec error-rate-gated smoothing (existing).
-4. **`smooth_voicing_decisions`** — Improvement 6 (gated on smoothed ER).
-5. **`compute_envelope_phases`** — Improvement 4 (Hilbert kernel, DC-removed B,
-   UV→V table-7-seed). Runs BEFORE the postfilter so the kernel sees the
-   pristine spectral envelope, not a contrast-enhanced version.
-6. **`apply_formant_postfilter`** — Improvement 5 (voiced-only, edge-reflected).
-7. `synth_unvoiced` — Noise + per-band DFT scaling + WOLA (existing).
-8. **`synth_voiced`** — Sinusoidal synth using the phi[][New] already
-   populated by step 5, with the wider interpolation gating (8).
-
----
-
-## Knob quick reference
-
-All in [`software_imbe_decoder.cc`](../../lib/op25_repeater/lib/software_imbe_decoder.cc),
-top of file:
-
-All fields of `VocoderParams` (declared in [`software_imbe_decoder.h`](../../lib/op25_repeater/lib/software_imbe_decoder.h)). Override at runtime via `set_params()`.
-
-| Field | Default | Improvement |
-|---|---|---|
-| `fmt_alpha` | 0 (off) | 5 — formant emphasis strength |
-| `fmt_w` | 7 | 5 — formant smoothing half-window (window = 2W+1) |
-| `phase_c_env` | 1.30 | 4 — envelope phase scaling |
-| `phase_w_rand` | 0.25 | 4 — residual random phase weight |
-| `phase_low_blend` | 0.4 | 4 — envelope phase weight on low harmonics |
-| `phase_kernel` | 0 | 4 — 0 = odd-only Hilbert, 1 = US5701390 kernel |
-| `phase_kernel_d` | 19 | 4 — kernel half-length |
-| `phase_kernel_gamma` | 0.6 | 4 — boundary extension factor (patent: 0.72) |
-| `voicing_smooth_taps` | 1 (off) | 6 — voicing median filter length |
-| `voicing_smooth_er_threshold` | 0 | 6 — fire smoothing only when smoothed ER ≥ this |
-| `uv_to_v_reset` | true | 7 — reset `psi1` on voicing onset |
-| `interp_max_l` | 8 | 8 — fine-transition max harmonic (TIA) |
-| `interp_pitch_tol` | 0.1 | 8 — fine-transition pitch tolerance (TIA) |
-| `repeat_amplitude_decay` | 1.0 | (repeat path) magnitude decay per consecutive repeat frame |
-| `mute_er` | 0.0875 | TIA §7.8 mute threshold on smoothed ER |
-| `repeat_e0` | 3 | repeat when E0 ≥ this (TIA: 2) |
-| `repeat_et_base`, `repeat_et_slope` | 10, 40 | repeat when ET ≥ base + slope·ER (TIA) |
-| `max_repeats` | 4 | consecutive repeats before muting (TIA) |
-
----
-
-## Implementation gaps and assumptions
-
-Patents typically describe *what* a technique does and *why* it works, but
-leave a lot of "how exactly" unstated — the inventor presumes the implementer
-will fill in the details based on the surrounding art. The implementations
-above each made specific concrete choices where the patent was silent or
-gestured at a class of solutions. This section catalogs those gaps so a
-future maintainer (or future-me) knows where the implementation diverges
-from a strict reading of the source patent, and which divergences are
-likely to matter.
-
-### #3 — `xorshift32` noise generator: period claim is overstated
-
-**The gap.** I justified switching from LCG to xorshift32 by saying the
-period went from "≤ 53125" to "2³²−1". That's wrong.
-
-The original LCG `(171·u + 11213) mod 53125` is computed with state size
-53125, and was designed so its full period IS 53125 — confirmed by checking
-the Hull-Dobell conditions (gcd(11213, 53125)=1; 171−1=170=2·5·17 divisible
-by all prime factors of 53125=5⁵·17).
-
-My replacement is `xorshift32(u) mod 53125`, with the state ALSO
-fed back through the modulus on each iteration. So the effective state space
-is STILL 53125 values — same as the LCG. And there's no algebraic reason to
-believe the cycle structure is as nice as the LCG's; it could split into
-multiple short orbits.
-
-**Likely impact.** Modest at worst. Even if the cycle is shorter (say a
-few thousand samples instead of the LCG's full 53125), the *sequence* of
-values is different from the LCG, so it won't sound identical to the old
-"6.6 s of repeating noise" artifact. But the claim that period went from
-6.6 s to ~9 days is not what the code actually does.
-
-**Real fix.** Keep a full 32-bit state separately from the modulo output:
-
-```cpp
-uint32_t state_;  // member, initialized to 0xDEADBEEFu or similar
-uint32_t next_u(uint32_t /*unused*/) {
-    state_ ^= state_ << 13; state_ ^= state_ >> 17; state_ ^= state_ << 5;
-    return state_ % 53125;  // full xorshift32 period of (2^32 - 1)
-}
-```
-
-This requires teaching the caller (`synth_unvoiced`) not to pass the prior
-output back in. Maintains TIA-correct output range and statistics, gives
-the actual long period.
-
-### #4 — Voiced phase regeneration: several specifics the patent doesn't fix
-
-**Gap 4a — kernel form.** The patent says `h(m)` is "inversely
-proportional to m" and antisymmetric, but doesn't pin the form. I chose
-`h(m) = 1/m`. The standard discrete Hilbert transform kernel is actually
-`h(n) = 2/(π·n)` for odd n, `h(n) = 0` for even n — *not* what I have.
-
-Mathematically the proper Hilbert kernel only picks up odd-spaced harmonics
-in the convolution; my `1/m` averages over all of them. Since the patent's
-whole point is "this approximates a Hilbert transform of log magnitude,"
-using the not-actual-Hilbert kernel produces a different envelope-phase
-result than the patent author would.
-
-**Likely impact.** Significant for purity of the math; the empirical
-result (the audio) sounds reasonable, but I had to tune `PHASE_C_ENV` to
-0.90 — far above the theoretical `2/π ≈ 0.637` that would apply to a true
-Hilbert kernel. That's evidence my kernel under-emphasizes phase compared
-to what a true Hilbert would give.
-
-**Real fix.** Replace the `for (int m = 1; m <= D; m++)` loop with the
-odd-only form, or precompute a proper Hilbert kernel as a constant array.
-
-**Gap 4b — boundary handling normalization.** Patent specifies symmetric
-reflection for `l ≤ 0` and geometric decay for `l > L`. I implement
-both, but B = log₂(M) ranges from ~6 to ~13 — biased positive, never
-near zero. The kernel's antisymmetric structure should make `Σ h(m)·B`
-sum to ~0 for a constant B, but with positive-biased B and asymmetric
-boundary treatment, that cancellation isn't perfect. The boundary terms
-(especially `B[L+k] = γᵏ · B[L]`) decay slowly enough that they leak DC
-into the phase output.
-
-**Real fix.** Subtract `mean(B[1..L])` from all B values before the
-convolution. The Hilbert transform has no DC response, so removing it
-explicitly avoids the boundary-leak bias.
-
-**Gap 4c — mixing with linear phase isn't in the patent.** US5701390
-describes envelope-derived phase as *replacing* the random/zero phase
-component. It doesn't say to keep a linear-phase `psi1·l` term too. I
-mixed both because pure envelope phase made low harmonics sound "reedy"
-without the glottal-pulse alignment from `psi1·l`. That's an empirical
-hybrid I invented; the patent inventors might have considered this and
-rejected it.
-
-**Likely impact.** Subjectively the hybrid sounded better than pure
-envelope phase on the test data. But:
-
-1. The `PHASE_LOW_BLEND` knob exists *because* of this mixing — the
-   patent wouldn't need it.
-2. If 4a (proper Hilbert kernel) and 4b (DC removal) are fixed, the
-   need for 4c's linear-phase mixing might disappear.
-
-**Gap 4d — phase wrap.** `psi1` is wrapped to `(-π, π]`; `env_phase` is
-not. For typical voiced frames `env_phase` stays in ~`(-3, 3)` range, but
-during sharp formant transitions it could spike higher. Then `cos(phi)` is
-mathematically fine, but at single-precision float, the precision of
-`cos(large_value)` is degraded. The patent doesn't discuss this; in
-practice it's a small effect.
-
-### #5 — Adaptive formant postfilter: different math than the patent
-
-**The gap.** US5241650 specifies an LPC-based postfilter
-`H(z) = B(z)/A(z/ν)` where the numerator is a bandwidth-expanded copy of
-the denominator. That requires fitting an LPC model to the spectrum,
-applying bandwidth expansion via autocorrelation+Levinson, and filtering.
-
-I implemented spectral-contrast enhancement in the magnitude domain:
-`M'[l] = M[l] · 2^(α · (log₂ M[l] − log₂ M_smooth[l]))`. This is
-**functionally similar** (emphasizes peaks, attenuates valleys) but
-mathematically a different operation. They are NOT equivalent — the
-patent's LPC postfilter has a specific time-domain effect that magnitude-
-domain contrast doesn't reproduce.
-
-**Likely impact.** Hard to say without direct comparison. The two
-techniques target the same perceptual goal but achieve it through
-different spectral shapes. The patent's specific innovation (bandwidth
-expansion to avoid "time-varying brightness modulation") doesn't map
-cleanly onto my magnitude-domain approach. I added an energy
-re-normalization step that gets at the same goal, but it's not the same
-mechanism.
-
-**Gap 5a — edge harmonics get uneven treatment.** The smoothing window
-clamps at the band edges: `int jc = (j < 1) ? 1 : (j > L ? L : j);`.
-That means harmonic `l=1`'s "smoothed" value averages mostly itself plus
-copies of itself — so it tends to be its own best peak by definition, and
-gets less emphasis than mid-band harmonics. Same at `l=L`. The patent's
-LPC formulation has no analogous edge artifact.
-
-**Real fix.** Extend the smoothing window via reflection or extrapolation
-like the phase-regen kernel does, OR skip postfilter on the bottom/top
-two harmonics.
-
-**Gap 5b — applied to unvoiced harmonics too.** The postfilter runs on
-all `M[l]` indiscriminately. But unvoiced bands carry noise-like content
-where there's no "formant peak" to emphasize — peaking those just makes
-noise sharper. The patent's LPC postfilter is also broadband, but a
-magnitude-domain version arguably should be voiced-only.
-
-**Real fix.** Wrap the per-harmonic update in `if (vee[l][New]) { ... }`
-or apply a reduced `α` to unvoiced bands.
-
-### #6 — Voicing-decision smoothing: scope is broader than patent
-
-**The gap.** US6912496 describes voicing smoothing as a corrective step
-applied around frames the decoder has *already identified as erroneously
-coded*. It's a targeted intervention.
-
-My implementation smooths *every* frame's voicing decisions. That works
-out OK most of the time because the median is identity for stable bands,
-but it does pay a latency cost on legitimate fast V→UV transitions
-(consonant onsets, plosives). The patent intended the smoothing to be
-gated on the upstream error indicator (high ER or related).
-
-**Real fix.** Gate `smooth_voicing_decisions()` on a sliding-window error
-condition, e.g., only smooth when ER over recent frames exceeds some
-threshold. That preserves snappy V/UV transitions in clean audio while
-still de-chattering noisy segments.
-
-**Gap 6a — centered vs past-only window.** Patent says "centered around
-the erroneously coded frame." Centered means using past *and future*
-frames. I use only current + past frames so there's no decoding latency.
-That's a defensible trade — but means the smoothing decision is one-sided
-and may under-smooth at the leading edge of a chatter burst.
-
-### #7 — UV→V phase reset: my implementation is a simplification
-
-**The gap.** US6963833 says "phases for each harmonic are initialized
-with a fixed set of values for each transition from completely unvoiced
-frames to voiced frames." That clearly implies a **per-harmonic table of
-predetermined phase values** that was empirically chosen by the patent
-inventors to produce "balanced output waveforms preventing saturation
-distortions."
-
-My implementation just sets `psi1 = 0` on the UV→V transition and lets
-the envelope phase term provide whatever per-harmonic offsets it
-provides. That's a simpler approach that hopes the envelope phase is
-"good enough" — but if the envelope phase happens to be small (smooth
-spectrum at onset), all harmonics land at `phi[l] = 0`, which is exactly
-the alignment that causes saturation. The patent's specific defense
-against this case is its specific fixed-value table, which I don't have.
-
-**Likely impact.** I haven't observed the failure mode the patent is
-defending against, but I also can't construct a counterexample to argue
-my simplification is safe.
-
-**Real fix.** At UV→V transition, set `phi[l][New]` to a precomputed
-per-harmonic table of values that are deliberately *not* aligned (e.g.,
-random values that were drawn once and frozen, like a permutation of
-`{0, π/3, 2π/3, π, 4π/3, 5π/3}` cycled across l). Then let the envelope
-phase add to those.
-
-### #8 — Widened amp/phase interpolation: I just loosened the gate
-
-**The gap.** US6131084 describes a fairly elaborate scheme: interpolate
-amplitude, frequency, and phase across **subframe segments smaller than
-the IMBE 20 ms frame** (the patent mentions 22.5 ms but really uses
-sub-20-ms segments in practice). That allows smooth parameter
-trajectories within a single frame.
-
-My implementation just changed two constants in the existing TIA fine-
-transition gate: `ell < 8` → `ell < 12` and `< 0.1` → `< 0.15`. That
-broadens *which harmonics* and *which pitch changes* qualify for the
-smoother synthesis path, but doesn't add subframe interpolation at all.
-It's a fraction of what the patent describes.
-
-**Likely impact.** Modest improvement, capped by the existing
-synthesizer's resolution (still 20 ms frame granularity). A real
-subframe implementation would be substantially smoother but require
-restructuring `synth_voiced` to do multiple synthesis passes per frame.
-
-**Real fix.** Genuinely beyond scope for this branch. If pursued, would
-need to: (a) interpolate `L`, `w0`, `M[l]`, `vee[l]`, `phi[l]` to two or
-three intermediate values per 20 ms frame, (b) call the synthesis loop
-once per subframe summing into the output buffer with appropriate
-windowing, (c) verify `psi1` accumulation still adds up correctly.
-
-### Cross-cutting issues
-
-**Improvements interact, but were designed orthogonally.** The biggest
-example: `apply_formant_postfilter()` runs *before* `synth_voiced()`, so
-the postfilter sharpens `M[l][New]`, then the phase regen takes
-`log₂(M[l][New])` to compute its envelope phase. If the postfilter is
-exaggerating peaks, the envelope phase sees sharper edges in B than the
-raw spectrum had, and the Hilbert convolution outputs a larger phase
-swing than it should. The two improvements are coupled in a way the
-patents don't anticipate (they assume only one or the other is present).
-
-**Likely impact.** The hand-tuned `PHASE_C_ENV = 0.90`, well above the
-2/π theoretical value, may partly reflect this coupling. If the
-postfilter were disabled or weaker, `PHASE_C_ENV` would probably want a
-smaller value.
-
-**Real fix.** Compute the envelope-phase term from the *pre-postfilter*
-magnitudes (i.e., from `Mu[l]` instead of `M[l]`), so the two
-improvements operate on independent inputs.
-
-**The smoothed ER reused for multiple thresholds.** The same `ER`
-variable drives:
-
-- The mute threshold (`ER > 0.0875`)
-- The repeat threshold (`ET >= 10 + 40·ER`)
-- (Indirectly, via the gating decisions, the upstream voicing-smooth and
-  postfilter activation when we gate on it)
-
-TIA-102.BABA-A spec actually defines separate error metrics for different
-purposes. I'm using one smoothing function for all of them. Probably
-fine in practice but a subtle simplification.
-
-**The `* 4` audio mix factor is in the path.** `samples[en] = suv[en] +
-sv[en] * 4`. The factor of 4 was empirically chosen in the original
-boatbod code to balance voiced/unvoiced loudness. With my postfilter
-pushing `M[l]` values higher in formant bands, `sv[en]` can be louder
-than it was before — which means the clipping check
-(`if(abs(sample) > 32767)`) fires more often. Worth checking whether
-peak-limiting is now degrading the audio.
-
-### Status: closed gaps
-
-The following have been fixed in code; the gap descriptions above are kept
-for historical context.
-
-| Gap | Status | Resolution |
-|---|---|---|
-| **3** xorshift32 period | ✅ closed | Full 32-bit state in `unvoiced_noise_state`; period now actually 2³²−1. |
-| **4a** kernel form | ✅ closed | Proper `2/(πm)` weights, odd m only. |
-| **4b** DC bias | ✅ closed | Subtract `mean(B[1..L])` before convolving; boundary extensions operate on zero-mean B. |
-| **Cross-cutting** | ✅ closed | Phase regen extracted into `compute_envelope_phases()`, called *before* `apply_formant_postfilter()`. |
-| **5a** edge harmonics | ✅ closed | Symmetric reflection at l=1 and l=L instead of clamp-to-edge. |
-| **5b** postfilter on unvoiced | ✅ closed | Contrast emphasis gated on `vee[l][New]`; unvoiced bands unchanged. |
-| **6** always-on smoothing | ✅ closed | New `voicing_smooth_er_threshold` knob (default 0.01); smoothing fires only when smoothed ER ≥ threshold. |
-| **7** UV→V phase table | ✅ closed | 56-entry table of misaligned per-harmonic phase offsets pre-seeded into `phi[Old]` on UV→V transition. |
-
-### Status: not addressed
-
-| Gap | Status | Reason |
-|---|---|---|
-| **5 main** LPC vs spectral contrast | won't fix | Magnitude-contrast is functionally similar and fits MBE more naturally. The patent's LPC formulation would be a different implementation, not strictly better. |
-| **4c** linear-phase mixing in patent | won't fix (knob retained) | Set `phase_low_blend=1.0` to disable the mixing; some users may prefer the glottal-pulse character. |
-| **6a** centered window with future frames | won't fix | Live decoder remains past-only; a centered window would need a frame of lookahead (20 ms of added delay). |
-| **8** true sub-frame interpolation | won't fix | Would require restructuring `synth_voiced` to do multiple synthesis passes per 20 ms frame for a marginal gain. Out of scope. |
-
-### Possible follow-ups (not implemented)
-
-Quality / latency tradeoffs that could be added if
-ear-truth says they're worth the complexity. None are in code today;
-listed here so the next iteration knows where to look.
+## Tried and not adopted
+
+- Formant postfilter (`fmt_alpha` 0.1–0.45, `fmt_w` 3–7): worse on every
+  metric.
+- Voicing median smoothing (`voicing_smooth_taps` 3): −0.3 PESQ at 2 % BER.
+- A noise floor inside voiced bands (0.05–0.2 of band amplitude): worse on
+  every metric.
+- Full-frame onset/offset ramps (`onset_ramp_mode`): worse on every metric.
+- Cross-frame amplitude smoothing (`amp_smooth`), high-band aperiodicity
+  (`aper_max`), partial phase steering (`phase_track`), and centred pitch or
+  amplitude smoothing with a frame of lookahead: measurable changes, no
+  audible improvement in listening tests.
+- Raising the ET repeat threshold (6 or 14 instead of 10) or decaying
+  repeated frames (`repeat_amplitude_decay` 0.85): no consistent
+  difference.
+
+## Possible follow-ups
 
 | Idea | Mechanism | Likely impact |
 |---|---|---|
-| Centered pitch (`w0`) median | Two-pass decode: capture per-frame `w0`, median across window, override before pass 2. Requires also interpolating `M[l]` to the corrected harmonic grid (per US6912496); not trivial. | Catches occasional octave-error frames that produce audible glitches. |
-| Adaptive mute threshold | Pass 1 collects the per-frame ER distribution; pass 2 uses a threshold set relative to that call's typical ER instead of the fixed 0.0875. | Frees normal-noise frames from being muted on quiet/distant calls; tightens threshold on clean calls. |
-| Whole-call AGC | After pass 2, post-process the output WAV to normalize peak / RMS to a target. Pure Python, no decoder change. | Useful when systems have very mixed loudness across talkgroups. |
-| Sub-frame interpolation (Gap 8) | Restructure `synth_voiced` to do M synthesis passes per 20 ms frame (M=2 or 3), interpolating `L`, `w0`, `M[l]`, `vee[l]` between frames. Patent US6131084 describes this. | Smoother sustained vowels, less frame-boundary artifact. |
-| Frame-buffered live decoder | Buffer N IMBE frames inside `p25p1_fdma` before emitting audio; smoothing then uses past + future. Adds N·20 ms output delay. | Brings centered-voicing-smoothing benefit to live recordings (currently offline-only). |
+| Mute noise frames at transmission end | Frames with ET ≥ 12 are random bits; muting them at once instead of repeating up to 3 times avoids a held syllable at unkey. | Cleaner transmission endings. |
+| Centred pitch median | One frame of lookahead (20 ms delay) to catch octave errors; needs amplitudes re-sampled to the corrected harmonic grid. | Fewer isolated pitch glitches. |
+| Sub-frame interpolation | Synthesize 2–3 sub-frames per 20 ms frame (US6131084). | Smoother sustained vowels. |
+| Soft-decision FEC | Use symbol reliabilities in the Golay/Hamming decoders. | Fewer bad frames on marginal signals. |
 
 ---
 
 ## References
 
-- **US5241650** (Motorola, expired ~2009) — Digital speech decoder having a postfilter with reduced spectral distortion. <https://patents.google.com/patent/US5241650>
-- **US5701390** (DVSI, expired Feb 2015) — Synthesis of MBE-based coded speech using regenerated phase information. <https://patents.google.com/patent/US5701390>
-- **US6131084** (DVSI, expired ~2017) — Dual subframe quantization of spectral magnitudes (decoder describes subframe-interpolation synthesis). <https://patents.google.com/patent/US6131084>
-- **US6912496** (DVSI, expired Mar 2023) — Preprocessing modules for quality enhancement of MBE coders and decoders. <https://patents.google.com/patent/US6912496>
-- **US6963833** (DVSI, expired Mar 2022) — Modifications in the MBE model for generating high-quality speech at low bit rates. <https://patents.google.com/patent/US6963833>
-- **TIA-102.BABA-A** — Project 25 IMBE Vocoder Description. The frame muting (§7.8) and frame repeat (§7.7) policies, equation 142 for the random voiced-phase term, and the baseline voiced-synthesis structure all come from this spec.
+- **TIA-102.BABA-A** — Project 25 IMBE vocoder description: frame repeat
+  (§7.7), muting (§7.8), spectral enhancement and adaptive smoothing, and
+  the baseline synthesis.
+- **US5701390** (DVSI, expired 2015) — Synthesis of MBE-based coded speech
+  using regenerated phase information.
+  <https://patents.google.com/patent/US5701390>
+- **US6131084** (DVSI, expired ~2017) — Dual subframe quantization of
+  spectral magnitudes (sub-frame interpolation synthesis).
+  <https://patents.google.com/patent/US6131084>
+- **US6912496** (DVSI, expired 2023) — Preprocessing modules for quality
+  enhancement of MBE coders and decoders (voicing smoothing).
+  <https://patents.google.com/patent/US6912496>
+- **US6963833** (DVSI, expired 2022) — Modifications in the MBE model for
+  generating high-quality speech at low bit rates (UV→V phase reset).
+  <https://patents.google.com/patent/US6963833>
+- **US5241650** (Motorola, expired ~2009) — Digital speech decoder having a
+  postfilter with reduced spectral distortion.
+  <https://patents.google.com/patent/US5241650>

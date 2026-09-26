@@ -32,14 +32,10 @@
  * Runtime-tunable knobs for the trunk-recorder-specific quality improvements
  * layered on the TIA-102.BABA-A IMBE reference decoder.
  *
- * Defaults are mathematically-principled starting points that match the
- * post-cleanup implementation (proper Hilbert kernel, DC-removed log-magnitude
- * input, voiced-only postfilter, ER-gated voicing smoothing). They are not
- * necessarily the perceptual sweet spot for any given system.
- *
- * See docs/Notes/VOCODER-IMPROVEMENTS.md for the patent-derived rationale,
- * target ranges, and effect of each field. Re-tuning notes for the post-
- * cleanup implementation are in the same doc under "Re-tuning note".
+ * Defaults are the settings measured best on lab speech through simulated
+ * P25 channels and chosen in listening tests on live traffic. Options that
+ * are off by default were measured and did not help; they remain for
+ * experiments. See docs/Notes/VOCODER-IMPROVEMENTS.md.
  */
 struct VocoderParams {
 	// -- Formant postfilter (US5241650, expired ~2009) ------------------------
@@ -86,7 +82,8 @@ struct VocoderParams {
 	int   phase_kernel          = 0;
 	// Kernel half-length (full length = 2*D+1 taps). Patent's preferred.
 	int   phase_kernel_d        = 19;
-	// Boundary-extension geometric decay outside [1, L]. Patent value.
+	// Extension of the log envelope past L: geometric decay factor for
+	// phase_kernel 0, constant factor for phase_kernel 1 (US5701390: 0.72).
 	float phase_kernel_gamma    = 0.6f;
 
 	// -- Voicing-decision median smoothing (US6912496, expired Mar 2023) ------
@@ -127,6 +124,7 @@ struct VocoderParams {
 	// only drift toward the target, so frame-to-frame jitter in the target
 	// (from quantization noise in the envelope phase) doesn't become a
 	// frequency wobble on every harmonic. 0 = free-running from onset.
+	// Lower values cut the measured jitter but made no audible difference.
 	float phase_track           = 1.0f;
 
 	// -- Spectral amplitude smoothing across frames ----------------------------
@@ -134,7 +132,8 @@ struct VocoderParams {
 	// sampled at the same frequency: log M' = log M + a * (log M_prev(f) -
 	// log M). Reduces frame-to-frame flutter from amplitude quantization.
 	// Skipped when the frame is more than 6 dB louder than the previous one
-	// (onsets stay sharp). 0 = off.
+	// (onsets stay sharp). 0 = off (default): raised DNSMOS but lowered
+	// PESQ-NB, and was not preferred in listening tests.
 	float amp_smooth            = 0.0f;
 
 	// -- Smooth synthesis (frame transitions spread over the whole frame) -----
@@ -161,7 +160,9 @@ struct VocoderParams {
 	// binary, so bright fully-voiced frames decode as a pure pulse train up
 	// to 3.7 kHz, which sounds buzzy. A share of each voiced harmonic's
 	// power, rising linearly from 0 at aper_f1 to aper_max at aper_f2 (Hz),
-	// is moved into band noise; total power is unchanged. 0 = off.
+	// is moved into band noise; total power is unchanged. 0 = off (default):
+	// reduced the measured high-band periodicity but made no audible
+	// difference.
 	float aper_max              = 0.0f;
 	float aper_f1               = 2000.0f;
 	float aper_f2               = 3500.0f;

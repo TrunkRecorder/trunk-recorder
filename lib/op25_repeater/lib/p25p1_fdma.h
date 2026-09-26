@@ -118,7 +118,6 @@ namespace gr {
 
                 imbe_vocoder vocoder; // for original full rate vocoder
 
-
                 typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
                 voice_codec_cb_t voice_codec_cb_;
                 void *voice_codec_cb_data_;
