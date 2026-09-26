@@ -35,9 +35,7 @@
  * Defaults are mathematically-principled starting points that match the
  * post-cleanup implementation (proper Hilbert kernel, DC-removed log-magnitude
  * input, voiced-only postfilter, ER-gated voicing smoothing). They are not
- * necessarily the perceptual sweet spot for any given system - run
- * utils/imbe_tune against captured .imbe files to find the best values for
- * your audio.
+ * necessarily the perceptual sweet spot for any given system.
  *
  * See docs/Notes/VOCODER-IMPROVEMENTS.md for the patent-derived rationale,
  * target ranges, and effect of each field. Re-tuning notes for the post-

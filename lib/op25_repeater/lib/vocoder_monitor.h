@@ -6,7 +6,7 @@
  *   OP25_VOCODER_STATS=<file>      append one JSON line per transmission
  *   OP25_IMBE_CAPTURE_DIR=<dir>    write each transmission's frames to
  *                                  <dir>/p25imbe_tg<tg>_<epoch_ms>.imbe
- *                                  (format read by utils/imbe_eval / imbe_tune)
+ *                                  (u[0..7], E0, ET per frame, for offline replay)
  *
  * All methods run on the decoder's own thread. A transmission ends on a voice
  * terminator, a talkgroup change, or a gap of more than 1 s between frames.

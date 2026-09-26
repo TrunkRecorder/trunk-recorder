@@ -30,11 +30,11 @@ this section is current.
 
 ### Method
 
-`utils/imbe_eval` encodes clean speech with the OP25 fixed-point IMBE encoder,
-applies the real P25 voice FEC (Golay/Hamming + PN), flips codeword bits,
-FEC-decodes, and decodes with either vocoder exactly as `p25p1_fdma` does.
-`utils/score_vocoder.py` scores the result with PESQ-NB (P.862) and STOI
-against the original, and with DNSMOS P.835 (non-intrusive).
+An offline harness (not kept in the tree) encoded clean speech with the
+OP25 fixed-point IMBE encoder, applied the real P25 voice FEC (Golay/Hamming
++ PN), flipped codeword bits, FEC-decoded, and decoded with either vocoder
+exactly as `p25p1_fdma` does. Output was scored with PESQ-NB (P.862) and
+STOI against the original, and with DNSMOS P.835 (non-intrusive).
 
 - Corpus: 11 Open Speech Repository Harvard-sentence recordings (8 kHz,
   male and female, ~8 min).
@@ -200,23 +200,6 @@ used as a listening reference, not as code for this project.
 With these fixes the float decoder is the best or tied-best variant in
 every condition tested, so `softVocoder: true` is the better setting for
 wmata as well as dcfd.
-
-### Reproducing
-
-```bash
-cmake --build build --target imbe_eval
-for f in corpus/*.wav; do b=$(basename $f .wav)
-  build/imbe_eval enc $f out/$b.imbe 0.02              # or ge:0.002,0.08,0.03,0.4
-  build/imbe_eval dec out/$b.imbe out/$b.float.wav float
-  build/imbe_eval dec out/$b.imbe out/$b.fixed.wav fixed
-done
-pip install numpy scipy soundfile pesq pystoi onnxruntime
-utils/score_vocoder.py --ref-dir corpus out/*.float.wav
-```
-
-`VP_<field>=value` environment variables override any `VocoderParams` field
-for `imbe_eval dec`. Captured live `.imbe` files (`OP25_IMBE_CAPTURE_DIR`)
-decode the same way; score those with DNSMOS only.
 
 ---
 
@@ -520,24 +503,6 @@ All fields of `VocoderParams` (declared in [`software_imbe_decoder.h`](../../lib
 
 ## Measuring / tuning
 
-Two analysis tools are provided to make picking knob values empirical
-rather than ear-only.
-
-### Offline WAV analyzer
-
-`utils/analyze_vocoder.py` reads decoded WAV files and prints objective
-audio-quality metrics plus concrete tuning suggestions. No rebuild needed,
-works on any existing recording.
-
-```
-python3 utils/analyze_vocoder.py call-*.wav
-```
-
-It computes crest factor, spectral flatness, formant/valley energy ratio,
-spectral tilt, and HF-energy variance, grades each against target ranges
-typical of natural P25-bandlimited speech, and recommends which knob to
-nudge. With multiple files it also prints an aggregate row.
-
 ### Live telemetry
 
 Setting the environment variable `OP25_DEBUG_VOCODER=1` before launching
@@ -556,11 +521,6 @@ stderr, like:
   output    : crest=5.13  SFM=0.184
   hints     : (metrics in healthy ranges)
 ```
-
-Use the two together: the WAV analyzer is great for A/B-comparing builds
-on the same recording; the live telemetry tells you what your system is
-actually decoding day-to-day. Both surface the same metrics so suggestions
-map to the same knobs.
 
 The telemetry is off by default and zero-cost when the env var isn't set
 (one `getenv` on the first frame, then an early-return).
@@ -851,36 +811,8 @@ for historical context.
 |---|---|---|
 | **5 main** LPC vs spectral contrast | won't fix | Magnitude-contrast is functionally similar and fits MBE more naturally. The patent's LPC formulation would be a different implementation, not strictly better. |
 | **4c** linear-phase mixing in patent | won't fix (knob retained) | Set `phase_low_blend=1.0` to disable the mixing; some users may prefer the glottal-pulse character. |
-| **6a** centered window with future frames | offline-only | Live decoder remains past-only; the offline `imbe_tune` tool can use lookahead because it processes whole captured calls at once. |
+| **6a** centered window with future frames | won't fix | Live decoder remains past-only; a centered window would need a frame of lookahead (20 ms of added delay). |
 | **8** true sub-frame interpolation | won't fix | Would require restructuring `synth_voiced` to do multiple synthesis passes per 20 ms frame for a marginal gain. Out of scope. |
-
-### Multi-pass / offline mode
-
-The live decoder is single-pass: each 20 ms IMBE frame is decoded
-immediately to PCM. That precludes any improvement that needs *future*
-frames as context.
-
-The offline tool `imbe_tune` doesn't have that constraint - it sees the
-whole captured `.imbe` file at once. With `--multipass`, it does two
-decoder passes per parameter combination:
-
-| Pass | What runs | Captured |
-|---|---|---|
-| 1 | Full decode with `voicing_smooth_taps = 1` (internal smoothing off) | Raw per-frame voicing via `get_decoded_voicing()` |
-| -- | (in-process) Centered median smoothing over the full voicing sequence (window = `2·lookahead+1`, default 5 taps) | -- |
-| 2 | Full decode; before each frame `set_voicing_override(smoothed[i])` is applied | Audio output written to WAV |
-
-The override is applied AFTER the decoder's own (now-disabled) smoothing
-step and BEFORE `compute_envelope_phases` / postfilter / synth - so the
-synthesizer sees the centered-smoothed voicing without disturbing any
-other per-frame state.
-
-```bash
-./build/imbe_tune --input call.imbe --sweep utils/sweep.json --output-dir /tmp/sw \
-                  --multipass --lookahead 2
-```
-
-Cost: 2× decode time per combo. Negligible on the offline path.
 
 ### Possible follow-ups (not implemented)
 
@@ -896,27 +828,10 @@ listed here so the next iteration knows where to look.
 | Sub-frame interpolation (Gap 8) | Restructure `synth_voiced` to do M synthesis passes per 20 ms frame (M=2 or 3), interpolating `L`, `w0`, `M[l]`, `vee[l]` between frames. Patent US6131084 describes this. | Smoother sustained vowels, less frame-boundary artifact. |
 | Frame-buffered live decoder | Buffer N IMBE frames inside `p25p1_fdma` before emitting audio; smoothing then uses past + future. Adds N·20 ms output delay. | Brings centered-voicing-smoothing benefit to live recordings (currently offline-only). |
 
-If any of these turn out to be wanted, the API hooks added for the
-voicing-multipass implementation (`get_decoded_voicing`,
-`set_voicing_override`) are the template - just add the corresponding
-accessor / override pair on the parameter you want to smooth across the
-call.
-
-### Re-tuning note
-
-The empirical defaults were originally tuned against the gaps in place —
-particularly `phase_c_env=0.90`, which was probably compensating for the
-wrong-kernel + DC-bias issues (gaps 4a + 4b combined). With those fixed,
-the proper Hilbert kernel produces ≈ 2.6× smaller phase swings on
-typical voiced speech compared to the old `1/m` kernel. The current
-default of 0.90 will therefore give *less* envelope phase than before;
-expect to re-tune upward (possibly into the 1.5–2.5 range) for
-equivalent perceptual phase variation. `phase_low_blend` might also no
-longer be needed (was masking the reedy/over-flat low-harmonic phase);
-set to 1.0 to test.
-
-Use `utils/imbe_tune` + `utils/rank_sweep.py` to find the new sweet
-spot quickly against captured `.imbe` files.
+If any of these turn out to be wanted, the existing voicing hooks
+(`get_decoded_voicing`, `set_voicing_override`) are the template - add the
+corresponding accessor / override pair on the parameter you want to smooth
+across the call.
 
 ---
 

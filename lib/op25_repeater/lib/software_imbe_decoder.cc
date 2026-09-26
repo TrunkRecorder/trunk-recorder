@@ -1339,9 +1339,9 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	}
 
 	// Optional offline / multi-pass voicing override (one-shot). Applied
-	// AFTER decode_vuv + smoothing + envelope phase, BEFORE synth - so
-	// imbe_tune in --multipass can re-decode with externally-smoothed
-	// voicing without disturbing the rest of the per-frame state.
+	// AFTER decode_vuv + smoothing + envelope phase, BEFORE synth - so an
+	// offline two-pass decode can apply externally-smoothed voicing without
+	// disturbing the rest of the per-frame state.
 	if (vee_override_active_) {
 		for (int l = 1; l <= 56; l++) vee[l][New] = vee_override_[l];
 		vee_override_active_ = false;

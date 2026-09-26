@@ -425,31 +425,3 @@ if (GR_IIO_FOUND)
 endif()
 
 install(TARGETS trunk-recorder RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
-
-# -----------------------------------------------------------------------------
-# imbe_tune: offline vocoder parameter sweep utility. Reads a captured .imbe
-# file (produced by setting OP25_IMBE_CAPTURE_DIR while running trunk-recorder)
-# and a JSON sweep spec, decodes each combination of parameters, writes one
-# .wav per combo + a summary CSV. See utils/imbe_tune.cc for usage.
-# Compile software_imbe_decoder + base directly into this binary - the shared
-# library uses -fvisibility=hidden, so its symbols aren't reachable for linking.
-add_executable(imbe_tune
-    utils/imbe_tune.cc
-    lib/op25_repeater/lib/software_imbe_decoder.cc
-    lib/op25_repeater/lib/imbe_decoder.cc
-)
-target_link_libraries(imbe_tune ${Boost_LIBRARIES})
-
-# imbe_eval: offline vocoder evaluation. Encodes a WAV with the fixed-point
-# IMBE encoder, runs it through the P25 voice FEC with simulated bit errors,
-# and decodes with either vocoder, so changes can be scored against the clean
-# original (utils/score_vocoder.py). See docs/Notes/VOCODER-IMPROVEMENTS.md.
-file(GLOB IMBE_EVAL_VOCODER_SOURCES lib/op25_repeater/lib/imbe_vocoder/*.cc)
-add_executable(imbe_eval
-    utils/imbe_eval.cc
-    lib/op25_repeater/lib/software_imbe_decoder.cc
-    lib/op25_repeater/lib/imbe_decoder.cc
-    ${IMBE_EVAL_VOCODER_SOURCES}
-)
-target_include_directories(imbe_eval PRIVATE lib/op25_repeater/lib)
-target_link_libraries(imbe_eval ${Boost_LIBRARIES})
