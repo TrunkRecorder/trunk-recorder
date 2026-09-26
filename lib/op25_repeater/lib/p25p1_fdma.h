@@ -22,6 +22,7 @@
 #ifndef INCLUDED_OP25_REPEATER_P25P1_FDMA_H
 #define INCLUDED_OP25_REPEATER_P25P1_FDMA_H
 
+#include <sys/time.h>
 #include <gnuradio/msg_queue.h>
 #include <deque>
 
@@ -117,10 +118,6 @@ namespace gr {
                 uint16_t vf_tgid;
 
                 imbe_vocoder vocoder; // for original full rate vocoder
-                // TIA-102.BABA-A §7.7-7.8 mute/repeat state for the fixed-point path
-                float d_imbe_er = 0.0f;
-                int   d_imbe_rpt_ctr = 0;
-                int16_t d_imbe_last_vec[8] = {0};
 
                 // IMBE frame capture for offline tuning. When capture_dir_ is
                 // non-empty (set via OP25_IMBE_CAPTURE_DIR env var or via
@@ -128,6 +125,8 @@ namespace gr {
                 // is written to a per-call binary file. See imbe_tune utility.
                 std::string capture_dir_;
                 FILE*       capture_file_ = nullptr;
+                uint16_t    capture_tgid_ = 0;
+                struct timeval capture_last_ = {0, 0};
 
                 typedef void (*voice_codec_cb_t)(int codec_type, long tgid, uint32_t src_id, const uint32_t *params, int param_count, int errs, void *user_data);
                 voice_codec_cb_t voice_codec_cb_;

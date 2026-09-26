@@ -439,3 +439,17 @@ add_executable(imbe_tune
     lib/op25_repeater/lib/imbe_decoder.cc
 )
 target_link_libraries(imbe_tune ${Boost_LIBRARIES})
+
+# imbe_eval: offline vocoder evaluation. Encodes a WAV with the fixed-point
+# IMBE encoder, runs it through the P25 voice FEC with simulated bit errors,
+# and decodes with either vocoder, so changes can be scored against the clean
+# original (utils/score_vocoder.py). See docs/Notes/VOCODER-IMPROVEMENTS.md.
+file(GLOB IMBE_EVAL_VOCODER_SOURCES lib/op25_repeater/lib/imbe_vocoder/*.cc)
+add_executable(imbe_eval
+    utils/imbe_eval.cc
+    lib/op25_repeater/lib/software_imbe_decoder.cc
+    lib/op25_repeater/lib/imbe_decoder.cc
+    ${IMBE_EVAL_VOCODER_SOURCES}
+)
+target_include_directories(imbe_eval PRIVATE lib/op25_repeater/lib)
+target_link_libraries(imbe_eval ${Boost_LIBRARIES})

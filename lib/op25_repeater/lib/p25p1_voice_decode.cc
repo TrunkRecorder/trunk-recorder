@@ -53,13 +53,10 @@ static void clear_bits(bit_vector& v) {
 p25p1_voice_decode::p25p1_voice_decode(bool verbose_flag, const op25_audio& udp, std::deque<int16_t> &_output_queue) :
 	write_bufp(0),
 	rxbufp(0),
-	d_er(0.0f),
-	d_rpt_ctr(0),
 	op25audio(udp),
 	output_queue(_output_queue),
 	opt_verbose(verbose_flag)
     {
-	memset(d_last_vec, 0, sizeof(d_last_vec));
 	const char *p = getenv("IMBE");
 	if (p && strcasecmp(p, "soft") == 0)
 		d_software_imbe_decoder = true;
@@ -77,9 +74,6 @@ p25p1_voice_decode::p25p1_voice_decode(bool verbose_flag, const op25_audio& udp,
 void p25p1_voice_decode::clear() {
   vocoder.clear();
   software_decoder.clear();      // critical: was leaking ER/state across calls
-  d_er = 0.0f;
-  d_rpt_ctr = 0;
-  memset(d_last_vec, 0, sizeof(d_last_vec));
 }
 // more-optimized version of rxframe() used by p25p1_fdma
 void p25p1_voice_decode::rxframe(const voice_codeword& cw)
@@ -93,44 +87,12 @@ void p25p1_voice_decode::rxframe(const voice_codeword& cw)
 		// gating internally via decode_fullrate(); don't double-gate here.
 		software_decoder.decode(snd, cw);
 	} else {
-		// Fixed-point vocoder has no internal gating. Mirror the float decoder's
-		// mute/repeat policy, but on repeat re-run the vocoder with the last good
-		// frame_vector so the synthesizer keeps phase continuity instead of
-		// emitting a stuttered PCM copy.
-		d_er = (0.95f * d_er) + (0.000365f * (float)ET);
-		int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
-		bool muted = false;
-		bool repeated = false;
-		if (d_er > 0.0875f) {
-			muted = true;
-		} else if (b0 > 207 || E0 >= 2 || ET >= (int)(10.0f + 40.0f * d_er)) {
-			if (++d_rpt_ctr >= 4) {
-				muted = true;
-			} else {
-				repeated = true;
-			}
-		} else {
-			d_rpt_ctr = 0;
-		}
-
 		int16_t frame_vector[8];
-		if (repeated) {
-			memcpy(frame_vector, d_last_vec, sizeof(frame_vector));
-		} else {
-			for (int i = 0; i < 8; i++) {
-				frame_vector[i] = u[i];
-			}
-			frame_vector[7] >>= 1;
-			if (!muted) {
-				memcpy(d_last_vec, frame_vector, sizeof(frame_vector));
-			}
+		for (int i = 0; i < 8; i++) {
+			frame_vector[i] = u[i];
 		}
-
-		if (muted) {
-			memset(snd, 0, sizeof(snd));
-		} else {
-			vocoder.imbe_decode(frame_vector, snd);
-		}
+		frame_vector[7] >>= 1;
+		vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
 	}
 
 	if (op25audio.enabled()) {

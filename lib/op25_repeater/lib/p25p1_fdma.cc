@@ -286,11 +286,7 @@ namespace gr {
 		void p25p1_fdma::clear() {
 			p1voice_decode.clear();
 			software_decoder.clear();   // was leaking ER/state across calls -> silent recordings
-			d_imbe_er = 0.0f;
-			d_imbe_rpt_ctr = 0;
-			memset(d_imbe_last_vec, 0, sizeof(d_imbe_last_vec));
-			// Close any active IMBE capture file - next call will open a fresh one.
-			if (capture_file_) { fclose(capture_file_); capture_file_ = nullptr; }
+			vocoder.clear();
 		}
 
         void p25p1_fdma::process_duid(uint32_t const duid, uint32_t const nac, const uint8_t* buf, const int len) {
@@ -858,10 +854,23 @@ namespace gr {
                     // file the first time we see a frame after a clear(), and
                     // append one fixed-size record per frame.
                     if (!capture_dir_.empty()) {
+                        // Start a new file when the talkgroup changes or voice
+                        // resumes after a gap. Done here, on the decoder thread,
+                        // because clear() is called from the main thread and
+                        // must not touch the FILE*.
+                        struct timeval now;
+                        gettimeofday(&now, NULL);
+                        double gap = (now.tv_sec - capture_last_.tv_sec) + (now.tv_usec - capture_last_.tv_usec) / 1e6;
+                        capture_last_ = now;
+                        if (capture_file_ && (gap > 2.0 || capture_tgid_ != vf_tgid)) {
+                            fclose(capture_file_);
+                            capture_file_ = nullptr;
+                        }
                         if (capture_file_ == nullptr) {
+                            capture_tgid_ = vf_tgid;
                             // Filename: <dir>/p25imbe_<tgid>_<epoch_ms>.imbe
                             char fname[1024];
-                            uint64_t ms = (uint64_t)(time(NULL)) * 1000ULL;
+                            uint64_t ms = (uint64_t)now.tv_sec * 1000ULL + now.tv_usec / 1000;
                             snprintf(fname, sizeof(fname),
                                      "%s/p25imbe_tg%u_%llu.imbe",
                                      capture_dir_.c_str(),
@@ -961,44 +970,15 @@ namespace gr {
                                 // This is vocoder that is for half-rate
                                 software_decoder.decode_fullrate(snd, u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7], E0, ET);
                             } else {
-                                // TIA-102.BABA-A §7.7-7.8: gate the fixed-point decoder on
-                                // smoothed ER and repeat-counter the same way the float
-                                // path does internally. On repeat, re-run the vocoder with
-                                // the previous good frame_vector so the synthesizer keeps
-                                // phase continuity (a PCM-level memcpy of the previous 20ms
-                                // sounds robotic and shows up as a 50Hz comb in the output).
-                                d_imbe_er = (0.95f * d_imbe_er) + (0.000365f * (float)ET);
-                                int b0 = ((u[0] >> 4) & 0xfc) | ((u[7] >> 1) & 0x3);
-                                bool muted = false, repeated = false;
-                                if (d_imbe_er > 0.0875f) {
-                                    muted = true;
-                                } else if (b0 > 207 || E0 >= 2 || ET >= (uint32_t)(10.0f + 40.0f * d_imbe_er)) {
-                                    if (++d_imbe_rpt_ctr >= 4)
-                                        muted = true;
-                                    else
-                                        repeated = true;
-                                } else {
-                                    d_imbe_rpt_ctr = 0;
-                                }
-
+                                // This is the older, fullrate vocoder
+                                // it was copied from p25p1_voice_decode.cc
                                 int16_t frame_vector[8];
-                                if (repeated) {
-                                    memcpy(frame_vector, d_imbe_last_vec, sizeof(frame_vector));
-                                } else {
-                                    for (int i=0; i < 8; i++) {
-                                        frame_vector[i] = u[i] & 0xFFFF;
-                                    }
-                                    frame_vector[7] >>= 1;
-                                    if (!muted) {
-                                        memcpy(d_imbe_last_vec, frame_vector, sizeof(frame_vector));
-                                    }
-                                }
 
-                                if (muted) {
-                                    memset(snd, 0, sizeof(snd));
-                                } else {
-                                    vocoder.imbe_decode(frame_vector, snd);
+                                for (int i=0; i < 8; i++) { // Ugh. For compatibility convert imbe params from uint32_t to int16_t
+                                    frame_vector[i] = u[i] & 0xFFFF;
                                 }
+                                frame_vector[7] >>= 1;
+                                vocoder.imbe_decode_checked(frame_vector, E0, ET, snd);
                             }
 
                             if (op25audio.enabled()) {      // decoded audio goes out via UDP (normal code path)

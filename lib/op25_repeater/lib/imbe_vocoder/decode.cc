@@ -50,7 +50,9 @@ void imbe_vocoder::decode_init(IMBE_PARAM *imbe_param)
 	imbe_param->fund_freq = 0x0cf6474a;
 	imbe_param->num_harms = 9;
 	imbe_param->num_bands = 3;
-
+	have_last_param = false;
+	d_er = 0.0f;
+	d_rpt_ctr = 0;
 }
 
 
@@ -63,6 +65,67 @@ void imbe_vocoder::decode(IMBE_PARAM *imbe_param, Word16 *frame_vector, Word16 *
 	v_uv_decode(imbe_param);
 	sa_decode(imbe_param);
 	sa_enh(imbe_param);
+	memcpy(&last_imbe_param, imbe_param, sizeof(IMBE_PARAM));
+	have_last_param = true;
+	v_synt(imbe_param, snd);
+	uv_synt(imbe_param, snd_tmp);
+
+	for(j = 0; j < FRAME; j++)
+		snd[j] = add(snd[j], snd_tmp[j]);
+}
+
+void imbe_vocoder::imbe_decode_checked(int16_t *frame_vector, uint32_t E0, uint32_t ET, int16_t *snd)
+{
+	// TIA-102.BABA-A §7.7-7.8, except that a frame is repeated only when the
+	// Golay code protecting u0 was at its correction limit (E0 >= 3) rather
+	// than E0 >= 2: Golay(23,12) is perfect, so E0 == 2 is almost always a
+	// correct decode, and repeating it costs more than it saves (offline
+	// PESQ-NB on encoded speech, random and fading channels).
+	int b0 = ((frame_vector[0] >> 4) & 0xfc) | ((frame_vector[7] >> 1) & 0x3);
+
+	d_er = 0.95f * d_er + 0.000365f * (float)ET;
+	if (d_er > 0.0875f) {
+		imbe_mute(snd);
+	} else if (b0 > 207 || E0 >= 3 || ET >= (uint32_t)(10.0f + 40.0f * d_er)) {
+		if (++d_rpt_ctr >= 4)
+			imbe_mute(snd);
+		else
+			imbe_repeat(snd);
+	} else {
+		d_rpt_ctr = 0;
+		imbe_decode(frame_vector, snd);
+	}
+}
+
+void imbe_vocoder::repeat(IMBE_PARAM *imbe_param, Word16 *snd)
+{
+	Word16 snd_tmp[FRAME];
+	Word16 j;
+
+	if (!have_last_param) {
+		mute(imbe_param, snd);
+		return;
+	}
+	memcpy(imbe_param, &last_imbe_param, sizeof(IMBE_PARAM));
+	v_synt(imbe_param, snd);
+	uv_synt(imbe_param, snd_tmp);
+
+	for(j = 0; j < FRAME; j++)
+		snd[j] = add(snd[j], snd_tmp[j]);
+}
+
+void imbe_vocoder::mute(IMBE_PARAM *imbe_param, Word16 *snd)
+{
+	Word16 snd_tmp[FRAME];
+	Word16 j;
+
+	if (have_last_param)
+		memcpy(imbe_param, &last_imbe_param, sizeof(IMBE_PARAM));
+	for(j = 0; j < NUM_HARMS_MAX; j++) {
+		imbe_param->sa[j] = 0;
+		imbe_param->v_uv_dsn[j] = 0;
+	}
+	imbe_param->l_uv = imbe_param->num_harms;
 	v_synt(imbe_param, snd);
 	uv_synt(imbe_param, snd_tmp);
 

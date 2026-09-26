@@ -33,6 +33,18 @@ public:
 	void imbe_decode(int16_t *frame_vector, int16_t *snd) {
 		decode(&my_imbe_param, frame_vector, snd);
 	}
+	// Decode with frame repeat / mute (TIA-102.BABA-A §7.7-7.8) driven by
+	// the FEC error counts from imbe_header_decode(). frame_vector[7] must
+	// already be shifted right by one, as for imbe_decode().
+	void imbe_decode_checked(int16_t *frame_vector, uint32_t E0, uint32_t ET, int16_t *snd);
+	// Frame repeat (TIA-102.BABA-A §7.7): re-synthesize the last good frame's
+	// parameters without touching the spectral-amplitude prediction memory.
+	// (Re-decoding the previous bit vector instead would apply its prediction
+	// residual a second time and corrupt the following frames.)
+	void imbe_repeat(int16_t *snd) { repeat(&my_imbe_param, snd); }
+	// Frame mute (TIA-102.BABA-A §7.8): synthesize a zero-amplitude frame so
+	// the previous frame's tail fades out and the next frame fades in.
+	void imbe_mute(int16_t *snd) { mute(&my_imbe_param, snd); }
 	// hack to enable ambe encoder read access to speech parameters
 	const IMBE_PARAM* param(void) {return &my_imbe_param;}
 	void set_gain_adjust(float gain_adjust) {d_gain_adjust = gain_adjust;}
@@ -40,6 +52,10 @@ public:
 	void decode_tap(Word16 *snd, int L, float w0, const int *Vl, const float *Ml);
 private:
 	IMBE_PARAM my_imbe_param;
+	IMBE_PARAM last_imbe_param;	// last good frame, post sa_enh (for imbe_repeat)
+	bool have_last_param;
+	float d_er;			// smoothed error rate for imbe_decode_checked()
+	int d_rpt_ctr;			// consecutive repeated frames
 
 	/* data items originally static (moved from individual c++ sources) */
 	Word16 prev_pitch, prev_prev_pitch, prev_e_p, prev_prev_e_p;
@@ -90,6 +106,8 @@ private:
 	void v_uv_det(IMBE_PARAM *imbe_param, Cmplx16 *fft_buf);
 	void decode_init(IMBE_PARAM *imbe_param);
 	void decode(IMBE_PARAM *imbe_param, Word16 *frame_vector, Word16 *snd);
+	void repeat(IMBE_PARAM *imbe_param, Word16 *snd);
+	void mute(IMBE_PARAM *imbe_param, Word16 *snd);
 	void encode_init(void);
 };
 

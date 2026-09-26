@@ -1096,6 +1096,7 @@ software_imbe_decoder::clear()
    // stuck rpt_ctr, last vee_history) leaks into the next call and pins the
    // gating into permanent mute - which produces fully-silent output files.
    ER = 0.0f;
+   SE = 10000.0f;
    rpt_ctr = 0;
    OldL = 0;
    L = 9;
@@ -1171,9 +1172,6 @@ software_imbe_decoder::decode(int16_t samples[IMBE_SAMPLES_PER_FRAME], const voi
 
 	// PN/Hamming/Golay - etc.
 	imbe_header_decode(cw, u0, u1, u2, u3, u4, u5, u6, u7, E0, ET) ;
-
-	//replace the sync bit(LSB of u7) with the BOT flag
-	u7 = u7 | 0x01; //ECC procedure called above always returns u7 LSB = 0
 
 	decode_fullrate(samples, u0, u1, u2, u3, u4, u5, u6, u7, E0, ET); // process 88-bit frame
 }
@@ -1257,16 +1255,24 @@ void
 software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7, uint32_t E0, uint32_t ET)
 {
 	int K;
-	float SE = 0;
 	int en, tmp_f;
 	bool muted = false;
 	bool repeated = false;
+
+	// u7 arrives as imbe_header_decode() leaves it: the 7 unprotected bits
+	// shifted left by one (bit 0 free). b0, rearrange() and the fixed-point
+	// decoder all index those 7 bits unshifted (b0 LSBs at bits 1-2, b2 LSB at
+	// bit 3, residual bits at 0x40/0x20/0x10 - cf. imbe_vocoder ch_decode.cc,
+	// mbelib imbe_d[85..86], JMBE IMBEFrame bits 141..142). Without this
+	// shift every frame decodes with the wrong pitch LSBs, gain LSB and three
+	// wrong spectral residual bits.
+	u7 >>= 1;
     int b0 = ((u0 >> 4) & 0xfc) | ((u7 >> 1) & 0x3);
 
 	ER = (0.95 * ER) + (0.000365 * ET);
-	if( ER > 0.0875) {                                           // Frame Muting per TIA-102-BABA-A section 7.8
+	if( ER > params_.mute_er) {                                  // Frame Muting per TIA-102-BABA-A section 7.8
 		muted = true;
-	} else if(b0 > 207 || E0 >= 2 || ET >=(10 + 40 * ER)) {      // Frame Repeat per TIA-102-BABA-A section 7.7
+	} else if(b0 > 207 || (int)E0 >= params_.repeat_e0 || ET >= (params_.repeat_et_base + params_.repeat_et_slope * ER)) { // Frame Repeat per TIA-102-BABA-A section 7.7
 		if (repeat_last()) {                                     // mute if repeat not allowed
 			muted = true;
 		} else {
@@ -1286,70 +1292,70 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		decode_spectral_amplitudes(Start3, Start8);
 		enhance_spectral_amplitudes(SE);
 	}
-	if (!muted) {
-		if (repeated) {
-			// Frame-repeat: decode_vuv / decode_spectral_amplitudes did NOT
-			// run this frame, so vee/M/Mu/phi[New] still hold whatever was
-			// last written into the [New] slot - which because of the
-			// unconditional Old/New ping-pong is actually data from TWO
-			// frames ago, not the previous frame. Synth would then
-			// interpolate two-frames-old -> previous, going backwards in
-			// time. Copy [Old] -> [New] so synth re-renders the last good
-			// frame; adaptive_smoothing / smooth_voicing / postfilter are
-			// also skipped because their effects are already baked into the
-			// [Old] values (re-applying would compound).
-			//
-			// Apply REPEAT_AMPLITUDE_DECAY to M only - compounds across
-			// consecutive repeats to fade held formants out before the mute
-			// threshold hits. See the REPEAT_AMPLITUDE_DECAY notes at the
-			// top of this file.
-			for (int l = 0; l < 57; l++) {
-				vee[l][New] = vee[l][Old];
-				M[l][New]   = params_.repeat_amplitude_decay * M[l][Old];
-				Mu[l][New]  = Mu[l][Old];
-				phi[l][New] = phi[l][Old];
-			}
-			for (int l = 0; l < 58; l++) log2Mu[l][New] = log2Mu[l][Old];
-			L = OldL;
-			w0 = Oldw0;
-		} else {
-			adaptive_smoothing(SE, ET);
-			smooth_voicing_decisions();
-			compute_envelope_phases();   // BEFORE postfilter - sees raw M
-			apply_formant_postfilter();
+	if (muted) {
+		// Mute: synthesize a zero-amplitude frame that holds the last good
+		// parameters. The previous frame's overlap tail then fades out
+		// through the synthesis window instead of being cut off (click), and
+		// the frame after the mute fades in from silence. Prediction memory
+		// (log2Mu) is carried over unchanged, as for a repeat.
+		w0 = Oldw0;
+		if (OldL > 0) L = OldL;
+		for (int l = 0; l < 57; l++) {
+			vee[l][New] = 0;
+			M[l][New] = 0.0f;
+			Mu[l][New] = Mu[l][Old];
+			log2Mu[l][New] = log2Mu[l][Old];
 		}
-
-		// Optional offline / multi-pass voicing override (one-shot). Applied
-		// AFTER decode_vuv + smoothing + envelope phase, BEFORE synth - so
-		// imbe_tune in --multipass can re-decode with externally-smoothed
-		// voicing without disturbing the rest of the per-frame state.
-		if (vee_override_active_) {
-			for (int l = 1; l <= 56; l++) vee[l][New] = vee_override_[l];
-			vee_override_active_ = false;
+		log2Mu[57][New] = log2Mu[57][Old];
+		compute_envelope_phases();
+	}
+	if (repeated) {
+		// Frame repeat (TIA-102.BABA §7.7): repeat_last() has already
+		// reloaded L, w0, vee, M, Mu and log2Mu from [Old]. The phases
+		// must still advance: psi1 keeps accumulating and phi[New] is
+		// recomputed, otherwise each harmonic is forced back to the
+		// previous frame's end phase, which detunes it (fine transition)
+		// or cancels it in the overlap region (coarse transition).
+		// adaptive_smoothing / voicing smoothing / postfilter are already
+		// baked into the reloaded values and are not re-applied.
+		if (params_.repeat_amplitude_decay != 1.0f) {
+			for (int l = 1; l <= L; l++)
+				M[l][New] *= params_.repeat_amplitude_decay;
 		}
+		compute_envelope_phases();
+	} else if (!muted) {
+		adaptive_smoothing(SE, ET);
+		smooth_voicing_decisions();
+		compute_envelope_phases();   // BEFORE postfilter - sees raw M
+		apply_formant_postfilter();
+	}
 
-		// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
+	// Optional offline / multi-pass voicing override (one-shot). Applied
+	// AFTER decode_vuv + smoothing + envelope phase, BEFORE synth - so
+	// imbe_tune in --multipass can re-decode with externally-smoothed
+	// voicing without disturbing the rest of the per-frame state.
+	if (vee_override_active_) {
+		for (int l = 1; l <= 56; l++) vee[l][New] = vee_override_[l];
+		vee_override_active_ = false;
+	}
 
-		//synth:
-		synth_unvoiced();// ToDo: make suv return value?
-		synth_voiced(); // ToDo: make sv return value?
+	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
-		//output:
-		for(en = 0; en <= 159; en++) {
-			// The unvoiced samples are loud and the voiced are low...I don't know why.
-			// Most of the difference is compensated by removing the 146.6433 factor
-			// in the synth_unvoiced procedure.  The final tweak is done by raising the
-			// voiced samples:
-			float sample = suv[en] + sv[en] * 4; //balance v/uv loudness
-			if(abs((int)sample) > 32767) {
-				sample = (sample < 0) ? -32767 : 32767; // * sgn(sample)
-			}
-			samples[en] = sample;
+	//synth:
+	synth_unvoiced();// ToDo: make suv return value?
+	synth_voiced(); // ToDo: make sv return value?
+
+	//output:
+	for(en = 0; en <= 159; en++) {
+		// The unvoiced samples are loud and the voiced are low...I don't know why.
+		// Most of the difference is compensated by removing the 146.6433 factor
+		// in the synth_unvoiced procedure.  The final tweak is done by raising the
+		// voiced samples:
+		float sample = suv[en] + sv[en] * 4; //balance v/uv loudness
+		if(abs((int)sample) > 32767) {
+			sample = (sample < 0) ? -32767 : 32767; // * sgn(sample)
 		}
-	} else { // muted
-		for(en = 0; en <= 159; en++) {
-			samples[en] = 0;
-		}
+		samples[en] = sample;
 	}
 
 	// Telemetry push (no-op unless OP25_DEBUG_VOCODER is set).
@@ -1393,15 +1399,9 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 		                           flips, sfm, samples, 160);
 	}
 
-	// Only advance Old/New on a frame we actually decoded/synthesized.
-	// On a mute frame the Old/New labels stay put so the next non-mute
-	// frame's [Old] still points at the last actually-synthesized data,
-	// not two-frames-ago via parity of the ping-pong.
-	if (!muted) {
-		OldL = L;
-		Oldw0 = w0;
-		tmp_f = Old; Old = New; New = tmp_f;
-	}
+	OldL = L;
+	Oldw0 = w0;
+	tmp_f = Old; Old = New; New = tmp_f;
 }
 
 void
@@ -1615,7 +1615,7 @@ int
 software_imbe_decoder::repeat_last()
 {
    // Frame Repeat per TIA-102-BABA-A sections 7.7 & 14.6
-   if (++rpt_ctr >= 4)
+   if (++rpt_ctr >= params_.max_repeats)
       return 1;
 
    // Reload parameters from previous frame
@@ -1870,31 +1870,10 @@ software_imbe_decoder::compute_envelope_phases()
    //     don't leak DC into the phase output. The Hilbert transform has no
    //     DC response; this restores that property under truncation.
 
-   // UV->V transition phase reset, after US6963833 (DVSI, expired Mar 2022).
-   // Patent specifies "phases for each harmonic are initialized with a fixed
-   // set of values" - i.e. a per-harmonic table of predetermined offsets that
-   // are deliberately misaligned so the harmonics don't sum coherently at
-   // sample 0. Earlier version of this code just set psi1=0 on UV->V, which
-   // could leave harmonics aligned if the envelope-phase term was small
-   // (smooth spectrum at onset) - exactly the saturation the patent defends
-   // against.
-   //
-   // The table below is 56 phase offsets drawn from a fixed permutation of
-   // {0, pi/3, 2pi/3, pi, 4pi/3, 5pi/3} so adjacent harmonics never share a
-   // phase value, computed once. Setting psi1=0 then adding these offsets
-   // gives the patent's "balanced output waveforms preventing saturation
-   // distortions."
-   static const float uv_to_v_phase_table[57] = {
-      0.000f,
-      0.000f,   2.094f,   4.189f,   1.047f,   3.142f,   5.236f,   2.094f,   4.189f,
-      0.000f,   3.142f,   1.047f,   5.236f,   2.094f,   0.000f,   4.189f,   3.142f,
-      1.047f,   5.236f,   0.000f,   2.094f,   4.189f,   3.142f,   1.047f,   5.236f,
-      2.094f,   0.000f,   3.142f,   4.189f,   1.047f,   5.236f,   2.094f,   3.142f,
-      0.000f,   4.189f,   1.047f,   5.236f,   3.142f,   2.094f,   0.000f,   4.189f,
-      1.047f,   3.142f,   5.236f,   2.094f,   0.000f,   4.189f,   1.047f,   3.142f,
-      5.236f,   0.000f,   2.094f,   4.189f,   1.047f,   3.142f,   5.236f,   2.094f
-   };
-
+   // UV->V transition (after US6963833): restart the linear-phase
+   // accumulator at voicing onset. Note that with an all-unvoiced previous
+   // frame synth_voiced() only uses phi[New] for the onset, so the absolute
+   // value of psi1 changes nothing audible; kept as a knob for experiments.
    if (params_.uv_to_v_reset) {
       bool prev_any_voiced = false;
       for (int l = 1; l <= OldL && !prev_any_voiced; l++) {
@@ -1906,12 +1885,6 @@ software_imbe_decoder::compute_envelope_phases()
       }
       if (!prev_any_voiced && cur_any_voiced) {
          psi1 = 0.0f;
-         // Pre-seed phi[][Old] from the table so the synthesizer's interp
-         // path (which reads phi[Old]) sees the misaligned values too on
-         // the very first synthesis after onset.
-         for (int l = 1; l <= 56; l++) {
-            phi[l][Old] = uv_to_v_phase_table[l];
-         }
       }
    }
 
@@ -1921,47 +1894,59 @@ software_imbe_decoder::compute_envelope_phases()
    const int MAX_D = 19;
    const int D = (params_.phase_kernel_d > MAX_D) ? MAX_D : params_.phase_kernel_d;
 
-   // Build log-magnitude vector B[1..L] and subtract its mean (DC removal).
+   // Build log-magnitude vector B[1..L]; B[0] = 0.
    float B[2 * 19 + 57];   // index B[l + MAX_D] for l in [-MAX_D, 56+MAX_D]
    for (int i = 0; i < (int)(sizeof(B)/sizeof(B[0])); i++) B[i] = 0.0f;
+   const bool patent_kernel = (params_.phase_kernel == 1);
 
    double mean_B = 0.0;
-   int    n_B    = 0;
    for (int l = 1; l <= L; l++) {
       float mag = M[l][New];
       float bl  = (mag > 1e-6f) ? log2f(mag) : -20.0f;
       B[l + MAX_D] = bl;
       mean_B += bl;
-      n_B++;
    }
-   if (n_B > 0) mean_B /= (double)n_B;
-   for (int l = 1; l <= L; l++) {
-      B[l + MAX_D] -= (float)mean_B;
+   if (!patent_kernel && L > 0) {
+      // Subtract the in-band mean so the boundary extensions don't leak DC
+      // into the phase (the Hilbert transform has no DC response).
+      mean_B /= (double)L;
+      for (int l = 1; l <= L; l++) B[l + MAX_D] -= (float)mean_B;
    }
-   // Boundary extensions: B[0]=0 already; symmetric reflection for l<0,
-   // geometric decay for l>L. All operating on zero-mean B now.
-   for (int l = 1; l <= D; l++) {
-      B[-l + MAX_D] = B[l + MAX_D];
-   }
+   // Extension past L first (patent: constant gamma * B[L]; odd-Hilbert
+   // form: geometric decay), then the symmetric reflection B[-l] = B[l] so
+   // reflected indices beyond L see the extended values rather than zero.
    {
       float decay = 1.0f;
       float B_L = B[L + MAX_D];
       for (int l = L + 1; l <= L + D && l < 56 + MAX_D; l++) {
-         decay *= params_.phase_kernel_gamma;
-         B[l + MAX_D] = B_L * decay;
+         if (patent_kernel) {
+            B[l + MAX_D] = params_.phase_kernel_gamma * B_L;
+         } else {
+            decay *= params_.phase_kernel_gamma;
+            B[l + MAX_D] = B_L * decay;
+         }
       }
    }
+   for (int l = 1; l <= D; l++) {
+      B[-l + MAX_D] = B[l + MAX_D];
+   }
 
-   // Proper discrete Hilbert kernel weights, precomputed once per call.
-   // h(m) = 2/(pi*m) for odd m, h(m) = 0 for even m.
-   const float two_over_pi = 2.0f / (float)M_PI;
+   // Kernel weights: odd-only discrete Hilbert h(m) = 2/(pi*m), or the
+   // patent's h(m) = 1/m over all m.
+   const float kscale = patent_kernel ? 1.0f : 2.0f / (float)M_PI;
+   const int kstep = patent_kernel ? 1 : 2;
 
-   float rho = (L > 0) ? ((float)Luv / (float)L) : 0.0f;
+   // TIA eq. 142 weights the random phase by this frame's unvoiced
+   // fraction. Luv itself is only updated later in synth_unvoiced(), so
+   // count it here from the current decisions.
+   int n_uv = 0;
+   for (int l = 1; l <= L; l++) if (!vee[l][New]) n_uv++;
+   float rho = (L > 0) ? ((float)n_uv / (float)L) : 0.0f;
    const int MaxL = (L > OldL) ? L : OldL;
    for (int ell = 1; ell <= MaxL; ell++) {
       float env_phase = 0.0f;
-      for (int m = 1; m <= D; m += 2) {  // odd-only per Hilbert kernel
-         env_phase += two_over_pi * (B[ell + m + MAX_D] - B[ell - m + MAX_D]) / (float)m;
+      for (int m = 1; m <= D; m += kstep) {
+         env_phase += kscale * (B[ell + m + MAX_D] - B[ell - m + MAX_D]) / (float)m;
       }
       uint32_t s = voiced_phase_seed;
       s ^= s << 13; s ^= s >> 17; s ^= s << 5;

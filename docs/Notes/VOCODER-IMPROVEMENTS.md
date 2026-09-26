@@ -20,6 +20,146 @@ Defaults reflect what sounded best on the WMATA (P25 Phase 1) test recording.
 
 ---
 
+## Review and measurements (Sep 2026)
+
+The changes below were re-checked against an objective benchmark. Several
+defaults turned out to lower quality, the float decoder had a long-standing
+bit-unpacking bug, and the TIA repeat rule was costing more than it saved.
+Where this section disagrees with the older per-feature notes further down,
+this section is current.
+
+### Method
+
+`utils/imbe_eval` encodes clean speech with the OP25 fixed-point IMBE encoder,
+applies the real P25 voice FEC (Golay/Hamming + PN), flips codeword bits,
+FEC-decodes, and decodes with either vocoder exactly as `p25p1_fdma` does.
+`utils/score_vocoder.py` scores the result with PESQ-NB (P.862) and STOI
+against the original, and with DNSMOS P.835 (non-intrusive).
+
+- Corpus: 11 Open Speech Repository Harvard-sentence recordings (8 kHz,
+  male and female, ~8 min).
+- Channels: random bit errors at 0 / 0.5 / 1 / 2 / 4 % BER, plus two
+  Gilbert-Elliott fading channels (per 20 ms frame, good/bad BER):
+  geA = 0.2 % / 8 %, P(g→b) 0.03, P(b→g) 0.4 (≈0.7 % average);
+  geB = 0.5 % / 15 %, 0.08, 0.3 (≈3.9 % average).
+  For scale: dcfd's per-transmission `error_count` (the sum of ET) is
+  0.20 corrected errors per frame at the median and 1.2 at p90.
+- Live material: 40 dcfd and 16 wmata transmissions from the recorders'
+  own output, re-encoded and decoded by each variant, scored with DNSMOS.
+  This is a tandem (the audio has already been through a decoder), so
+  absolute scores are low; only the differences between decoders mean
+  anything.
+
+### Results (PESQ-NB, mean of 11 files)
+
+| Decoder | clean | 1 % | 2 % | 4 % | fading A | fading B |
+|---|---|---|---|---|---|---|
+| master fixed-point (`softVocoder: false`) | 3.135 | 3.115 | 3.033 | 2.483 | 2.766 | 1.614 |
+| master float (`softVocoder: true`) | 3.010 | 2.909 | 2.635 | 2.111 | 2.762 | 1.787 |
+| previous branch, fixed-point | 3.135 | 2.996 | 2.644 | 2.029 | 2.729 | 1.695 |
+| previous branch, float | 2.605 | 2.563 | 2.325 | 1.916 | 2.421 | 1.701 |
+| **this branch, fixed-point** | 3.135 | 3.115 | 3.016 | 2.666 | 2.905 | 1.922 |
+| **this branch, float** | 3.132 | 3.093 | 3.021 | 2.721 | 2.954 | 1.949 |
+
+DNSMOS OVRL agrees (clean / 2 % / fading A / fading B): master float
+2.963 / 2.869 / 2.912 / 2.673, previous branch float 2.884 / 2.801 / 2.878 /
+2.648, this branch float 2.996 / 2.990 / 2.999 / 2.865. On the live
+tandem material this branch's float decoder is +0.04 OVRL over master float
+on dcfd (better on 26 of 40 transmissions) and +0.02 on wmata; the previous
+branch's float decoder was −0.12 and −0.20.
+
+### What changed in this review
+
+1. **Float decoder read u7 one bit off (bug since upstream OP25).**
+   `imbe_header_decode()` returns the 7 unprotected bits shifted left by
+   one. `p25p1_fdma` shifts them back for the fixed-point vocoder but passed
+   them unshifted to `software_imbe_decoder`, whose `rearrange()` expects the
+   same layout as the fixed-point `ch_decode` (confirmed against mbelib and
+   JMBE). Every frame decoded with wrong pitch LSBs (77 % of frames, mean f0
+   error 1.2 %, up to 5 %), a wrong gain LSB and three wrong residual bits:
+   audible as rough, warbly pitch. `decode_fullrate()` now does the shift
+   itself, which also fixes `decode()` (YSF and the legacy voice path).
+   Worth +0.09 PESQ on its own.
+2. **Formant postfilter defaults to off** (`fmt_alpha` 0.45 → 0). It was
+   the largest regression (−0.44 PESQ). The TIA spectral enhancement in
+   `enhance_spectral_amplitudes()` is already a formant postfilter; every
+   alpha/W combination tried (0.1–0.45, 3–7) scored lower than none on both
+   PESQ and DNSMOS.
+3. **Repeat only when E0 ≥ 3** (was E0 ≥ 2, per TIA). Golay(23,12) is a
+   perfect code: E0 = 2 means two errors were corrected, almost always
+   correctly, so repeating that frame discards good data. +0.30 PESQ at 2 %
+   BER, +0.19 on fading channel A. The ET and mute rules are unchanged; on
+   fading channels removing gating altogether measured worse.
+4. **Repeated frames keep advancing phase.** The repeat path copied
+   `phi[Old]` into `phi[New]` and stopped `psi1`, which forced every
+   harmonic back to its previous end phase: detuning on the fine-transition
+   path and cancellation in the overlap-add path, on the repeat frame and
+   the frame after it.
+5. **Muted frames fade.** A mute now synthesizes a zero-amplitude frame that
+   holds the last good parameters, so the previous frame's tail fades out
+   through the synthesis window and the next frame fades in, instead of
+   hard zeros followed by a cross-fade from pre-mute audio. Old/New advance
+   on every frame again.
+6. **Fixed-point repeat re-synthesizes instead of re-decoding.** Re-decoding
+   the previous bit vector applied its spectral prediction residual a second
+   time (prediction memory lives in `sa_decode`), distorting the repeat and
+   the frames after it. `imbe_vocoder::imbe_repeat()` replays the saved
+   post-enhancement parameters; `imbe_mute()` fades out. The gating that was
+   copied into `p25p1_fdma`, `p25p1_voice_decode` and `rx_sync` (each with
+   the same u7 off-by-one in its b0 check) is now one method,
+   `imbe_vocoder::imbe_decode_checked()`.
+7. **Persistent S_E.** `SE` was a local reset to 0 every frame, so the
+   recursive `S_E = 0.95·S_E + 0.05·R_M0` never smoothed anything.
+8. **Random-phase weight uses the current frame's unvoiced count**
+   (`Luv` was one frame stale).
+9. **IMBE capture no longer closes its FILE\* from `clear()`**, which runs
+   on the main thread while the decoder thread may be writing. Files are
+   now split on the decoder thread on a talkgroup change or a 2 s gap.
+10. **UV→V phase table removed.** It seeded `phi[Old]`, which the onset
+    frame never reads (with an all-unvoiced previous frame, synthesis uses
+    only `phi[New]`); measured no effect. The `psi1` reset knob remains.
+
+### Things measured and left alone
+
+- Envelope phase regeneration (§4) gives about +0.03 PESQ over the TIA
+  linear phase. `phase_c_env` 0.7–1.3, `phase_w_rand` 0–0.6, and the
+  patent's own kernel (`phase_kernel = 1`: h(m) = 1/m over all m, scale
+  0.44, B[l>L] = 0.72·B[L]) are indistinguishable on PESQ and DNSMOS;
+  `phase_low_blend = 1` and `phase_c_env = 2` are measurably worse. Defaults
+  are unchanged. PESQ and DNSMOS are weak judges of phase, so this is where
+  listening tests would add the most.
+- Voicing smoothing (§6) stays off: 3 taps cost ~0.3 PESQ at 2 % BER even
+  with the ER gate.
+- The wider fine-transition gates (§8) were already at TIA values in the
+  code defaults.
+- Repeat amplitude decay 0.85 vs 1.0 and ET threshold 10 vs 6 or 14: no
+  consistent difference.
+
+### Recommendation for live systems
+
+With these fixes the float decoder is the best or tied-best variant in
+every condition tested, so `softVocoder: true` is the better setting for
+wmata as well as dcfd.
+
+### Reproducing
+
+```bash
+cmake --build build --target imbe_eval
+for f in corpus/*.wav; do b=$(basename $f .wav)
+  build/imbe_eval enc $f out/$b.imbe 0.02              # or ge:0.002,0.08,0.03,0.4
+  build/imbe_eval dec out/$b.imbe out/$b.float.wav float
+  build/imbe_eval dec out/$b.imbe out/$b.fixed.wav fixed
+done
+pip install numpy scipy soundfile pesq pystoi onnxruntime
+utils/score_vocoder.py --ref-dir corpus out/*.float.wav
+```
+
+`VP_<field>=value` environment variables override any `VocoderParams` field
+for `imbe_eval dec`. Captured live `.imbe` files (`OP25_IMBE_CAPTURE_DIR`)
+decode the same way; score those with DNSMOS only.
+
+---
+
 ## 1. Robust error concealment on the fixed-point IMBE path
 
 **Problem.** The fixed-point `imbe_vocoder` had no internal mute/repeat policy
@@ -297,19 +437,24 @@ All fields of `VocoderParams` (declared in [`software_imbe_decoder.h`](../../lib
 
 | Field | Default | Improvement |
 |---|---|---|
-| `fmt_alpha` | 0.22 | 5 — formant emphasis strength |
-| `fmt_w` | 5 | 5 — formant smoothing half-window (window = 2W+1) |
-| `phase_c_env` | 0.90 | 4 — envelope phase scaling (re-tune after Hilbert kernel fix) |
-| `phase_w_rand` | 0.15 | 4 — residual random phase weight |
-| `phase_low_blend` | 0.85 | 4 — envelope phase weight on low harmonics |
-| `phase_kernel_d` | 19 | 4 — Hilbert kernel half-length |
-| `phase_kernel_gamma` | 0.72 | 4 — kernel boundary decay |
-| `voicing_smooth_taps` | 3 | 6 — voicing median filter length |
-| `voicing_smooth_er_threshold` | 0.01 | 6 — fire smoothing only when smoothed ER ≥ this |
-| `uv_to_v_reset` | true | 7 — reset `psi1` + seed phi[Old] from phase table on voicing onset |
-| `interp_max_l` | 12 | 8 — fine-transition max harmonic |
-| `interp_pitch_tol` | 0.15 | 8 — fine-transition pitch tolerance |
-| `repeat_amplitude_decay` | 0.85 | (repeat path) magnitude decay per consecutive repeat frame |
+| `fmt_alpha` | 0 (off) | 5 — formant emphasis strength |
+| `fmt_w` | 7 | 5 — formant smoothing half-window (window = 2W+1) |
+| `phase_c_env` | 1.30 | 4 — envelope phase scaling |
+| `phase_w_rand` | 0.25 | 4 — residual random phase weight |
+| `phase_low_blend` | 0.4 | 4 — envelope phase weight on low harmonics |
+| `phase_kernel` | 0 | 4 — 0 = odd-only Hilbert, 1 = US5701390 kernel |
+| `phase_kernel_d` | 19 | 4 — kernel half-length |
+| `phase_kernel_gamma` | 0.6 | 4 — boundary extension factor (patent: 0.72) |
+| `voicing_smooth_taps` | 1 (off) | 6 — voicing median filter length |
+| `voicing_smooth_er_threshold` | 0 | 6 — fire smoothing only when smoothed ER ≥ this |
+| `uv_to_v_reset` | true | 7 — reset `psi1` on voicing onset |
+| `interp_max_l` | 8 | 8 — fine-transition max harmonic (TIA) |
+| `interp_pitch_tol` | 0.1 | 8 — fine-transition pitch tolerance (TIA) |
+| `repeat_amplitude_decay` | 1.0 | (repeat path) magnitude decay per consecutive repeat frame |
+| `mute_er` | 0.0875 | TIA §7.8 mute threshold on smoothed ER |
+| `repeat_e0` | 3 | repeat when E0 ≥ this (TIA: 2) |
+| `repeat_et_base`, `repeat_et_slope` | 10, 40 | repeat when ET ≥ base + slope·ER (TIA) |
+| `max_repeats` | 4 | consecutive repeats before muting (TIA) |
 
 ---
 
