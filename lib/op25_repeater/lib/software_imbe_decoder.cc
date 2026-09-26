@@ -1333,6 +1333,7 @@ software_imbe_decoder::decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], 
 	} else if (!muted) {
 		adaptive_smoothing(SE, ET);
 		smooth_voicing_decisions();
+		smooth_amplitudes();
 		compute_envelope_phases();   // BEFORE postfilter - sees raw M
 		apply_formant_postfilter();
 	}
@@ -1869,6 +1870,31 @@ software_imbe_decoder::set_voicing_override(const int in[57])
    }
    vee_override_[0] = 0;
    vee_override_active_ = true;
+}
+
+void
+software_imbe_decoder::smooth_amplitudes()
+{
+   const float a = params_.amp_smooth;
+   if (a <= 0.0f || OldL <= 0 || Oldw0 <= 0.0f)
+      return;
+   float e_new = 0.0f, e_old = 0.0f;
+   for (int l = 1; l <= L; l++) e_new += M[l][New] * M[l][New];
+   for (int l = 1; l <= OldL; l++) e_old += M[l][Old] * M[l][Old];
+   if (e_old <= 0.0f || e_new > 4.0f * e_old)   // onset or after silence/mute
+      return;
+   for (int l = 1; l <= L; l++) {
+      // previous frame's envelope at this harmonic's frequency
+      float k = l * w0 / Oldw0;
+      int k0 = (int)k;
+      if (k0 < 1 || k0 >= OldL) continue;
+      float t = k - k0;
+      float m0 = M[k0][Old], m1 = M[k0 + 1][Old];
+      if (m0 <= 0.0f || m1 <= 0.0f || M[l][New] <= 0.0f) continue;
+      float lp = (1.0f - t) * log2f(m0) + t * log2f(m1);
+      float ln = log2f(M[l][New]);
+      M[l][New] = exp2f(ln + a * (lp - ln));
+   }
 }
 
 void
@@ -2458,7 +2484,13 @@ software_imbe_decoder::synth_voiced()
             // INTERP_MAX_L / INTERP_PITCH_TOL at top of file.
             if(ell < params_.interp_max_l && fabsf(w0 - Oldw0) < params_.interp_pitch_tol * w0) { // (fine transition)
                Dpl = phi[ell][ New] - phi[ell][ Old] -(Oldw0 + w0) * ell * 80;
-               Dwl = .00625 * (Dpl - 2 * M_PI * floorf((Dpl + M_PI) / (2 * M_PI)));
+               Dpl = params_.phase_track * (Dpl - 2 * M_PI * floorf((Dpl + M_PI) / (2 * M_PI)));
+               Dwl = .00625 * Dpl;
+               // With partial tracking the harmonic ends the frame short of
+               // phi[New]; record where it actually is so the next frame
+               // continues from there.
+               if (params_.phase_track != 1.0f)
+                  phi[ell][ New] = remainderf(phi[ell][ Old] + (Oldw0 + w0) * ell * 80 + Dpl, 2 * M_PI);
                THa = (Oldw0 * (float)ell + Dwl);
                THb = (w0 - Oldw0) * ell * .003125;
                Mb = .00625 *(MNew - MOld);

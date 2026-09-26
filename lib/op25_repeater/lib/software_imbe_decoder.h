@@ -120,6 +120,21 @@ struct VocoderParams {
 	// 0.20 = default (0.15-0.30 measured the same); larger pitch jumps still
 	// use the cross-fade.
 	float interp_pitch_tol      = 0.2f;
+	// Fraction of the way each interpolated harmonic is steered toward its
+	// new target phase per frame. 1 = TIA (hit phi[New] exactly at the end
+	// of the frame); lower values let the harmonic keep its own phase and
+	// only drift toward the target, so frame-to-frame jitter in the target
+	// (from quantization noise in the envelope phase) doesn't become a
+	// frequency wobble on every harmonic. 0 = free-running from onset.
+	float phase_track           = 1.0f;
+
+	// -- Spectral amplitude smoothing across frames ----------------------------
+	// Pull each harmonic's log amplitude toward the previous frame's envelope
+	// sampled at the same frequency: log M' = log M + a * (log M_prev(f) -
+	// log M). Reduces frame-to-frame flutter from amplitude quantization.
+	// Skipped when the frame is more than 6 dB louder than the previous one
+	// (onsets stay sharp). 0 = off.
+	float amp_smooth            = 0.0f;
 
 	// -- Smooth synthesis (frame transitions spread over the whole frame) -----
 	// The TIA synthesis changes the spectrum only inside a ~6 ms cross-fade
@@ -305,6 +320,7 @@ private:
 	void apply_formant_postfilter();
 	void smooth_voicing_decisions();
 	void compute_envelope_phases();
+	void smooth_amplitudes();
 	void fft(float i[], float q[]);
 	void enhance_spectral_amplitudes(float&);
 	void ifft(float i[], float q[], float[]);
