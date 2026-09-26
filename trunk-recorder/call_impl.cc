@@ -99,11 +99,7 @@ Call_impl::Call_impl(TrunkMessage message, System *s, Config c) {
   mode = message.mode;
   is_analog = false;
   priority = message.priority;
-  if (message.message_type == GRANT) {
-    was_update = false;
-  } else {
-    was_update = true;
-  }
+  was_update = call_detail::started_from_update(message.message_type);
   set_freq(message.freq);
   add_source(message.source);
   this->update_talkgroup_display();
@@ -129,6 +125,9 @@ void Call_impl::stop_call() {
 }
 long Call_impl::get_call_num() {
   return call_num;
+}
+bool Call_impl::get_started_from_update() {
+  return was_update;
 }
 void Call_impl::conclude_call() {
 

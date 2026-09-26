@@ -93,6 +93,7 @@ public:
   virtual bool get_conversation_mode() = 0;
   virtual System *get_system() = 0;
   virtual std::vector<Transmission> get_transmissions() = 0;
+  virtual bool get_started_from_update() = 0;
 };
 
 #endif

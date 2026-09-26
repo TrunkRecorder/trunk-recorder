@@ -12,6 +12,7 @@ class Recorder;
 class System;
 
 #include "call.h"
+#include "call_start_provenance.h"
 #include "state.h"
 #include "systems/parser.h"
 #include "systems/system.h"
@@ -94,6 +95,7 @@ public:
   bool get_conversation_mode();
   System *get_system();
   std::vector<Transmission> get_transmissions();
+  bool get_started_from_update();
 
 protected:
   State state;
