@@ -170,8 +170,11 @@ struct VocoderParams {
 	// High-frequency presence lift applied at synthesis: 0 dB below
 	// hf_lift_f1 (Hz) rising linearly (in dB) to hf_lift_db at 3700 Hz.
 	// The DVSI-derived reference decoder carries ~+1 dB at 2.5-3 kHz and
-	// ~+3 dB at 3.5-3.9 kHz relative to this decoder ("crisper"). 0 = off.
-	float hf_lift_db            = 0.0f;
+	// ~+3 dB at 3.5-3.9 kHz relative to this decoder ("crisper"). 3 dB is
+	// the default (chosen in listening tests on live traffic; neutral to
+	// slightly positive on PESQ/DNSMOS, no change in high-band buzz).
+	// 0 = off.
+	float hf_lift_db            = 3.0f;
 	float hf_lift_f1            = 2200.0f;
 	// Voiced harmonics that start or stop in this frame. 0 = TIA (fade in
 	// over samples 56-159 / fade out over 0-105 with the trapezoid window);

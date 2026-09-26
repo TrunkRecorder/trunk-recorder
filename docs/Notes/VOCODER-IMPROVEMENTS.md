@@ -184,7 +184,7 @@ traffic, and what the measurements showed:
 - The DVSI-derived decoder sounded slightly "crisper": it carries ~+1 dB
   at 2.5-3 kHz and ~+3 dB at 3.5-3.9 kHz relative to this decoder, and a
   ~4 dB lower noise floor between words. `hf_lift_db` reproduces the
-  former (off by default pending listening).
+  former; +3 dB was chosen in listening and is the default.
 
 Offline A/B of other decoders on captured frames used their public entry
 points: mbelib / mbelib-neo `mbe_processImbe4400Data` (88 info bits + E0/
