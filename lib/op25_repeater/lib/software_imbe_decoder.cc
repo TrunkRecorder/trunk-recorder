@@ -2368,6 +2368,17 @@ fft_radix2(float re[], float im[], int n, bool inv)
    }
 }
 
+// Share of a voiced harmonic's power (at w radians/sample) rendered as noise.
+float
+software_imbe_decoder::aper_share(float w) const
+{
+   if (params_.aper_max <= 0.0f || params_.uv_synth_mode != 1) return 0.0f;
+   float f = w * 8000.0f / (2.0f * (float)M_PI);
+   float t = (f - params_.aper_f1) / (params_.aper_f2 - params_.aper_f1);
+   t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
+   return params_.aper_max * t;
+}
+
 void
 software_imbe_decoder::synth_unvoiced_smooth()
 {
@@ -2385,15 +2396,26 @@ software_imbe_decoder::synth_unvoiced_smooth()
 
    Luv = 0;
    for (int ell = 1; ell <= L; ell++) {
-      if (vee[ell][New]) continue;
-      Luv = Luv + 1;
+      float amp = M[ell][New];
+      if (vee[ell][New]) {
+         // aperiodic share of a voiced harmonic: a sinusoid of amplitude M
+         // leaves the output at 4*M (power 8*M^2); a noise band of density
+         // d has power 2*nb*(UV_DENSITY*d)^2, so pick d for beta*8*M^2.
+         float beta = aper_share(ell * w0);
+         if (beta <= 0.0f) continue;
+         int nb0 = (int)ceilf((ell + 0.5f) * w0 * N / (2.0f * (float)M_PI)) - (int)ceilf((ell - 0.5f) * w0 * N / (2.0f * (float)M_PI));
+         if (nb0 <= 0) continue;
+         amp = M[ell][New] * sqrtf(8.0f * beta / (2.0f * nb0)) / UV_DENSITY;
+      } else {
+         Luv = Luv + 1;
+      }
       int lo = (int)ceilf((ell - 0.5f) * w0 * N / (2.0f * (float)M_PI));
       int hi = (int)ceilf((ell + 0.5f) * w0 * N / (2.0f * (float)M_PI));
       if (lo < 1) lo = 1;
       if (hi > N / 2) hi = N / 2;
       int nb = hi - lo;
       if (nb <= 0) continue;
-      float sigma = params_.uv_smooth_gain * UV_DENSITY * M[ell][New] * (float)N;
+      float sigma = (vee[ell][New] ? 1.0f : params_.uv_smooth_gain) * UV_DENSITY * amp * (float)N;
       float band_pow = 0.0f;
       for (int k = lo; k < hi; k++) {
          // Box-Muller from the full-period xorshift generator
@@ -2467,13 +2489,13 @@ software_imbe_decoder::synth_voiced()
       if(ell > L) { 
          MNew = 0;
       } else {
-         MNew = M[ell][ New];
+         MNew = M[ell][ New] * sqrtf(1.0f - aper_share(ell * w0));
       }
 
       if(ell > OldL) {
          MOld = 0;
       } else {
-         MOld = M[ell][ Old];
+         MOld = M[ell][ Old] * sqrtf(1.0f - aper_share(ell * Oldw0));
       }
 
       if(vee[ell][ New]) {

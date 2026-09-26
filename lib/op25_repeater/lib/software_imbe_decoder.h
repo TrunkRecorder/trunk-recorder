@@ -155,6 +155,15 @@ struct VocoderParams {
 	// centered on sample 80 of the frame. 160 = the whole frame; 49 matches
 	// the TIA cross-fade length.
 	int   uv_xfade              = 160;
+	// High-band aperiodicity for voiced harmonics (smooth path only). Real
+	// voiced speech is increasingly aperiodic above ~2 kHz; IMBE voicing is
+	// binary, so bright fully-voiced frames decode as a pure pulse train up
+	// to 3.7 kHz, which sounds buzzy. A share of each voiced harmonic's
+	// power, rising linearly from 0 at aper_f1 to aper_max at aper_f2 (Hz),
+	// is moved into band noise; total power is unchanged. 0 = off.
+	float aper_max              = 0.0f;
+	float aper_f1               = 2000.0f;
+	float aper_f2               = 3500.0f;
 	// Voiced harmonics that start or stop in this frame. 0 = TIA (fade in
 	// over samples 56-159 / fade out over 0-105 with the trapezoid window);
 	// 1 = linear ramp over the whole frame (measured worse: DNSMOS -0.04).
@@ -327,6 +336,7 @@ private:
 	uint16_t rearrange(uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7);
 	void synth_unvoiced();
 	void synth_unvoiced_smooth();
+	float aper_share(float w) const;
 	void synth_voiced();
 	void unpack(uint8_t *buf, uint32_t& u0, uint32_t& u1, uint32_t& u2, uint32_t& u3, uint32_t& u4, uint32_t& u5, uint32_t& u6, uint32_t& u7, uint32_t& E0, uint32_t& ET);
 	int repeat_last();
