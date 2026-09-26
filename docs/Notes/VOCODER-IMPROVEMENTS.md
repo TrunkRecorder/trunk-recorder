@@ -163,6 +163,38 @@ full-frame onset/offset ramps for harmonics that start or stop (worse on
 every metric) and a noise floor in voiced bands (0.05-0.2 of the band
 amplitude; worse on every metric).
 
+### Live listening round (Sep 2026): warble, buzz and other decoders
+
+Reports from listening to live wmata (SmartNet, P25 voice) and dcfd (P25)
+traffic, and what the measurements showed:
+
+- **"Buzzy"** comes from the radios' encoding. wmata's radios send brighter
+  audio (spectral tilt -6.7 vs -12.7 dB/kHz) and mark 56% of loud vowels
+  fully voiced to 3.7 kHz (dcfd 36%), so the top octave decodes as a
+  pure pulse train. A DVSI-derived reference decoder is just as periodic
+  in 2-3.7 kHz on the same frames. `aper_max` (high-band aperiodicity)
+  reduces the measured periodicity but made no audible difference.
+- **"Warble"** is in the transmitted parameters, not added by the decoder:
+  the same frames decoded by JMBE, mbelib, mbelib-neo, GopherTrunk and a
+  DVSI-derived decoder all warbled about equally in listening tests.
+  Smoothing pitch or amplitudes across frames, or removing the decoder's
+  own per-frame phase steering (`phase_track`), did not help audibly.
+- **`phase_c_env` 0.7** (now the default) was preferred over 1.3 and was
+  among the best of all decoders tested; mbelib was consistently worst.
+- The DVSI-derived decoder sounded slightly "crisper": it carries ~+1 dB
+  at 2.5-3 kHz and ~+3 dB at 3.5-3.9 kHz relative to this decoder, and a
+  ~4 dB lower noise floor between words. `hf_lift_db` reproduces the
+  former (off by default pending listening).
+
+Offline A/B of other decoders on captured frames used their public entry
+points: mbelib / mbelib-neo `mbe_processImbe4400Data` (88 info bits + E0/
+ET), GopherTrunk `imbe.Decoder.Decode` (11 packed info bytes, recorder
+defaults), JMBE `IMBEAudioCodec.getAudio` (re-encoded, re-interleaved
+144-bit frames), blip25-vocoder `Rate::FullRate4400x4400` with
+`FrameStatus` from ET. blip25-vocoder is reverse-engineered from a DVSI
+image and licensed for research / interoperability study only; it was
+used as a listening reference, not as code for this project.
+
 ### Recommendation for live systems
 
 With these fixes the float decoder is the best or tied-best variant in
