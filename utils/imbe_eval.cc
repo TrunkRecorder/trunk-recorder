@@ -173,6 +173,8 @@ static void apply_param_overrides(software_imbe_decoder &dec) {
   F("VP_aper_max", vp.aper_max);
   F("VP_aper_f1", vp.aper_f1);
   F("VP_aper_f2", vp.aper_f2);
+  F("VP_hf_lift_db", vp.hf_lift_db);
+  F("VP_hf_lift_f1", vp.hf_lift_f1);
   F("VP_repeat_amplitude_decay", vp.repeat_amplitude_decay);
   F("VP_mute_er", vp.mute_er);
   I("VP_repeat_e0", vp.repeat_e0);

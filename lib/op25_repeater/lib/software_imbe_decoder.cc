@@ -2382,6 +2382,18 @@ software_imbe_decoder::aper_share(float w) const
    return params_.aper_max * t;
 }
 
+// Presence lift (linear gain) for a component at w radians/sample.
+float
+software_imbe_decoder::hf_gain(float w) const
+{
+   if (params_.hf_lift_db == 0.0f) return 1.0f;
+   float f = w * 8000.0f / (2.0f * (float)M_PI);
+   if (f <= params_.hf_lift_f1) return 1.0f;
+   float t = (f - params_.hf_lift_f1) / (3700.0f - params_.hf_lift_f1);
+   if (t > 1.0f) t = 1.0f;
+   return powf(10.0f, params_.hf_lift_db * t / 20.0f);
+}
+
 void
 software_imbe_decoder::synth_unvoiced_smooth()
 {
@@ -2418,7 +2430,7 @@ software_imbe_decoder::synth_unvoiced_smooth()
       if (hi > N / 2) hi = N / 2;
       int nb = hi - lo;
       if (nb <= 0) continue;
-      float sigma = (vee[ell][New] ? 1.0f : params_.uv_smooth_gain) * UV_DENSITY * amp * (float)N;
+      float sigma = (vee[ell][New] ? 1.0f : params_.uv_smooth_gain) * UV_DENSITY * amp * hf_gain(ell * w0) * (float)N;
       float band_pow = 0.0f;
       for (int k = lo; k < hi; k++) {
          // Box-Muller from the full-period xorshift generator
@@ -2492,13 +2504,13 @@ software_imbe_decoder::synth_voiced()
       if(ell > L) { 
          MNew = 0;
       } else {
-         MNew = M[ell][ New] * sqrtf(1.0f - aper_share(ell * w0));
+         MNew = M[ell][ New] * sqrtf(1.0f - aper_share(ell * w0)) * hf_gain(ell * w0);
       }
 
       if(ell > OldL) {
          MOld = 0;
       } else {
-         MOld = M[ell][ Old] * sqrtf(1.0f - aper_share(ell * Oldw0));
+         MOld = M[ell][ Old] * sqrtf(1.0f - aper_share(ell * Oldw0)) * hf_gain(ell * Oldw0);
       }
 
       if(vee[ell][ New]) {

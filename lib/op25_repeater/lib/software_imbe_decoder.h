@@ -65,9 +65,12 @@ struct VocoderParams {
 
 	// Envelope-phase scaling. The kernel already includes 2/pi; this is an
 	// additional multiplier. 0 = falls back to pure linear phase (buzzy).
-	// Envelope phase measured ~+0.03 PESQ-NB over linear phase; 0.7-1.3 are
-	// indistinguishable on PESQ/DNSMOS, 2.0 is measurably worse.
-	float phase_c_env           = 1.30f;
+	// Envelope phase measured ~+0.03 PESQ-NB over linear phase. 0.7
+	// (default) matches natural speech's pulse sharpness on the lab corpus
+	// and cuts pitch-pulse timing jitter on live traffic from 5.6% (1.3) to
+	// 3.8%, with small gains on PESQ and DNSMOS; preferred in listening
+	// tests against 1.3 and against five other IMBE decoders.
+	float phase_c_env           = 0.7f;
 	// Residual TIA-eq.142 random phase weight, scaled by the unvoiced
 	// fraction of the frame. 0 = deterministic per the patent; 0..0.6 made
 	// no measurable difference.
@@ -164,6 +167,12 @@ struct VocoderParams {
 	float aper_max              = 0.0f;
 	float aper_f1               = 2000.0f;
 	float aper_f2               = 3500.0f;
+	// High-frequency presence lift applied at synthesis: 0 dB below
+	// hf_lift_f1 (Hz) rising linearly (in dB) to hf_lift_db at 3700 Hz.
+	// The DVSI-derived reference decoder carries ~+1 dB at 2.5-3 kHz and
+	// ~+3 dB at 3.5-3.9 kHz relative to this decoder ("crisper"). 0 = off.
+	float hf_lift_db            = 0.0f;
+	float hf_lift_f1            = 2200.0f;
 	// Voiced harmonics that start or stop in this frame. 0 = TIA (fade in
 	// over samples 56-159 / fade out over 0-105 with the trapezoid window);
 	// 1 = linear ramp over the whole frame (measured worse: DNSMOS -0.04).
@@ -337,6 +346,7 @@ private:
 	void synth_unvoiced();
 	void synth_unvoiced_smooth();
 	float aper_share(float w) const;
+	float hf_gain(float w) const;
 	void synth_voiced();
 	void unpack(uint8_t *buf, uint32_t& u0, uint32_t& u1, uint32_t& u2, uint32_t& u3, uint32_t& u4, uint32_t& u5, uint32_t& u6, uint32_t& u7, uint32_t& E0, uint32_t& ET);
 	int repeat_last();
