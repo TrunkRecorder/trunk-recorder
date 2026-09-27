@@ -9,13 +9,15 @@ synthesis and has its own fixes.
 There are two decoders:
 
 - **Float decoder** — `software_imbe_decoder`, used when
-  `"softVocoder": true`. This is where the synthesis changes are.
-- **Fixed-point decoder** — `imbe_vocoder`, the default. It gets the
-  error-concealment changes only.
+  `"softVocoder": true` (the default). This is where the synthesis changes
+  are.
+- **Fixed-point decoder** — `imbe_vocoder`, used when
+  `"softVocoder": false`. It gets the error-concealment changes only.
 
-**Recommended:** `"softVocoder": true`. With these changes the float decoder
-matches or beats the fixed-point decoder on clean audio and outperforms it
-under channel errors on Phase 1, and matches it on Phase 2.
+The float decoder is the default because, with these changes, it matches
+or beats the fixed-point decoder on clean audio and outperforms it under
+channel errors on Phase 1, and matches it on Phase 2. Stock Trunk Recorder
+defaults to the fixed-point decoder.
 
 ---
 

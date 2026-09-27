@@ -211,7 +211,7 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
     BOOST_LOG_TRIVIAL(info) << "Control channel warning rate: " << config.control_message_warn_rate;
     config.control_retune_limit = data.value("controlRetuneLimit", 0);
     BOOST_LOG_TRIVIAL(info) << "Control channel retune limit: " << config.control_retune_limit;
-    config.soft_vocoder = data.value("softVocoder", false);
+    config.soft_vocoder = data.value("softVocoder", true);
     BOOST_LOG_TRIVIAL(info) << "Phase 1 Software Vocoder: " << config.soft_vocoder;
     config.enable_audio_streaming = data.value("audioStreaming", false);
     BOOST_LOG_TRIVIAL(info) << "Enable Audio Streaming: " << config.enable_audio_streaming;
