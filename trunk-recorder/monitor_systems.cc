@@ -226,6 +226,9 @@ void print_status(std::vector<Source *> &sources, std::vector<System *> &systems
 
     if ((sys->get_system_type() != "conventional") && (sys->get_system_type() != "conventionalP25") && (sys->get_system_type() != "conventionalDMR") && (sys->get_system_type() != "conventionalSIGMF")) {
       BOOST_LOG_TRIVIAL(info) << "[" << sys->get_short_name() << "]\t" << format_freq(sys->get_current_control_channel()) << "\t" << sys->get_decode_rate() << " msg/sec";
+      if (sys->get_system_type() == "p25") {
+        for (const auto &site : sys->get_adjacent_sites()) BOOST_LOG_TRIVIAL(info) << site;
+      }
       
       // SmartNet's offset comes from the decoded FSK levels, so only trust it
       // while the control channel is actually decoding.
@@ -651,6 +654,10 @@ void handle_message(std::vector<TrunkMessage> messages, System *sys, Config &con
 
     case SYSID:
       current_system_sysid(message, sys);
+      break;
+
+    case ADJACENT_SITE:
+      if (sys->get_system_type() == "p25") sys->update_adjacent_site(message);
       break;
 
     case STATUS:

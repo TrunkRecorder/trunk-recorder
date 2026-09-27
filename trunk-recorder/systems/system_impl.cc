@@ -1,5 +1,8 @@
 #include "system_impl.h"
 #include "system.h"
+#include "../formatter.h"
+#include <fstream>
+#include <sstream>
 
 System *System::make(int sys_num) {
   return (System *)new System_impl(sys_num);
@@ -275,6 +278,50 @@ bool System_impl::update_sysid(TrunkMessage message) {
     return true;
   }
   return false;
+}
+
+void System_impl::set_known_sites_file(std::string file) {
+  known_sites_file = file;
+  if (file.empty()) return;
+  std::ifstream input(file);
+  if (!input) {
+    BOOST_LOG_TRIVIAL(error) << "Unable to open known sites file: " << file;
+    return;
+  }
+  std::string line;
+  std::getline(input, line); // RFSS,SITEID,NAME
+  while (std::getline(input, line)) {
+    std::stringstream row(line);
+    std::string rfss, site, name;
+    if (!std::getline(row, rfss, ',') || !std::getline(row, site, ',') || !std::getline(row, name)) continue;
+    if (name.size() >= 2 && name.front() == '"' && name.back() == '"') {
+      name = name.substr(1, name.size() - 2);
+      size_t quote = 0;
+      while ((quote = name.find("\"\"", quote)) != std::string::npos) name.replace(quote, 2, "\"");
+    }
+    try { known_sites[{std::stoi(rfss), std::stoi(site)}] = name; }
+    catch (...) { BOOST_LOG_TRIVIAL(warning) << "Ignoring malformed known site row: " << line; }
+  }
+  BOOST_LOG_TRIVIAL(info) << "Loaded " << known_sites.size() << " known P25 sites from " << file;
+}
+
+void System_impl::update_adjacent_site(TrunkMessage message) {
+  adjacent_sites[{static_cast<int>(message.neighbor_rfss), static_cast<int>(message.neighbor_site_id)}] = message.freq;
+}
+
+std::vector<std::string> System_impl::get_adjacent_sites() {
+  std::vector<std::string> result;
+  for (const auto &site : adjacent_sites) {
+    std::ostringstream line;
+    auto known = known_sites.find(site.first);
+    if (known == known_sites.end()) line << Color::YEL;
+    line << "[" << short_name << "]\tNeighbour RFSS " << site.first.first << " Site " << site.first.second;
+    if (known != known_sites.end()) line << " (" << known->second << ")";
+    if (site.second > 0) line << " Control Channel " << format_freq(site.second);
+    if (known == known_sites.end()) line << Color::RST;
+    result.push_back(line.str());
+  }
+  return result;
 }
 
  gr::msg_queue::sptr System_impl::get_msg_queue() {

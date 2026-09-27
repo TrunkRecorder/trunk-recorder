@@ -153,6 +153,9 @@ public:
   virtual const char *get_xor_mask() = 0;
   virtual bool update_status(TrunkMessage message) = 0;
   virtual bool update_sysid(TrunkMessage message) = 0;
+  virtual void update_adjacent_site(TrunkMessage message) = 0;
+  virtual void set_known_sites_file(std::string file) = 0;
+  virtual std::vector<std::string> get_adjacent_sites() = 0;
   virtual int get_sys_num() = 0;
   virtual void set_system_type(std::string) = 0;
   virtual std::string get_talkgroups_file() = 0;

@@ -53,6 +53,9 @@ class System_impl : public System {
   unsigned long nac;
   int sys_rfss;
   int sys_site_id;
+  std::string known_sites_file;
+  std::map<std::pair<int, int>, std::string> known_sites;
+  std::map<std::pair<int, int>, double> adjacent_sites;
 
 public:
   Talkgroups *talkgroups;
@@ -242,6 +245,9 @@ public:
   const char *get_xor_mask() override;
   bool update_status(TrunkMessage message) override;
   bool update_sysid(TrunkMessage message) override;
+  void update_adjacent_site(TrunkMessage message) override;
+  void set_known_sites_file(std::string file) override;
+  std::vector<std::string> get_adjacent_sites() override;
   int get_sys_num() override;
   void set_system_type(std::string) override;
   std::string get_talkgroups_file() override;

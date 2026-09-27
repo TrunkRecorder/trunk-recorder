@@ -272,6 +272,7 @@ During the status display, each source will report the running average as well a
 | bandplanSpacing          |          |                            | number                                                                                                                 | *SmartNet, 400_custom only* The channel spacing, specified in Hz. Typically this is *25000*. |
 | bandplanOffset           |          |                            | number                                                                                                                 | *SmartNet, 400_custom only* The offset used to calculate frequencies. |
 | customFrequencyTableFile |          |                            | string                                                                                                                 | *P25 only* The filename for a CSV file that provides information about the P25 custom frequency tables. The format for the file is described below. |
+| knownSitesFile           |          |                            | string                                                                                                                 | *P25 only* Optional CSV of known sites. Advertised neighboring RFSS/site IDs are matched to this file and printed with the site's name. CSV columns: `RFSS,SITEID,NAME`. |
 | decodeMDC                |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the MDC-1200 signaling decoder. |
 | decodeFSync              |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the Fleet Sync signaling decoder. |
 | decodeStar               |          | false                      | **true** / **false**                                                                                                   | *Conventional systems only* enable the Star signaling decoder. |
@@ -918,3 +919,11 @@ A **Header Row** is required for the file and the headers must match the column 
 | 2       | FDMA | 762.00625 | 6.25    | +30    |
 | 3       | TDMA | 851.01250 | 12.5    | -45    |
 | 4       | TDMA | 762.00625 | 12.5    | +30    |
+
+## knownSitesFile
+
+For P25 trunked systems, `knownSitesFile` may point to a CSV used to label adjacent sites in the periodic control-channel information output. Neighbor frequency and RFSS/site IDs are learned from P25 adjacent-status broadcasts; the CSV supplies the site name. Neighbors that do not match an entry are highlighted in yellow when console colors are enabled. Neighbor information is still printed when no file is configured.
+
+| RFSS | SITEID | NAME |
+|------|--------|------|
+| 1 | 7 | North Ridge |

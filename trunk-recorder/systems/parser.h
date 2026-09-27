@@ -23,6 +23,7 @@ enum MessageType {
   INVALID_CC_MESSAGE = 16,
   TDULC = 17,
   CALL_ALERT = 18,
+  ADJACENT_SITE = 19,
   UNKNOWN = 99
 };
 
@@ -54,6 +55,8 @@ struct TrunkMessage {
   unsigned long wacn;
   PatchData patch_data;
   unsigned long opcode;
+  unsigned long neighbor_rfss = 0;
+  unsigned long neighbor_site_id = 0;
   
 };
 
