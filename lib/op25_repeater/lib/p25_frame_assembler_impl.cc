@@ -144,6 +144,7 @@ static const int MAX_IN = 1;	// maximum number of input streams
       // fully-silent recording. (Memsets in the vocoder's clear are scoped
       // to its own state; safe to call between calls.)
       p1fdma.clear();
+      p2tdma.clear();
     }
 
     void p25_frame_assembler_impl::set_voice_codec_callback(voice_codec_cb_t cb, void *user_data) {

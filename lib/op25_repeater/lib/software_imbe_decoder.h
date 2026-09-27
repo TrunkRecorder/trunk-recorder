@@ -175,6 +175,13 @@ struct VocoderParams {
 	// 0 = off.
 	float hf_lift_db            = 3.0f;
 	float hf_lift_f1            = 2200.0f;
+	// Gain applied to the spectral amplitudes passed to decode_tap() (the
+	// half-rate AMBE+2 path: P25 Phase 2, DMR/D-STAR via rx_sync). mbelib's
+	// half-rate amplitudes are on a larger scale than the full-rate
+	// decoder's; at 1.0 speech ran ~8 dB hotter than full rate and 2-2.5% of
+	// samples clipped (PESQ-NB 2.56 vs 2.99 for the fixed-point decoder).
+	// 0.3 matches the full-rate level and removes the clipping.
+	float tap_gain              = 0.3f;
 	// Voiced harmonics that start or stop in this frame. 0 = TIA (fade in
 	// over samples 56-159 / fade out over 0-105 with the trapezoid window);
 	// 1 = linear ramp over the whole frame (measured worse: DNSMOS -0.04).
@@ -243,6 +250,13 @@ public:
 
 	void decode_fullrate(int16_t samples[IMBE_SAMPLES_PER_FRAME], uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7, uint32_t E0, uint32_t ET);
 	void decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _L, int _K, float _w0, const int * _v, const float * _mu);
+
+	/**
+	 * Half-rate frame that was muted: synthesize a zero-amplitude frame
+	 * holding the last parameters, so the audio fades out and the next
+	 * frame fades in.
+	 */
+	void decode_tap_mute(int16_t samples[IMBE_SAMPLES_PER_FRAME]);
 	void decode_tone(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _ID, int _AD, int * _n);
 private:
 
@@ -299,6 +313,7 @@ private:
 	uint16_t rearrange(uint32_t u0, uint32_t u1, uint32_t u2, uint32_t u3, uint32_t u4, uint32_t u5, uint32_t u6, uint32_t u7);
 	void synth_unvoiced();
 	void synth_unvoiced_smooth();
+	void synthesize_frame(int16_t samples[IMBE_SAMPLES_PER_FRAME]);
 	float aper_share(float w) const;
 	float hf_gain(float w) const;
 	void synth_voiced();

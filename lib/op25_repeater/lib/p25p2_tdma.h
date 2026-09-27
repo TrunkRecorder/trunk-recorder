@@ -47,6 +47,7 @@ public:
 	int handle_packet(uint8_t dibits[], const uint64_t fs) ;
 	void set_slotid(int slotid);
 	void call_end();
+	void clear();
 	void crypt_reset();
 	void crypt_key(uint16_t keyid, uint8_t algid, const std::vector<uint8_t> &key);
 	uint8_t* tdma_xormask;

@@ -1,9 +1,10 @@
 # Vocoder Changes from Stock OP25
 
-Trunk Recorder vendors OP25's P25 Phase 1 (IMBE) voice decoders in
-`lib/op25_repeater/`. This document describes how they differ from stock
-OP25: decoding fixes, error concealment, and changes to the float decoder's
-synthesis.
+Trunk Recorder vendors OP25's P25 voice decoders in `lib/op25_repeater/`.
+This document describes how they differ from stock OP25: decoding fixes,
+error concealment, and changes to the float decoder's synthesis. Phase 1
+(full-rate IMBE) is covered first; [Phase 2](#phase-2-half-rate) shares the
+synthesis and has its own fixes.
 
 There are two decoders:
 
@@ -14,7 +15,7 @@ There are two decoders:
 
 **Recommended:** `"softVocoder": true`. With these changes the float decoder
 matches or beats the fixed-point decoder on clean audio and outperforms it
-under channel errors.
+under channel errors on Phase 1, and matches it on Phase 2.
 
 ---
 
@@ -144,6 +145,55 @@ each frame. The defaults were confirmed in listening tests on live traffic.
 
 ---
 
+## Phase 2 (half-rate)
+
+P25 Phase 2 carries half-rate AMBE+2 frames. `p25p2_tdma` unpacks them
+with mbelib (`mbe_dequantizeAmbe2250Parms`), handles repeats and muting
+itself, and synthesizes through `decode_tap()` on the same decoder objects.
+The float decoder therefore gets all of the synthesis changes above on
+Phase 2 as well. Phase 2 also has these changes of its own:
+
+### Float decoder level corrected
+
+mbelib's half-rate spectral amplitudes are on a larger scale than the
+full-rate decoder's. Stock OP25 passes them to the float synthesizer as-is,
+so Phase 2 speech came out about 8 dB hotter than Phase 1 and 2–2.5 % of
+samples clipped, which put the float decoder well behind the fixed-point
+one on Phase 2 (PESQ-NB 2.26 vs 2.99). `decode_tap()` now scales the
+amplitudes by `tap_gain` (0.3), which matches the Phase 1 level and removes
+the clipping; with the synthesis changes the float decoder then matches the
+fixed-point decoder on Phase 2 (2.98 vs 2.99 clean, 2.87 vs 2.88 on a
+fading channel). The same scale applies to the other half-rate paths that
+use `decode_tap()` (DMR and D-STAR in `rx_sync`).
+
+### Decoder state is reset between calls
+
+`p25p2_tdma` initialized its error-rate tracker, repeat counter and
+previous-frame parameters only when it was created. A call that ended on a
+bad signal left the next call on that slot starting with a high error rate
+and stale parameters: in testing, its first two frames were muted and the
+next three came out about 20 dB too loud. `p25p2_tdma::clear()` now resets
+all of it and both decoders, and the frame assembler calls it between
+calls alongside the Phase 1 reset.
+
+### Mutes fade
+
+A muted Phase 2 frame used to be hard silence with no synthesis, so the
+next frame started from stale state. It is now a zero-amplitude frame
+through the synthesizer (`decode_tap_mute()` for the float decoder,
+`imbe_mute()` for the fixed-point decoder), as for Phase 1.
+
+### Persistent spectral energy estimate
+
+`decode_tap()` used its own local `S_E`, reset every frame; it now uses the
+persistent estimate, as the full-rate path does.
+
+Phase 2's repeat rules and error thresholds are unchanged: they belong to
+the half-rate codec and its own FEC, and the Phase 1 E0 ≥ 3 reasoning does
+not carry over directly.
+
+---
+
 ## Pipeline
 
 Per 20 ms frame, `software_imbe_decoder::decode_fullrate`:
@@ -185,6 +235,7 @@ changes them at runtime. The fixed-point decoder has no settings.
 | `uv_xfade` | 160 | — | Cross-fade length (samples) of the smooth unvoiced path. |
 | `hf_lift_db` | 3.0 | 0 | Presence lift at 3.7 kHz; 0 = off. |
 | `hf_lift_f1` | 2200 | — | Frequency (Hz) where the lift starts. |
+| `tap_gain` | 0.3 | 1.0 | Scale on the half-rate amplitudes passed to `decode_tap()` (Phase 2, DMR). |
 | `mute_er` | 0.0875 | 0.0875 | Mute when the smoothed error rate exceeds this (TIA §7.8). |
 | `repeat_e0` | 3 | 2 | Repeat when E0 ≥ this. |
 | `repeat_et_base`, `repeat_et_slope` | 10, 40 | 10, 40 | Repeat when ET ≥ base + slope × error rate (TIA §7.7). |
@@ -208,10 +259,11 @@ improve the result on the tested systems; they remain for experiments.
 
 | File | Change |
 |---|---|
-| `software_imbe_decoder.h/.cc` | Bit fix, state reset, S_E, noise generator, error concealment, synthesis changes, `VocoderParams`. |
+| `software_imbe_decoder.h/.cc` | Bit fix, state reset, S_E, noise generator, error concealment, synthesis changes, `VocoderParams`; `decode_tap()` level and `decode_tap_mute()` for half-rate. |
 | `imbe_vocoder/imbe_vocoder.h`, `imbe_vocoder/decode.cc` | `imbe_decode_checked()`, `imbe_repeat()`, `imbe_mute()`. |
 | `p25p1_fdma.cc` | Clears both decoders on `clear()`; fixed-point path uses `imbe_decode_checked()`. |
-| `p25_frame_assembler_impl.cc` | Calls `p1fdma.clear()` between calls. |
+| `p25_frame_assembler_impl.cc` | Calls `p1fdma.clear()` and `p2tdma.clear()` between calls. |
+| `p25p2_tdma.h/.cc` | `clear()` resets half-rate decoding state; muted frames fade. |
 | `p25p1_voice_decode.cc`, `rx_sync.cc` | Clear their decoders between calls; fixed-point paths use `imbe_decode_checked()`. |
 | `mbelib.c` | Clamp `uvquality` instead of `exit()`. |
 

@@ -1007,8 +1007,6 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 {
 	int ell;
 	uint32_t ET=0;
-	float SE = 0;
-	int en, tmp_f;
 
 	// TODO: For now half rate frame repeats are handled outside of this code
 	// It would probably be better to move them into here since the mechanism
@@ -1018,7 +1016,7 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 	w0 = _w0;
 	for(ell = 1; ell <= L; ell++) {
 		vee[ell][ New] = _v[ell - 1];
-		Mu[ell][ New] = _mu[ell - 1];
+		Mu[ell][ New] = _mu[ell - 1] * params_.tap_gain;
 	}
 	// decode_spectral_amplitudes(Start3, Start8);
 	enhance_spectral_amplitudes(SE);
@@ -1026,6 +1024,34 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 	smooth_voicing_decisions();
 	compute_envelope_phases();   // BEFORE postfilter - sees raw M
 	apply_formant_postfilter();
+
+	synthesize_frame(samples);
+}
+
+void
+software_imbe_decoder::decode_tap_mute(int16_t samples[IMBE_SAMPLES_PER_FRAME])
+{
+	// Muted half-rate frame: synthesize a zero-amplitude frame holding the
+	// last parameters, as decode_fullrate() does for a muted full-rate
+	// frame, so the previous frame's tail fades out and the next frame fades
+	// in instead of starting from stale state after a hard cut to silence.
+	if (Oldw0 > 0.0f) w0 = Oldw0;
+	if (OldL > 0) L = OldL;
+	for (int l = 0; l < 57; l++) {
+		vee[l][New] = 0;
+		M[l][New] = 0.0f;
+	}
+	compute_envelope_phases();
+
+	synthesize_frame(samples);
+}
+
+void
+software_imbe_decoder::synthesize_frame(int16_t samples[IMBE_SAMPLES_PER_FRAME])
+{
+	// Synthesis and output shared by the half-rate entry points: renders the
+	// [Old] -> [New] transition already set up in M / vee / phi, then advances.
+	int en, tmp_f;
 
 	// (8000 samp/sec) * (1 sec / 50 compressed voice frames) = 160 samples/frame
 
@@ -1047,7 +1073,7 @@ software_imbe_decoder::decode_tap(int16_t samples[IMBE_SAMPLES_PER_FRAME], int _
 			sample = (sample < 0) ? -32767 : 32767; // * sgn(sample)
 		}
 		samples[en] = sample;
-    }
+	}
 	OldL = L;
 	Oldw0 = w0;
 	tmp_f = Old; Old = New; New = tmp_f;

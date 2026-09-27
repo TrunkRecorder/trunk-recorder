@@ -163,6 +163,21 @@ void p25p2_tdma::call_end() {
 	cached_id_timestamp = 0;
 }
 
+// Reset voice decoding state between calls: the running error rate, the
+// frame-repeat counter, the previous-frame parameters and both vocoders.
+// Without this a call that ended on a bad signal leaves the error rate high,
+// so the next call on this slot starts muted and cross-fades from the
+// previous call's last sound.
+void p25p2_tdma::clear() {
+	mbe_initMbeParms (&cur_mp, &prev_mp, &enh_mp);
+	mbe_initToneParms (&tone_mp);
+	mbe_initErrParms (&errs_mp);
+	mbe_err_cnt = 0;
+	tone_frame = false;
+	software_decoder.clear();
+	vocoder.clear();
+}
+
 void p25p2_tdma::crypt_reset() {
 	crypt_algs.reset();
 }
@@ -800,6 +815,14 @@ void p25p2_tdma::handle_voice_frame(const uint8_t dibits[], int slot, int voice_
 			} else {
 				vocoder.decode_tap(samples_buf, cur_mp.L, cur_mp.w0, &cur_mp.Vl[1], &cur_mp.Ml[1]);
 			}
+		} else if (!tone_frame) {
+			// Muted: fade the previous frame out through the synthesizer
+			// rather than cutting to silence, so the next frame fades in
+			// from a clean state.
+			if (d_soft_vocoder)
+				software_decoder.decode_tap_mute(samples_buf);
+			else
+				vocoder.imbe_mute(samples_buf);
 		}
 	}
 
