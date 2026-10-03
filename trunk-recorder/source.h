@@ -12,7 +12,9 @@
 #include "sources/iq_file_source.h"
 #include <gnuradio/basic_block.h>
 #include <gnuradio/top_block.h>
+#ifdef TR_HAVE_UHD
 #include <gnuradio/uhd/usrp_source.h>
+#endif
 #ifdef GnuradioIIO_FOUND
   #include <gnuradio/iio/fmcomms2_source.h>
 #endif
@@ -179,9 +181,11 @@ public:
   inline osmosdr::source::sptr cast_to_osmo_sptr(gr::basic_block_sptr p) {
     return boost::dynamic_pointer_cast<osmosdr::source, gr::basic_block>(p);
   }
+#ifdef TR_HAVE_UHD
   inline gr::uhd::usrp_source::sptr cast_to_usrp_sptr(gr::basic_block_sptr p) {
     return boost::dynamic_pointer_cast<gr::uhd::usrp_source, gr::basic_block>(p);
   }
+#endif
 #ifdef GnuradioIIO_FOUND
   inline gr::iio::fmcomms2_source<gr_complex>::sptr cast_to_iio_sptr(gr::basic_block_sptr p) {
       return boost::dynamic_pointer_cast<gr::iio::fmcomms2_source<gr_complex>, gr::basic_block>(p);
@@ -191,9 +195,11 @@ public:
   inline osmosdr::source::sptr cast_to_osmo_sptr(gr::basic_block_sptr p) {
     return std::dynamic_pointer_cast<osmosdr::source, gr::basic_block>(p);
   }
+#ifdef TR_HAVE_UHD
   inline gr::uhd::usrp_source::sptr cast_to_usrp_sptr(gr::basic_block_sptr p) {
     return std::dynamic_pointer_cast<gr::uhd::usrp_source, gr::basic_block>(p);
   }
+#endif
 #ifdef GnuradioIIO_FOUND
   inline gr::iio::fmcomms2_source<gr_complex>::sptr cast_to_iio_sptr(gr::basic_block_sptr p) {
       return std::dynamic_pointer_cast<gr::iio::fmcomms2_source<gr_complex>, gr::basic_block>(p);

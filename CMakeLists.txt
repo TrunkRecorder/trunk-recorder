@@ -141,6 +141,29 @@ find_package(GnuradioUHD)
 find_package(GnuradioOsmosdr)
 find_package(LibHackRF)
 find_package(LibUHD)
+
+# UHD/USRP support is optional. Keep the library variables empty when
+# UHD is unavailable so non-USRP builds and plugins do not depend on it.
+set(TR_HAVE_UHD FALSE)
+set(TR_UHD_LIBRARIES "")
+set(TR_UHD_LIBRARY_DIRS "")
+
+if(GNURADIO_UHD_FOUND AND LibUHD_FOUND)
+  set(TR_HAVE_UHD TRUE)
+  set(TR_UHD_LIBRARIES
+    ${GNURADIO_UHD_LIBRARIES}
+    ${UHD_LIBRARIES}
+  )
+  set(TR_UHD_LIBRARY_DIRS
+    ${GNURADIO_UHD_LIBRARIES_DIRS}
+    ${UHD_LIBRARIES_DIRS}
+  )
+  add_compile_definitions(TR_HAVE_UHD=1)
+  message(STATUS "UHD support enabled")
+else()
+  message(STATUS "UHD support disabled")
+endif()
+
 find_library(IIO_LIBRARIES iio)
 find_path(IIO_INCLUDE_DIRS iio.h)
 find_package(GnuradioIIO)
@@ -225,8 +248,7 @@ link_directories(
     ${Boost_LIBRARY_DIRS}
     ${GNURADIO_RUNTIME_LIBRARY_DIRS}
     ${GROSMOSDR_LIBRARIES_DIRS}
-    ${GNURADIO_UHD_LIBRARIES_DIRS}
-    ${UHD_LIBRARIES_DIRS}
+    ${TR_UHD_LIBRARY_DIRS}
     ${OPENSSL_ROOT_DIR}/lib
 )
 
@@ -405,7 +427,7 @@ endforeach()
 
 add_executable(trunk-recorder trunk-recorder/main.cc) # ${trunk_recorder_sources})
 
-target_link_libraries(trunk-recorder git trunk_recorder_library gnuradio-op25_repeater   ${CMAKE_DL_LIBS} ssl crypto ${CURL_LIBRARIES} ${Boost_LIBRARIES} ${GNURADIO_PMT_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_FILTER_LIBRARIES} ${GNURADIO_DIGITAL_LIBRARIES} ${GNURADIO_ANALOG_LIBRARIES} ${GNURADIO_AUDIO_LIBRARIES} ${GNURADIO_UHD_LIBRARIES} ${UHD_LIBRARIES} ${GNURADIO_BLOCKS_LIBRARIES} ${GNURADIO_OSMOSDR_LIBRARIES} ) # gRPC::grpc++_reflection protobuf::libprotobuf)
+target_link_libraries(trunk-recorder git trunk_recorder_library gnuradio-op25_repeater   ${CMAKE_DL_LIBS} ssl crypto ${CURL_LIBRARIES} ${Boost_LIBRARIES} ${GNURADIO_PMT_LIBRARIES} ${GNURADIO_RUNTIME_LIBRARIES} ${GNURADIO_FILTER_LIBRARIES} ${GNURADIO_DIGITAL_LIBRARIES} ${GNURADIO_ANALOG_LIBRARIES} ${GNURADIO_AUDIO_LIBRARIES} ${TR_UHD_LIBRARIES} ${GNURADIO_BLOCKS_LIBRARIES} ${GNURADIO_OSMOSDR_LIBRARIES} ) # gRPC::grpc++_reflection protobuf::libprotobuf)
 
 #target_link_libraries(trunk-recorder PRIVATE nlohmann_json::nlohmann_json )
 
