@@ -135,6 +135,7 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
   }
 
   if (driver == "usrp") {
+#ifdef TR_HAVE_UHD
     gr::uhd::usrp_source::sptr usrp_src;
     usrp_src = gr::uhd::usrp_source::make(device, uhd::stream_args_t("fc32"));
 
@@ -148,6 +149,12 @@ Source::Source(double c, double r, double e, std::string drv, std::string dev, C
     usrp_src->set_center_freq(center + error, 0);
 
     source_block = usrp_src;
+#else
+    BOOST_LOG_TRIVIAL(fatal)
+        << "Trunk Recorder was not compiled with UHD support. "
+        << "Install GNU Radio UHD and UHD, then rebuild.";
+    exit(1);
+#endif
   }
 
   if (driver == "iio") {
@@ -296,8 +303,14 @@ void Source::set_antenna(std::string ant) {
   }
 
   if (driver == "usrp") {
+#ifdef TR_HAVE_UHD
     BOOST_LOG_TRIVIAL(info) << "Setting antenna to [" << antenna << "]";
     cast_to_usrp_sptr(source_block)->set_antenna(antenna, 0);
+#else
+    BOOST_LOG_TRIVIAL(fatal)
+        << "Trunk Recorder was not compiled with UHD support.";
+    exit(1);
+#endif
   }
 }
 
@@ -375,8 +388,14 @@ void Source::set_gain(double r) {
   }
 
   if (driver == "usrp") {
+#ifdef TR_HAVE_UHD
     gain = r;
     cast_to_usrp_sptr(source_block)->set_gain(gain);
+#else
+    BOOST_LOG_TRIVIAL(fatal)
+        << "Trunk Recorder was not compiled with UHD support.";
+    exit(1);
+#endif
   }
 
   if (driver == "iio") {
