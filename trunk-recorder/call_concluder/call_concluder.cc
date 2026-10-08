@@ -793,6 +793,7 @@ int create_call_json(Call_Data_t &call_info) {
       {"recorder_num",          int(call_info.recorder_num)},
       {"tdma_slot",             int(call_info.tdma_slot)},
       {"phase2_tdma",           int(call_info.phase2_tdma)},
+      {"started_from_update",   call_info.started_from_update},
       {"start_time",            call_info.start_time},
       {"stop_time",             call_info.stop_time},
       {"start_time_ms",         call_info.start_time_ms},
@@ -1086,6 +1087,7 @@ Call_Data_t Call_Concluder::create_call_data(Call *call, System *sys, const Conf
   call_info.duplex               = call->get_duplex();
   call_info.tdma_slot            = call->get_tdma_slot();
   call_info.phase2_tdma          = call->get_phase2_tdma();
+  call_info.started_from_update  = call->get_started_from_update();
   call_info.transmission_list    = call->get_transmissions();
   call_info.sys_num              = sys->get_sys_num();
   call_info.short_name           = sys->get_short_name();
