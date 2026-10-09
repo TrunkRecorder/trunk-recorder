@@ -321,6 +321,18 @@ double Source::get_max_hz() {
   return max_hz;
 }
 
+// Calls and control channels go to the first Source whose range covers the frequency, so
+// narrowing a Source's range keeps it from picking up channels near the edge of its passband
+// that another Source receives better. The range can only be reduced, never extended.
+bool Source::set_frequency_limits(double limit_min_hz, double limit_max_hz) {
+  if ((limit_min_hz >= limit_max_hz) || (limit_min_hz < min_hz) || (limit_max_hz > max_hz)) {
+    return false;
+  }
+  min_hz = limit_min_hz;
+  max_hz = limit_max_hz;
+  return true;
+}
+
 double Source::get_center() {
   return center;
 }

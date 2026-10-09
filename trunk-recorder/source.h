@@ -97,6 +97,7 @@ public:
   double get_min_hz();
   double get_max_hz();
   void set_min_max();
+  bool set_frequency_limits(double limit_min_hz, double limit_max_hz);
 
   void set_silence_frames(int m);
   int get_silence_frames();
