@@ -1,0 +1,31 @@
+{
+    "ver": 2,
+    "sources": [{
+        "center": 851000000,
+        "rate": 2400000,
+        "error": 0,
+        "gain": 40,
+        "digitalRecorders": 2,
+        "minFrequency": 850900000,
+        "maxFrequency": 851300000,
+        "driver": "osmosdr",
+        "device": "rtl=0"
+    }, {
+        "center": 853000000.0,
+        "rate": 9600000.0,
+        "error": 0,
+        "gain": 14,
+        "ifGain": 24,
+        "bbGain": 42,
+        "digitalRecorders": 8,
+        "driver": "osmosdr",
+        "device": "hackrf=0"
+    }],
+    "systems": [{
+        "control_channels": [851137500, 853875000],
+        "type": "p25",
+        "talkgroupsFile": "talkgroups.csv",
+        "shortName": "example",
+        "modulation": "qpsk"
+    }]
+}

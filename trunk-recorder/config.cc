@@ -786,6 +786,24 @@ bool load_config(string config_file, Config &config, gr::top_block_sptr &tb, std
             source->set_freq_corr(ppm);
           }
         }
+
+        double min_frequency = element.value("minFrequency", 0.0);
+        double max_frequency = element.value("maxFrequency", 0.0);
+        if ((min_frequency != 0) || (max_frequency != 0)) {
+          double source_min = source->get_min_hz();
+          double source_max = source->get_max_hz();
+          if (min_frequency == 0) {
+            min_frequency = source_min;
+          }
+          if (max_frequency == 0) {
+            max_frequency = source_max;
+          }
+          if (!source->set_frequency_limits(min_frequency, max_frequency)) {
+            BOOST_LOG_TRIVIAL(error) << "minFrequency and maxFrequency must be within the Source's range of " << format_freq(source_min) << " - " << format_freq(source_max) << ", and minFrequency must be less than maxFrequency";
+            return false;
+          }
+          BOOST_LOG_TRIVIAL(info) << "Frequency Limits: " << format_freq(min_frequency) << " - " << format_freq(max_frequency) << " (Source range " << format_freq(source_min) << " - " << format_freq(source_max) << ")";
+        }
         BOOST_LOG_TRIVIAL(info) << "Max Frequency: " << format_freq(source->get_max_hz());
         BOOST_LOG_TRIVIAL(info) << "Min Frequency: " << format_freq(source->get_min_hz());
         BOOST_LOG_TRIVIAL(info) << "Digital Recorders: " << element.value("digitalRecorders", 0);
