@@ -9,9 +9,12 @@
 #include <boost/property_tree/ptree.hpp>
 #include <boost/property_tree/xml_parser.hpp>
 #include <stdlib.h>
+#include <future>
+#include <utility>
 #include <vector>
 
 std::vector<Plugin *> plugins;
+static bool parallel_plugin_call_end = false;
 
 Plugin *setup_plugin(std::string plugin_lib, std::string plugin_name) {
   BOOST_LOG_TRIVIAL(info) << "Setting up plugin -  Name: " << plugin_name << "\t Library file: " << plugin_lib;
@@ -34,6 +37,9 @@ Plugin *setup_plugin(std::string plugin_lib, std::string plugin_name) {
 }
 
 void initialize_plugins(json config_data, Config *config, std::vector<Source *> sources, std::vector<System *> systems) {
+
+  parallel_plugin_call_end = config_data.value("parallelPluginCallEnd", false);
+  BOOST_LOG_TRIVIAL(info) << "Parallel Plugin call_end: " << parallel_plugin_call_end;
 
   bool plugins_exists = config_data.contains("plugins");
 
@@ -179,48 +185,106 @@ int plugman_call_start(Call *call) {
 
 int plugman_call_end(Call_Data_t& call_info) {
   std::vector<int> plugin_retry_list;
-  
+
   std::stringstream logstream;
-  logstream << "[" << call_info.short_name << "]\t\033[0;34m" << call_info.call_num << "C\033[0m\tTG: " << call_info.talkgroup_display << "\tFreq: " << format_freq(call_info.freq) << "\t";
+  logstream << "[" << call_info.short_name << "]\t\033[0;34m"
+            << call_info.call_num << "C\033[0m\tTG: "
+            << call_info.talkgroup_display << "\tFreq: "
+            << format_freq(call_info.freq) << "\t";
   std::string loghdr = logstream.str();
 
-  // On INITIAL, run call_end for all active plugins and note failues 
-  if (call_info.status == INITIAL)
-  {
-    for (std::vector<Plugin *>::iterator it = plugins.begin(); it != plugins.end(); it++) {
-      Plugin *plugin = *it;
-      if (plugin->state == PLUGIN_RUNNING) {
-        int plugin_error = plugin->api->call_end(call_info);
-        if (plugin_error) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "Plugin Manager: call_end -  " << plugin->name << " failed.";
-          int plugin_index = std::distance(plugins.begin(), it );
-          plugin_retry_list.push_back(plugin_index);
-        }
+  std::vector<int> plugins_to_run;
+
+  if (call_info.status == INITIAL) {
+    for (std::size_t i = 0; i < plugins.size(); ++i) {
+      if (plugins[i]->state == PLUGIN_RUNNING) {
+        plugins_to_run.push_back(static_cast<int>(i));
       }
     }
-  } 
-  // On RETRY, run call_end only for plugins reporting previous failue
-  else if (call_info.status == RETRY)
-  {
-    for (std::vector<int>::iterator it = call_info.plugin_retry_list.begin(); it != call_info.plugin_retry_list.end(); it++) {
-      Plugin *plugin = plugins[*it];
-      if (plugin->state == PLUGIN_RUNNING) {
-        BOOST_LOG_TRIVIAL(info) << loghdr << "Plugin Manager: call_end - retry (" << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY << ") - " << plugin->name;
-        int plugin_error = plugin->api->call_end(call_info);
-        if (plugin_error) {
-          BOOST_LOG_TRIVIAL(error) << loghdr << "Plugin Manager: call_end - retry (" << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY << ") - " << plugin->name << " failed.";
-          plugin_retry_list.push_back(*it);
-        }
+  } else if (call_info.status == RETRY) {
+    for (int plugin_index : call_info.plugin_retry_list) {
+      if (plugin_index >= 0 &&
+          static_cast<std::size_t>(plugin_index) < plugins.size() &&
+          plugins[plugin_index]->state == PLUGIN_RUNNING) {
+        plugins_to_run.push_back(plugin_index);
       }
     }
   }
 
-  if (plugin_retry_list.size() == 0) {
-    return 0;
+  auto run_plugin = [&](int plugin_index) {
+    Plugin *plugin = plugins[plugin_index];
+
+    if (call_info.status == RETRY) {
+      BOOST_LOG_TRIVIAL(info)
+          << loghdr << "Plugin Manager: call_end - retry ("
+          << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY
+          << ") - " << plugin->name;
+    }
+
+    int plugin_error = plugin->api->call_end(call_info);
+    return std::make_pair(plugin_index, plugin_error);
+  };
+
+  if (parallel_plugin_call_end && plugins_to_run.size() > 1) {
+    std::vector<std::future<std::pair<int, int>>> futures;
+    futures.reserve(plugins_to_run.size());
+
+    for (int plugin_index : plugins_to_run) {
+      futures.emplace_back(
+          std::async(std::launch::async, run_plugin, plugin_index));
+    }
+
+    for (auto &future : futures) {
+      auto result = future.get();
+      int plugin_index = result.first;
+      int plugin_error = result.second;
+
+      if (plugin_error) {
+        Plugin *plugin = plugins[plugin_index];
+
+        if (call_info.status == RETRY) {
+          BOOST_LOG_TRIVIAL(error)
+              << loghdr << "Plugin Manager: call_end - retry ("
+              << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY
+              << ") - " << plugin->name << " failed.";
+        } else {
+          BOOST_LOG_TRIVIAL(error)
+              << loghdr << "Plugin Manager: call_end -  "
+              << plugin->name << " failed.";
+        }
+
+        plugin_retry_list.push_back(plugin_index);
+      }
+    }
   } else {
-    call_info.plugin_retry_list = plugin_retry_list;
-    return 1;
+    for (int plugin_index : plugins_to_run) {
+      auto result = run_plugin(plugin_index);
+
+      if (result.second) {
+        Plugin *plugin = plugins[plugin_index];
+
+        if (call_info.status == RETRY) {
+          BOOST_LOG_TRIVIAL(error)
+              << loghdr << "Plugin Manager: call_end - retry ("
+              << call_info.retry_attempt << "/" << Call_Concluder::MAX_RETRY
+              << ") - " << plugin->name << " failed.";
+        } else {
+          BOOST_LOG_TRIVIAL(error)
+              << loghdr << "Plugin Manager: call_end -  "
+              << plugin->name << " failed.";
+        }
+
+        plugin_retry_list.push_back(plugin_index);
+      }
+    }
   }
+
+  if (plugin_retry_list.empty()) {
+    return 0;
+  }
+
+  call_info.plugin_retry_list = plugin_retry_list;
+  return 1;
 }
 
 int plugman_calls_active(std::vector<Call *> calls) {
