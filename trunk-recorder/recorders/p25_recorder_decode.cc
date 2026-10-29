@@ -320,6 +320,14 @@ void p25_recorder_decode::check_message_queue() {
             handle_alias_message(j);
           }
           // Add some more JSON handlers as we find other things to decode!
+        } else if (j.contains("encrypted") && j.contains("algid")) {
+          // Phase 2 ESS: voice may be encrypted even when the grant did not say so
+          if (j["encrypted"].get<int>() && !d_call->get_encrypted()) {
+            std::string loghdr = log_header(d_call->get_short_name(),d_call->get_call_num(),d_call->get_talkgroup_display(),d_call->get_freq());
+            BOOST_LOG_TRIVIAL(info) << loghdr << "Voice channel ENCRYPTED (ESS) - algid: 0x" << std::hex << j["algid"].get<int>()
+                                    << " keyid: 0x" << j["keyid"].get<int>() << std::dec;
+            d_call->set_encrypted(true);
+          }
         }
         
       } catch (const std::exception& e) {
