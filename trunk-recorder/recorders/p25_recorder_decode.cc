@@ -103,7 +103,10 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
 
   op25_frame_assembler = gr::op25_repeater::p25_frame_assembler::make(silence_frames, d_soft_vocoder, udp_host, udp_port, verbosity, do_imbe, do_output, do_msgq, rx_queue, do_audio_output, do_tdma, do_nocrypt);
   op25_frame_assembler->set_voice_codec_callback(voice_codec_cb_handler, this);
-  levels = gr::blocks::multiply_const_ss::make(1);
+  // Apply digitalLevels in float and saturate on the way back to 16-bit; a 16-bit multiply wraps loud samples around.
+  converter = gr::blocks::short_to_float::make(1, 1);
+  levels = gr::blocks::multiply_const_ff::make(1);
+  levels_to_short = gr::blocks::float_to_short::make(1, 1);
 
   if (use_streaming) {
     plugin_sink = gr::blocks::plugin_wrapper_impl::make(std::bind(&p25_recorder_decode::plugin_callback_handler, this, std::placeholders::_1, std::placeholders::_2));
@@ -111,12 +114,14 @@ void p25_recorder_decode::initialize(int silence_frames, bool d_soft_vocoder) {
 
   connect(self(), 0, slicer, 0);
   connect(slicer, 0, op25_frame_assembler, 0);
-  connect(op25_frame_assembler, 0, levels, 0);
+  connect(op25_frame_assembler, 0, converter, 0);
+  connect(converter, 0, levels, 0);
+  connect(levels, 0, levels_to_short, 0);
 
   if (use_streaming) {
-    connect(levels, 0, plugin_sink, 0);
+    connect(levels_to_short, 0, plugin_sink, 0);
   }
-  connect(levels, 0, wav_sink, 0);
+  connect(levels_to_short, 0, wav_sink, 0);
 }
 
 void p25_recorder_decode::plugin_callback_handler(int16_t *samples, int sampleCount) {
