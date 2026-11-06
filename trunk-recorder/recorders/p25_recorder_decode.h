@@ -4,6 +4,7 @@
 #include <boost/shared_ptr.hpp>
 #include <gnuradio/block.h>
 #include <gnuradio/block_detail.h>
+#include <gnuradio/blocks/float_to_short.h>
 #include <gnuradio/blocks/short_to_float.h>
 #include <gnuradio/hier_block2.h>
 #include <gnuradio/io_signature.h>
@@ -18,7 +19,7 @@
 #include <op25_repeater/vocoder.h>
 
 #if GNURADIO_VERSION < 0x030800
-#include <gnuradio/blocks/multiply_const_ss.h>
+#include <gnuradio/blocks/multiply_const_ff.h>
 #else
 #include <gnuradio/blocks/multiply_const.h>
 #endif
@@ -49,7 +50,8 @@ protected:
   gr::msg_queue::sptr rx_queue;
   gr::op25_repeater::fsk4_slicer_fb::sptr slicer;
   gr::blocks::short_to_float::sptr converter;
-  gr::blocks::multiply_const_ss::sptr levels;
+  gr::blocks::multiply_const_ff::sptr levels;
+  gr::blocks::float_to_short::sptr levels_to_short;
   gr::blocks::transmission_sink::sptr wav_sink;
   gr::blocks::plugin_wrapper::sptr plugin_sink;
 
